@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CHT Reference Registry",
+  "description": "Compact registry of CHT resources the backend/pipeline connects to by id.",
+  "type": "object",
+  "required": ["meta", "repos", "docs", "designRules"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["name", "purpose"],
+      "properties": {
+        "name": { "type": "string" },
+        "purpose": { "type": "string" },
+        "lastUpdated": { "type": "string" },
+        "region": { "type": "string" },
+        "license": { "type": "string" }
+      }
+    },
+    "repos": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["url", "role"],
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "role": { "type": "string" }
+        }
+      }
+    },
+    "images": { "type": "object" },
+    "mcp": { "type": "object" },
+    "docs": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "format": "uri" }
+    },
+    "referenceApps": { "type": "object" },
+    "warmupWorkflow": { "type": "object" },
+    "candidatePathways": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "designRules": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
