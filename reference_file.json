@@ -1,0 +1,152 @@
+{
+  "$schema": "./cht-reference-registry.schema.json",
+  "meta": {
+    "name": "CHT No-Code Configuration — Reference Registry",
+    "purpose": "Single source of truth for CHT resources the backend/pipeline connects to. Reference entries by `id`.",
+    "lastUpdated": "2026-11-03",
+    "region": "us-west-2",
+    "license": "Medic tools are AGPL-3.0; test-data-generator is GPL-3.0"
+  },
+
+  "repos": {
+    "cht-core": {
+      "url": "https://github.com/medic/cht-core",
+      "role": "CHT platform + published Docker images; holds reference configs",
+      "refConfigs": ["config/default", "config/standard"],
+      "dockerHelper": "scripts/docker-helper/cht-docker-compose.sh"
+    },
+    "cht-conf": {
+      "url": "https://github.com/medic/cht-conf",
+      "role": "CLI to validate, convert, compile, upload CHT config; builds cht-app-ide image",
+      "install": "npm install -g cht-conf",
+      "needs": ["node>=20", "python>=3.10", "xsltproc"]
+    },
+    "cht-conf-test-harness": {
+      "url": "https://github.com/medic/cht-conf-test-harness",
+      "role": "Runs synthetic patients through compiled forms/tasks in headless Chromium",
+      "installDev": "npm install --save-dev cht-conf-test-harness chai mocha",
+      "pin": "^5.0.4",
+      "coreVersion": "4.11+",
+      "notes": ["run as non-root", "first run downloads Chromium", "reads compiled app_settings.json, not tasks.js"]
+    },
+    "cht-ui-builder": {
+      "url": "https://github.com/medic/cht-ui-builder",
+      "role": "Reference-path base: visual form editor (pnpm monorepo)",
+      "stack": ["React 18", "Vite 6", "Zustand 5", "React Flow 11", "Fastify 5", "ExcelJS 4"],
+      "ports": { "ui": 5173, "api": 5174 },
+      "integration": ["XLSForm model", "serializeXlsForm", "diff before save", "read-only decision tables", "logic graph"],
+      "gaps": ["no approve action", "inverted task conditions in sign-off view", "no live preview"]
+    },
+    "cht-ai-tools": {
+      "url": "https://github.com/medic/cht-ai-tools",
+      "role": "Skills/commands/hooks/docs-MCP config for Claude Code & OpenCode",
+      "skills": ["cht-specialist", "create-cht-task", "create-cht-target", "cht-pr-review"],
+      "formBuilderBranch": "feat/add-cht-form-builder",
+      "scripts": ["read-xlsform.py", "add-xlsform-calculation.py", "detect-cht-project.sh", "parse-design-sheet.py", "generate-xlsform.py"],
+      "note": "No skill writes shippable config in the product path (design rule 1)"
+    },
+    "test-data-generator": {
+      "url": "https://github.com/medic/test-data-generator",
+      "role": "Generates synthetic contacts/reports for a CHT instance (demo seeding ONLY, not correctness)",
+      "run": "npm ci && npm run generate <design.js> <CHT_URL>",
+      "sampleDesigns": ["easy-mode.js", "default.js", "users.js", "add-to-existing-hierarchy.js"],
+      "needs": ["node>=20.11"]
+    },
+    "cht-docs": {
+      "url": "https://github.com/medic/cht-docs",
+      "role": "Documentation source (~500 markdown pages under content/en/)",
+      "offlineUse": "git clone --depth 1 then search locally with coding assistant"
+    }
+  },
+
+  "images": {
+    "cht-app-ide": {
+      "ref": "medicmobile/cht-app-ide",
+      "registry": "https://hub.docker.com/r/medicmobile/cht-app-ide",
+      "role": "Build-and-test container base; also a VS Code Dev Container",
+      "pin": "v6.6.1",
+      "contains": ["node 20", "cht-conf", "python 3", "xsltproc", "git", "chromium libs"],
+      "notes": ["amd64 only — run on x86_64 EC2", "non-root 'node' user", "add only SYS_ADMIN capability"]
+    }
+  },
+
+  "mcp": {
+    "cht-docs-mcp": {
+      "endpoint": "https://mcp-docs.dev.medicmobile.org/mcp",
+      "transport": "http",
+      "role": "Hosted docs/issues/forum/source search (Kapa AI)",
+      "tools": ["ask_question", "search_docs", "get_sources"],
+      "limits": { "perIpPerMin": 10, "globalPerMin": 50 },
+      "warning": "Runs OUTSIDE the AWS account — keep out of the product runtime path; use a Bedrock Knowledge Base over cht-docs for runtime grounding",
+      "fallbacks": ["docs site Ask AI (Ctrl/Cmd+K)", "local clone of medic/cht-docs"]
+    }
+  },
+
+  "docs": {
+    "localSetup": "https://docs.communityhealthtoolkit.org/building/local-setup/",
+    "hostingRequirements": "https://docs.communityhealthtoolkit.org/hosting/cht/requirements/",
+    "dockerHelper": "https://docs.communityhealthtoolkit.org/hosting/cht/app-developer/#cht-docker-helper",
+    "appForms": "https://docs.communityhealthtoolkit.org/building/tutorials/app-forms/",
+    "simpleTasks": "https://docs.communityhealthtoolkit.org/building/tasks/simple-tasks/",
+    "applicationTests": "https://docs.communityhealthtoolkit.org/building/tutorials/application-tests/",
+    "contactManagement": "https://docs.communityhealthtoolkit.org/building/contact-management/contact-and-users-1/",
+    "testDataGenerator": "https://docs.communityhealthtoolkit.org/community/contributing/code/test-data/test-data-generator/",
+    "mcpSetup": "https://docs.communityhealthtoolkit.org/ai/mcp-servers/cht-docs-mcp-server/",
+    "referenceAppsIndex": "https://docs.communityhealthtoolkit.org/reference-apps/"
+  },
+
+  "referenceApps": {
+    "maternal-newborn": {
+      "url": "https://docs.communityhealthtoolkit.org/reference-apps/maternal-newborn/",
+      "configSource": "cht-core/config/default",
+      "default": true,
+      "note": "Ships on a fresh instance; source for the warm-up workflow"
+    },
+    "others": [
+      "contact-tracing", "covid19-primary-health-care", "covid19-education",
+      "covid19-rdt-testing", "two-way-texting-rapidpro", "event-based-surveillance",
+      "learning-and-care", "loss-to-follow-up", "pharmacovigilance",
+      "yendanafe-pih-malawi", "remote-onboarding-training", "stock-monitoring",
+      "chw-supervision"
+    ]
+  },
+
+  "warmupWorkflow": {
+    "name": "Pregnancy danger sign → referral → follow-up",
+    "why": "Same shape as pathways teams will build; seeded test data already contains danger-sign reports",
+    "configMap": {
+      "dangerSignForm": "forms/app/pregnancy_danger_sign.xlsx",
+      "dangerSignProps": "forms/app/pregnancy_danger_sign.properties.json",
+      "followUpDate": "calculate: t_danger_signs_referral_follow_up_date = today + 3 days",
+      "task": "tasks.js → anc.pregnancy_danger_sign_followup (start:3, end:7)",
+      "followUpForm": "forms/app/pregnancy_danger_sign_follow_up.xlsx",
+      "contactSummary": ["contact-summary.templated.js", "contact-summary-extras.js"],
+      "taskTitle": "translations/messages-en.properties",
+      "tests": [
+        "test/tasks/pregnancy_danger_signs.spec.js",
+        "test/forms/pregnancy_danger_sign_follow_up.spec.js"
+      ]
+    },
+    "runTests": "TZ=Africa/Nairobi npx mocha test/tasks/pregnancy_danger_signs.spec.js test/forms/pregnancy_danger_sign_follow_up.spec.js --timeout 60000"
+  },
+
+  "candidatePathways": [
+    "child cough and fast breathing",
+    "diarrhoea",
+    "fever in a malaria area",
+    "malnutrition danger signs"
+  ],
+
+  "designRules": [
+    "Models never write compiled configuration",
+    "Every change gets two human approvals (content, then deploy); clinical changes need a clinician",
+    "AI drafts and hand edits take the same path and checks",
+    "Approval binds to one exact versioned snapshot, never a conversation",
+    "Approver's view comes from the same model the compiler uses",
+    "Expected outcomes come from approved logic; a model never judges a test",
+    "Ambiguity is flagged for a person, never resolved silently",
+    "Synthetic data only; no personal data in prompts, no real credentials",
+    "Nothing generative runs on a health worker's phone",
+    "Output is standard CHT config that builds with cht-conf; every change reversible"
+  ]
+}
