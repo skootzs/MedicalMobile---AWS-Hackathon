@@ -1,1 +1,1 @@
-git add readme.txt
+README
