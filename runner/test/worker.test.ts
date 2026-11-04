@@ -232,21 +232,27 @@ describe('fails closed', () => {
     assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
   });
 
-  it('runs a payload delivered as DynamoDB JSON by the outbox Pipe', async () => {
+  it('runs a payload delivered as a stream record by the outbox Pipe', async () => {
     const payload = h.payload();
     await h.seedJob(payload);
-    const body = { M: marshall(payload, { removeUndefinedValues: true }) };
-    assert.equal(body.M.revision!.N, '1');
-    assert.equal(body.M.clinicalApprovalId!.NULL, true);
-    assert.equal(await h.run(body), 'SUCCEEDED');
+    const attribute = { M: marshall(payload, { removeUndefinedValues: true }) };
+    assert.equal(attribute.M.revision!.N, '1');
+    assert.equal(attribute.M.clinicalApprovalId!.NULL, true);
+    const record = { eventName: 'INSERT', dynamodb: { Keys: { sk: { S: 'OUTBOX' } }, NewImage: { sk: { S: 'OUTBOX' }, payload: attribute } } };
+    assert.equal(await h.run(record), 'SUCCEEDED');
   });
 
   it('decodes each form the jobs queue can carry', () => {
-    assert.deepEqual(decodeBody('{"S":"{\\"jobId\\":\\"a\\"}"}'), { jobId: 'a' });
+    const record = (payload: unknown) => ({ dynamodb: { NewImage: { payload } } });
+    const map = { M: { jobId: { S: 'a' }, revision: { N: '1' } } };
+    assert.deepEqual(decodeBody(JSON.stringify(record(map))), { jobId: 'a', revision: 1 });
+    assert.deepEqual(decodeBody(JSON.stringify([record(map)])), { jobId: 'a', revision: 1 });
+    assert.deepEqual(decodeBody(JSON.stringify(record({ S: '{"jobId":"a"}' }))), { jobId: 'a' });
     assert.deepEqual(decodeBody('{"jobId":"a","revision":1}'), { jobId: 'a', revision: 1 });
-    assert.deepEqual(decodeBody('{"M":"not a map"}'), { M: 'not a map' });
-    assert.equal(decodeBody('{"S":"not json"}'), undefined);
-    assert.equal(decodeBody('not json'), undefined);
+    assert.equal(decodeBody(JSON.stringify(record({ S: 'not json' }))), undefined);
+    assert.equal(decodeBody(JSON.stringify(record({ BOGUS: 'x' }))), undefined);
+    // What the old input template produced.
+    assert.equal(decodeBody('{M:{jobId:{S:smoke-1},revision:{N:1}}}'), undefined);
   });
 
   it('accepts payloads still on contract 1.0.0 and rejects unknown versions', () => {

@@ -30,11 +30,12 @@ transaction. Delivery is derived from that committed write, so it can never
 disagree with the table:
 
 - **Outbox Pipe** (Tier 2): DynamoDB Stream → EventBridge Pipe, filtered to
-  `INSERT` where `sk = OUTBOX` → the `jobs` SQS queue, sending the payload
-  stored on the outbox item.
+  `INSERT` where `sk = OUTBOX` and `jobType` is `COMPILE_LOGIC` or `VERIFY_BUILD` → the
+  `jobs` SQS queue. The message body is the whole stream record, and the runner reads
+  `dynamodb.NewImage.payload` from it and unmarshalls it.
 - **Events Pipe** (Tier 3): DynamoDB Stream → EventBridge Pipe, filtered to
-  `MODIFY` on `sk = META` items where `status` changed → the `job-events`
-  queue, sending `{ jobId, status, attempt }`.
+  `MODIFY` on `JOB#` `META` items where `status` changed → the `job-events`
+  queue, sending `{ requestId, jobId, status, attempt }`.
 
 **Fallbacks if Pipes don't work out** (ask R7 before switching): a poller in
 the orchestrator for the outbox (runner idempotency makes duplicate sends

@@ -75,11 +75,13 @@ put_outbox "$JOB" COMPILE_LOGIC
 next_message "$JOBS_URL" "$PIPE_WAIT_SECONDS"
 [ -n "$BODY" ] || fail "no outbox message within ${PIPE_WAIT_SECONDS}s, check the pipe's state and role"
 echo "jobs queue body: $BODY"
-python3 - "$BODY" "$JOB" <<'PY' || fail "outbox message is not the DynamoDB JSON payload"
+python3 - "$BODY" "$JOB" <<'PY' || fail "outbox message is not a valid JSON stream record holding the payload"
 import json, sys
 body = json.loads(sys.argv[1])
-assert body["M"]["jobId"]["S"] == sys.argv[2], body
-assert body["M"]["revision"]["N"] == "1", body
+record = body[0] if isinstance(body, list) and len(body) == 1 else body
+payload = record["dynamodb"]["NewImage"]["payload"]["M"]
+assert payload["jobId"]["S"] == sys.argv[2], body
+assert payload["revision"]["N"] == "1", body
 PY
 
 echo "== 30-pipes-smoke: DRAFT_LOGIC must stay off the jobs queue =="
@@ -94,7 +96,7 @@ set_status RUNNING 1
 next_message "$EVENTS_URL" "$PIPE_WAIT_SECONDS"
 [ -n "$BODY" ] || fail "no job event within ${PIPE_WAIT_SECONDS}s, check the pipe's state and role"
 echo "job-events body: $BODY"
-python3 - "$BODY" "$JOB" <<'PY' || fail "job event is not {requestId,jobId,status,attempt}"
+python3 - "$BODY" "$JOB" <<'PY' || fail "job event is not valid JSON {requestId,jobId,status,attempt} with a numeric attempt"
 import json, sys
 assert json.loads(sys.argv[1]) == {"requestId": f"req-{sys.argv[2]}", "jobId": sys.argv[2], "status": "RUNNING", "attempt": 1}, sys.argv[1]
 PY
