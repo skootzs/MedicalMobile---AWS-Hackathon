@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.tfstate*
+.terraform/
+generated/*
+!generated/.gitkeep
+dist/

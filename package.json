@@ -1,0 +1,11 @@
+{
+  "name": "cht-nocode",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
