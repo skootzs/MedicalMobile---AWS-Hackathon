@@ -1,0 +1,22 @@
+{
+  "name": "@cht-nocode/schema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LogicModel v1 and golden-case schemas, plus the R2/R7 job handoff contract",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ajv": "8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "~5.9.3"
+  }
+}

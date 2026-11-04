@@ -1,0 +1,23 @@
+{
+  "name": "@cht-nocode/checker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Checks a LogicModel for structure, golden-case agreement, and decision-row overlap",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "cht-nocode-check": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "node src/cli.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "~5.9.3"
+  }
+}

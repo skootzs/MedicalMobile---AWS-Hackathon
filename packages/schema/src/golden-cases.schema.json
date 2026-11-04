@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GoldenCases",
+  "description": "Handwritten expected report values for one pathway. A case is not clinician-approved unless approval says so.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "input", "expected"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "approval": { "type": "string", "minLength": 1 },
+      "basis": { "type": "string", "minLength": 1 },
+      "input": {
+        "type": "object",
+        "additionalProperties": { "type": ["boolean", "number", "string", "null"] }
+      },
+      "expected": {
+        "type": "object",
+        "required": ["classification"],
+        "additionalProperties": { "type": "string" },
+        "properties": {
+          "classification": { "type": "string", "minLength": 1 },
+          "in_scope": { "enum": ["yes", "no", "unknown"] },
+          "referral_urgent": { "enum": ["yes", "no"] },
+          "follow_up_days": { "type": "string" },
+          "fast_breathing": { "enum": ["yes", "no", ""] },
+          "any_general_danger_sign": { "enum": ["yes", "no", ""] }
+        }
+      }
+    }
+  }
+}

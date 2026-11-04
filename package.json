@@ -4,6 +4,9 @@
   "engines": { "node": ">=22.18" },
   "workspaces": [
     "packages/compiler",
+    "packages/schema",
+    "packages/evaluator",
+    "packages/checker",
     "packages/drafter",
     "packages/orchestrator",
     "packages/intake",
