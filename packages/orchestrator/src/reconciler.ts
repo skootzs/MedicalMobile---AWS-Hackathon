@@ -23,10 +23,13 @@ import type { CompilationResultStore } from './storage/compilation-results.ts';
 
 /** The minimal, trusted notification R7 delivers (or R2 polls) per terminal job. */
 export interface JobCompletionNotification {
-  requestId: string;
+  /** Present when the caller already knows the request. The events Pipe sends only jobId, status and attempt. */
+  requestId?: string;
   jobId: string;
   /** Hint only; the authoritative job type is confirmed from the stored intent. */
   jobType?: 'COMPILE_LOGIC' | 'VERIFY_BUILD';
+  /** Hint only. The pipe includes it; the reconciler re-reads JOB/META. */
+  status?: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
   /** R7's attempt counter from the event; the reconciler re-reads the record. */
   attempt: number;
 }
@@ -42,6 +45,8 @@ export interface ReconcileResult {
 export interface ReconcilerDependencies {
   /** Store that can look up which kind of job a jobId is. */
   store: CompilationResultStore & VerificationResultStore;
+  /** Reads requestId off JOB#id/META when the events Pipe omitted it. */
+  resolveRequestId?(jobId: string): Promise<string | null>;
   compilation: Pick<CompilationResultService, 'ingest'>;
   verification: Pick<VerificationResultService, 'ingest'>;
   /** Deterministic event id for the ingestion command, derived from the job+attempt. */
@@ -73,10 +78,17 @@ export class JobCompletionReconciler {
   async reconcile(notification: JobCompletionNotification, principal: unknown): Promise<ReconcileResult> {
     const reply = (status: ReconcileStatus, jobType: ReconcileResult['jobType'], reason: string, workflowVersion: number | null = null): ReconcileResult =>
       ({ status, jobType, reason, workflowVersion });
-    if (!notification || !id(notification.requestId) || !id(notification.jobId) || !attemptOk(notification.attempt)) {
+    if (!notification || !id(notification.jobId) || !attemptOk(notification.attempt)) {
       return reply('REJECTED', null, 'INVALID_NOTIFICATION');
     }
-    const { requestId, jobId, attempt } = notification;
+    let requestId = notification.requestId;
+    if (!id(requestId)) {
+      if (!this.#deps.resolveRequestId) return reply('REJECTED', null, 'INVALID_NOTIFICATION');
+      try { requestId = (await this.#deps.resolveRequestId(notification.jobId)) ?? undefined; }
+      catch { return reply('STORAGE_FAILURE', null, 'SERVICE_UNAVAILABLE'); }
+      if (!id(requestId)) return reply('UNKNOWN_JOB', null, 'JOB_NOT_FOUND');
+    }
+    const { jobId, attempt } = notification;
     const eventId = (this.#deps.resultEventId ?? defaultEventId);
     try {
       // Confirm the authoritative job type from R2's stored intent (not the hint).

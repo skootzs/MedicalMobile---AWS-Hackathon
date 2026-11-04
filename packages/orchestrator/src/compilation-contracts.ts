@@ -4,6 +4,7 @@ import type { LogicModelSnapshot } from './snapshots.ts';
 import type { RevisionIdentity } from './routing.ts';
 import type { LogicIdentity } from './workflow.ts';
 import { checkerId, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
+import { R7_CONTRACT_VERSION, toR7Hash } from './verify-build-contracts.ts';
 
 /** Provisional R2/R5/R7 transport contract. No shared handoff contract exists locally. */
 export const LOGIC_OBJECT_FORMAT = 'r2-snapshot-envelope-without-hash-v1' as const;
@@ -102,4 +103,22 @@ export function validCompilationIntent(job: CompilationJobIntent, snapshot: Logi
       input.logicModelRevision === snapshot.revision && input.logicModelHash === snapshot.snapshotHash && input.logicModelUri === input.snapshotReference.uri &&
       referenceMatches(input.snapshotReference, snapshot) && typeof input.createdAt === 'string' && new Date(input.createdAt).toISOString() === input.createdAt;
   } catch { return false; }
+}
+
+/** Project the internal intent to R7's COMPILE_LOGIC payload. checkReportHash is the raw checker-report digest. */
+export function toCompilationPayload(job: CompilationJobIntent, checkReportHash: string): Record<string, unknown> {
+  return {
+    contractVersion: R7_CONTRACT_VERSION,
+    jobId: job.jobId,
+    jobType: 'COMPILE_LOGIC',
+    mode: job.mode,
+    requestId: job.requestId,
+    revision: job.revision,
+    logicModelHash: toR7Hash(job.logicModelHash),
+    snapshotUri: job.logicModelUri,
+    checkReportHash: toR7Hash(checkReportHash),
+    clinicalApprovalId: job.clinicalApprovalId,
+    createdBy: job.createdBy,
+    createdAt: job.createdAt,
+  };
 }

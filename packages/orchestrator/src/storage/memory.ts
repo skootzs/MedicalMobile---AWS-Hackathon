@@ -551,10 +551,12 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         // The compiled artifact the verification binds to must be the current accepted one.
         // compileArtifactHash/manifestHash/packageUri are bound by the handoff service from
         // the accepted compilation result; validVerifyBuildIntent confirms internal consistency.
+        const compiled = base.compilationJobs.get(key(command.requestId, job.compileJobId));
         if (!validVerifyBuildIntent(job) || job.sourceWorkflowVersion !== state.version || job.workflowVersion !== next.version ||
             job.handoffEventId !== event.eventId || job.jobId !== event.verificationId || job.createdBy !== actor.id ||
             !state.artifact || job.compileJobId !== state.artifact.compilationId || job.packageHash !== state.artifact.artifactHash ||
             job.logicModelRevision !== state.artifact.logicRevision || job.logicModelHash !== state.artifact.logicHash ||
+            !compiled || job.snapshotUri !== compiled.logicModelUri ||
             !checkerSame(identity(state), job.requestPreview) || state.clinicalApproval?.eventId !== job.clinicalApprovalId ||
             state.checks?.reportId !== job.checkerReportId) return deny('INVALID_VERIFY_BUILD_INTENT');
         if ([...verifyBuildJobs.values()].some(old => old.requestId === command.requestId && old.compileJobId === job.compileJobId &&

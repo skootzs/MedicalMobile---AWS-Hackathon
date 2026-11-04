@@ -15,7 +15,7 @@
  */
 import { S3Client } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import type { FastifyInstance } from 'fastify';
 import { ApprovalService } from './approvals.ts';
 import { RequestService } from './requests.ts';
@@ -283,7 +283,14 @@ export function bootstrap(options: BootstrapOptions): BootstrappedServer {
     store: verifyStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, executions: verifySrc,
     authorizeRunner: (actor, job) => workers.authorizeVerificationRunner?.(actor, job.jobId) ?? false, objects,
   });
-  const reconciler = new JobCompletionReconciler({ store, compilation: compilationResults, verification: verificationResults });
+  const reconciler = new JobCompletionReconciler({
+    store, compilation: compilationResults, verification: verificationResults,
+    resolveRequestId: async (jobId) => {
+      const row = await document.send(new GetCommand({ TableName: config.ddbTable, Key: { pk: `JOB#${jobId}`, sk: 'META' }, ConsistentRead: true }));
+      const requestId = row.Item?.requestId;
+      return typeof requestId === 'string' && requestId ? requestId : null;
+    },
+  });
 
   const services: OrchestratorServices = {
     draftingHandoff, draftingCallback, checkerResults,

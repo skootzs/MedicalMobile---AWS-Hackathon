@@ -44,6 +44,15 @@ test('allows a null goldenCasesHash (no golden file supplied) but still schema-v
   assert.equal(r.report?.goldenCasesHash, null);
 });
 
+test('rejects a report whose version or package hash disagrees with itself', () => {
+  const drifted = fictionalReport();
+  drifted.packageHash = 'd'.repeat(64);
+  assert.equal(validateVerificationReport(drifted).ok, false);
+  const renamed = fictionalReport();
+  renamed.version = '2.0.0';
+  assert.equal(validateVerificationReport(renamed).ok, false);
+});
+
 test('rejects a non-hex compileArtifactHash', () => {
   assert.equal(validateVerificationReport(fictionalReport({ compileArtifactHash: 'not-a-hash' })).ok, false);
 });

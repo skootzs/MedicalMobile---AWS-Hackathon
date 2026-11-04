@@ -11,6 +11,9 @@ import { createHash } from 'node:crypto';
 import { canonicalizeJson } from './snapshots.ts';
 import type { RevisionIdentity } from './routing.ts';
 import { checkerId, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
+import { R7_CONTRACT_VERSION } from './r7-handoff-contract.ts';
+
+export { R7_CONTRACT_VERSION };
 
 const hash = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
 
@@ -97,9 +100,7 @@ export function validVerifyBuildIntent(job: VerifyBuildJobIntent): boolean {
   } catch { return false; }
 }
 
-/** R7 wire contract version (packages/schema/src/handoffs.ts CONTRACT_VERSION). */
-export const R7_CONTRACT_VERSION = '1.0.0' as const;
-/** R2 raw hex -> R7's prefixed logicModelHash form, reconciled ONLY at this boundary. */
+/** R2 raw hex -> R7's prefixed hash form, reconciled ONLY at this boundary. */
 export const toR7Hash = (rawHex: string): string => `sha256:${rawHex}`;
 
 /**
@@ -108,7 +109,7 @@ export const toR7Hash = (rawHex: string): string => `sha256:${rawHex}`;
  * to R7's `sha256:` prefix. Shape validated against R7's published schema in
  * the integration boundary (see r7-handoff-contract.ts).
  */
-export function toVerifyBuildPayload(job: VerifyBuildJobIntent): Record<string, unknown> {
+export function toVerifyBuildPayload(job: VerifyBuildJobIntent, checkReportHash: string): Record<string, unknown> {
   return {
     contractVersion: R7_CONTRACT_VERSION,
     jobId: job.jobId,
@@ -117,7 +118,7 @@ export function toVerifyBuildPayload(job: VerifyBuildJobIntent): Record<string, 
     revision: job.revision,
     logicModelHash: toR7Hash(job.logicModelHash),
     snapshotUri: job.snapshotUri,
-    checkReportHash: toR7Hash(job.compileArtifactHash),
+    checkReportHash: toR7Hash(checkReportHash),
     clinicalApprovalId: job.clinicalApprovalId,
     compileJobId: job.compileJobId,
     packageUri: job.packageUri,

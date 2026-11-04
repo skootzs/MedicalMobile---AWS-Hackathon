@@ -1,11 +1,11 @@
 import { digest } from './compilation-result-contracts.ts';
 import type { CompilationExecution } from './compilation-result-contracts.ts';
 
-/** R2 internal intent remains PENDING; R7's persisted initial job status is requested.
- * This maps only initial intent semantics, never execution/completion or outbox delivery. */
-export function r7InitialCompilationStatus(status: 'PENDING'): 'requested' {
-  if (status !== 'PENDING') throw Error('Only an initial R2 intent can map to requested.');
-  return 'requested';
+/** R2's intent and the JOB/META row the runner leases both start as PENDING.
+ * The runner takes a job only when that status is PENDING. */
+export function r7InitialCompilationStatus(status: 'PENDING'): 'PENDING' {
+  if (status !== 'PENDING') throw Error('Only an initial R2 intent can be written as PENDING.');
+  return 'PENDING';
 }
 /** Explicit semantic inputs: R7 adapter must establish each wire field's meaning.
  * Legacy R2 execution/workflow artifactHash identifies packaged BYTES; never copy a

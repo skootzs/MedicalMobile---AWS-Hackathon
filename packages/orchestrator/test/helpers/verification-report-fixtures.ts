@@ -23,19 +23,20 @@ export interface ReportOverrides {
 /** A schema-valid, passing VerificationReport. Override to make it fail/mismatch. */
 export function fictionalReport(over: ReportOverrides = {}): Record<string, unknown> {
   const passed = over.passed ?? true;
+  const references = {
+    snapshotId: 'snap-1', logicModelHash: HASH('b'), revision: '1', clinicalApprovalId: 'clin-1',
+    compilationJobId: 'compile-x', packageHash: HASH('c'), ...over.references,
+  };
   return {
     schemaVersion: over.schemaVersion ?? VERIFICATION_REPORT_SCHEMA_VERSION,
     version: over.schemaVersion ?? VERIFICATION_REPORT_SCHEMA_VERSION,
-    packageHash: HASH('c'),
+    packageHash: references.packageHash,
     generatedAt: '2026-11-04T00:00:00.000Z',
     passed,
     coverageComplete: over.coverageComplete ?? true,
     toolVersions: { node: 'v24.22.1', chtConf: '6.6.1', chtConfTestHarness: '1.0.0', chromiumRevision: '901912', python: 'Python 3.12.16' },
     run: { command: ['cht-conf-test-harness'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-11-04' },
-    references: {
-      snapshotId: 'snap-1', logicModelHash: HASH('b'), revision: '1', clinicalApprovalId: 'clin-1',
-      compilationJobId: 'compile-x', packageHash: HASH('c'), ...over.references,
-    },
+    references,
     compileArtifactHash: over.compileArtifactHash ?? HASH('e'),
     testedDirHash: over.testedDirHash ?? HASH('9'),
     patientSetHash: HASH('7'),

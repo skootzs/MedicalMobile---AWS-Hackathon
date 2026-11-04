@@ -47,24 +47,26 @@ test('outbox is a thin pointer to the job', () => {
 
 test('toVerifyBuildPayload reconciles raw-hex -> R7 sha256: prefix only at the boundary', () => {
   const job = createVerifyBuildIntent(input());
-  const payload = toVerifyBuildPayload(job);
+  const payload = toVerifyBuildPayload(job, HASH('9'));
   assert.equal(payload.contractVersion, R7_CONTRACT_VERSION);
   assert.equal(payload.logicModelHash, toR7Hash(job.logicModelHash));
   assert.equal(payload.packageHash, `sha256:${job.packageHash}`);
   assert.equal(payload.manifestHash, `sha256:${job.manifestHash}`);
+  assert.equal(payload.checkReportHash, toR7Hash(HASH('9')));
+  assert.equal(payload.snapshotUri, job.snapshotUri);
   // The internal intent keeps raw hex; only the payload is prefixed.
   assert.match(job.logicModelHash, /^[a-f0-9]{64}$/);
 });
 
 test('the emitted payload satisfies R7 VerifyBuildPayload schema', () => {
   const job = createVerifyBuildIntent(input());
-  const result = validateVerifyBuildPayload(toVerifyBuildPayload(job));
+  const result = validateVerifyBuildPayload(toVerifyBuildPayload(job, HASH('9')));
   assert.equal(result.ok, true, JSON.stringify(result.errors));
 });
 
 test('R7 schema rejects a payload missing verify-specific fields or with wrong version', () => {
   const job = createVerifyBuildIntent(input());
-  const payload = toVerifyBuildPayload(job) as Record<string, unknown>;
+  const payload = toVerifyBuildPayload(job, HASH('9')) as Record<string, unknown>;
   const { packageUri: _omit, ...missing } = payload;
   assert.equal(validateVerifyBuildPayload(missing).ok, false);
   assert.equal(validateVerifyBuildPayload({ ...payload, contractVersion: '2.0.0' }).ok, false);

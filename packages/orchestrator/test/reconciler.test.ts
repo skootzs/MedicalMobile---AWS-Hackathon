@@ -49,6 +49,18 @@ test('reports UNKNOWN_JOB when neither a compile nor verify job exists', async (
   assert.equal(out.jobType, null);
 });
 
+test('resolves requestId from the job row when the events Pipe omits it', async () => {
+  let seen: unknown;
+  const r = new JobCompletionReconciler(deps({
+    resolveRequestId: async (jobId) => (jobId === 'compile-x' ? 'req-from-meta' : null),
+    compilation: { ingest: async (c) => { seen = c; return { status: 'ACCEPTED', reason: 'COMPILED', result: null, workflowVersion: 7, auditId: 'a', attemptAuditId: 'a' }; } },
+  }));
+  const out = await r.reconcile({ jobId: 'compile-x', status: 'SUCCEEDED', attempt: 1 }, 'svc-compiler');
+  assert.equal(out.status, 'RECONCILED');
+  assert.equal((seen as { requestId: string }).requestId, 'req-from-meta');
+  assert.equal((await r.reconcile({ jobId: 'missing', status: 'SUCCEEDED', attempt: 1 }, 'svc')).status, 'UNKNOWN_JOB');
+});
+
 test('rejects an invalid notification without touching any service', async () => {
   const r = new JobCompletionReconciler(deps());
   assert.equal((await r.reconcile({ requestId: '', jobId: 'compile-x', attempt: 1 }, 'svc')).status, 'REJECTED');

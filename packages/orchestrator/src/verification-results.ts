@@ -94,7 +94,7 @@ export class VerificationResultService {
         requestPreview: job.requestPreview, logicModelRevision: job.logicModelRevision, logicModelHash: job.logicModelHash,
         clinicalApprovalId: job.clinicalApprovalId, compileJobId: job.compileJobId,
         outcome: passed ? 'VERIFIED' : 'FAILED', reportUri: execution.reportUri, reportHash: execution.reportHash,
-        reportVersionId: execution.reportVersionId, reportVersion: report.schemaVersion,
+        reportVersionId: execution.reportVersionId, reportVersion: report.version,
         passed: report.passed, coverageComplete: report.coverageComplete,
         testedDirHash: report.testedDirHash, compileArtifactHash: report.compileArtifactHash,
       },

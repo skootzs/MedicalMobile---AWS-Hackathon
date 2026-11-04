@@ -2333,8 +2333,8 @@ Targeted corrections:
   BUILD_EVIDENCE_REQUIRED. The trusted verifier must validate manifest, template,
   canonical bare input, files, package and conversion/validation evidence. No missing
   build evidence can be filled by a role/status/URI/hash string from a caller.
-- `compilation-integration.ts` maps initial R2 job PENDING to R7 requested explicitly.
-  This is an adapter mapping, not a persisted status rename or an outbox delivery state.
+- `compilation-integration.ts` writes the initial JOB/META status as PENDING.
+  That is the status the runner leases. It is not an outbox delivery state.
   It also maps semantic inputHash / compileArtifactHash / packageHash into the existing
   normalized R2 names. Confirm R7's raw artifactHash meaning in its published schema;
   never assume it is a package digest. The normalized legacy execution/workflow
@@ -2456,7 +2456,7 @@ compilation/result/read-queue ports using the AWS SDK. It uses:
 | Request/LogicModel snapshots | SNAP#hash / META plus verified canonical object at snapshots/hash.json |
 | Clinical/release decisions | REQ#id / APPROVAL#eventId, normalized decision and current validity, plus immutable decision reference |
 | Checker, screening, PO, compiled and verification evidence | REQ partition evidence references plus complete version-bound history in the repository image |
-| Job intents | JOB#id / META, initial requested status, GSI1 request index; R7 owns later execution status |
+| Job intents | JOB#id / META, initial PENDING status, GSI1 request index; R7 owns later execution status |
 | Job results | JOB#id / RECEIPT#R2#eventId plus immutable result/evidence reference |
 | Idempotency | Immutable request receipt and preserved event/attempt fingerprints |
 | Audit | Append-only AUDIT#timestamp#eventId#attempt entry and immutable payload |
@@ -2588,11 +2588,12 @@ storage adapter are not published there. Resolve these before shared-sandbox sta
    history on each operation; it favors correctness/reuse over large-history throughput.
 2. Supply real S3 version-aware adapter and verify IAM/KMS permissions. The current R7
    IAM source lists GetObject but not GetObjectVersion; version-pinned reads need review.
-3. Reconcile initial requested versus PENDING in the R7 lease section (user-confirmed
-   mapping currently writes requested). Publish exact runner status/result/condition
-   fields and payload schema. Outbox includes payload as the documented Pipe expects;
-   no fallback poller, extra queue or publisher was added. Pipe event filters must
-   distinguish JOB#.../META from request META status changes.
+3. Initial JOB/META status is PENDING, which is what the runner leases. The outbox
+   payload for COMPILE_LOGIC and VERIFY_BUILD is the published wire shape, and that
+   payload is what the pipe sends. The runner does not draft: DRAFT_LOGIC stays with
+   R3 and is filtered out of the jobs pipe. No fallback poller, extra queue or
+   publisher was added. Pipe event filters must distinguish JOB#.../META from request
+   META status changes.
 4. Align R7's post-conversion manifestHash with R2's current compiler-manifest reference;
    don't silently equate those byte representations or change existing approval guards.
 5. Wire real Cognito/service identity and validated schemas into backend startup; provision

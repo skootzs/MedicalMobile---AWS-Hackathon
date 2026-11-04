@@ -77,8 +77,8 @@ test('semantic R7 hash mapping never assigns compiler-file digest to package ali
   assert.equal(normalized.inputHash, 'a'.repeat(64)); assert.equal(normalized.compileArtifactHash, 'b'.repeat(64)); assert.equal(normalized.artifactHash, 'c'.repeat(64));
   assert.throws(() => normalizeCompilationHashes({ inputHash: 'bad', compileArtifactHash: 'b'.repeat(64), packageHash: 'c'.repeat(64) }));
 });
-test('initial status maps PENDING to requested explicitly without advancing workflow', () => {
-  assert.equal(r7InitialCompilationStatus('PENDING'), 'requested'); assert.throws(() => r7InitialCompilationStatus('RUNNING' as never));
+test('initial status stays PENDING, which is the status the runner leases', () => {
+  assert.equal(r7InitialCompilationStatus('PENDING'), 'PENDING'); assert.throws(() => r7InitialCompilationStatus('RUNNING' as never));
 });
 test('authoritative generated-files digest mismatch blocks despite correct package bytes', async () => {
   const f = await compilationResultFixture(); f.source.current!.compileArtifactHash = 'a'.repeat(64);

@@ -196,10 +196,14 @@ The assembled end-to-end scenario is `test/assembled.integration.test.ts`.
 ## 7. Known teammate-owned blockers
 
 - **R6 report 2.2.0:** the published report requires both `schemaVersion` and
-  `version` (each `2.2.0`) and a top-level `packageHash`, and still echoes
-  `references.packageHash`. R2 validates that schema as published. R2 only needs
-  R7's flat JOB/META to carry `reportUri`/`reportHash`/`attempt`/`status`; the
-  reconciler reads the report fields from the stored document.
+  `version` (each `2.2.0`) and a top-level `packageHash` equal to
+  `references.packageHash`. R2 validates that schema and those two equalities.
+  The runner reads `version`. The reconciler accepts the events Pipe body
+  `{jobId, status, attempt}` and loads `requestId` from JOB/META.
+- **Job wire:** JOB/META starts at `PENDING`. The outbox payload for
+  `COMPILE_LOGIC` and `VERIFY_BUILD` is the published payload, with the real
+  snapshot URI and the checker report's sha256 as `checkReportHash`. The runner
+  does not draft; `DRAFT_LOGIC` stays with the drafter and is left out of the jobs pipe.
 - **R7 flat JOB/META vs recordVersion:** R7's META has `attempt`+`status` but no
   `recordVersion`. R2 adapts (synthesizing `r7-attempt-<n>`) and conditions on
   `attempt`+`status`. R7 must ensure the terminal META carries the fields R2 reads

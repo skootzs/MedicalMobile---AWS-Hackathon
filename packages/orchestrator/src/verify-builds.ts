@@ -16,7 +16,7 @@ import type { StoreDependencies, ApplyResult } from './storage/requests.ts';
 import type { EventReceipt } from './storage/audit.ts';
 import type { VerificationResultStore } from './storage/verification-results.ts';
 import type { CompilationResultStore } from './storage/compilation-results.ts';
-import { checkerId, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
+import { checkerId, checkerReportDigest, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
 import { createVerifyBuildIntent, validVerifyBuildIntent, toVerifyBuildPayload } from './verify-build-contracts.ts';
 import type { VerifyBuildJobIntent } from './verify-build-contracts.ts';
 import { validateVerifyBuildPayload } from './r7-handoff-contract.ts';
@@ -105,22 +105,29 @@ export class VerifyBuildHandoffService {
             if (!result || result.outcome !== 'COMPILED' || !result.artifact) failure = 'COMPILATION_RESULT_REQUIRED';
             else if (result.artifact.packagedObject.sha256 !== s.artifact.artifactHash) failure = 'ARTIFACT_MISMATCH';
             else {
-              const snapshotUri = `s3://r2/snapshots/${s.logic.logicHash}.json`;
-              job = createVerifyBuildIntent({
-                requestId: c.requestId, revision: c.revision, requestPreview: identity(c),
-                logicModelRevision: c.logicModelRevision, logicModelHash: s.logic.logicHash,
-                clinicalApprovalId: s.clinicalApproval.eventId, compileJobId: c.compileJobId,
-                packageHash: result.artifact.packagedObject.sha256, packageUri: result.artifact.packagedObject.uri,
-                packageVersionId: result.artifact.packagedObject.versionId, manifestHash: result.artifact.manifest.sha256,
-                compileArtifactHash: result.artifact.generatedFilesHash, snapshotUri,
-                checkerReportId: s.checks.reportId, sourceWorkflowVersion: s.version,
-                handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))(),
-              });
-              // Fail closed if the outgoing payload would not satisfy R7's published schema.
-              if (!validVerifyBuildIntent(job)) { job = null; failure = 'VERIFY_BUILD_INTENT_REQUIRED'; }
+              const compiled = await this.#deps.store.getCompilationJob(c.requestId, c.compileJobId);
+              const records = await this.#deps.store.listEvidence(c.requestId);
+              const checked = records.find(r => r.kind === 'LOGIC_CHECKED' && r.recordId === s.checks?.reportId);
+              const digest = checked?.checkerResult ? checkerReportDigest(checked.checkerResult.report) : null;
+              if (!compiled || compiled.logicModelHash !== s.logic.logicHash || !compiled.logicModelUri) failure = 'COMPILATION_RESULT_REQUIRED';
+              else if (!digest) failure = 'CHECKER_REPORT_REQUIRED';
               else {
-                const payload = validateVerifyBuildPayload(toVerifyBuildPayload(job));
-                if (!payload.ok) { job = null; failure = 'R7_PAYLOAD_INVALID'; }
+                job = createVerifyBuildIntent({
+                  requestId: c.requestId, revision: c.revision, requestPreview: identity(c),
+                  logicModelRevision: c.logicModelRevision, logicModelHash: s.logic.logicHash,
+                  clinicalApprovalId: s.clinicalApproval.eventId, compileJobId: c.compileJobId,
+                  packageHash: result.artifact.packagedObject.sha256, packageUri: result.artifact.packagedObject.uri,
+                  packageVersionId: result.artifact.packagedObject.versionId, manifestHash: result.artifact.manifest.sha256,
+                  compileArtifactHash: result.artifact.generatedFilesHash, snapshotUri: compiled.logicModelUri,
+                  checkerReportId: s.checks.reportId, sourceWorkflowVersion: s.version,
+                  handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))(),
+                });
+                // Fail closed if the outgoing payload would not satisfy R7's published schema.
+                if (!validVerifyBuildIntent(job)) { job = null; failure = 'VERIFY_BUILD_INTENT_REQUIRED'; }
+                else {
+                  const payload = validateVerifyBuildPayload(toVerifyBuildPayload(job, digest));
+                  if (!payload.ok) { job = null; failure = 'R7_PAYLOAD_INVALID'; }
+                }
               }
             }
           }

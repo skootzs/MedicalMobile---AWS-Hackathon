@@ -55,6 +55,10 @@ const request = (v: unknown) => object(v) && keys(v, ['requestId', 'revision', '
 const logic = (v: unknown) => object(v) && keys(v, ['logicRevision', 'logicHash']) && checkerVersionNumber(v.logicRevision) && hash(v.logicHash);
 const references = (v: unknown) => Array.isArray(v) && v.every(ref => typeof ref === 'string' && !!ref.trim());
 export const checkerSame = (a: unknown, b: unknown) => canonicalizeJson(a) === canonicalizeJson(b);
+/** Raw sha256 of the canonical checker report. This is the value R7 records as checkReportHash. */
+export function checkerReportDigest(report: unknown): string {
+  return createHash('sha256').update(canonicalizeJson(report)).digest('hex');
+}
 export function makeCheckerInvocation(draft: Omit<CheckerInvocation, 'invocationId'>): CheckerInvocation {
   const digest = createHash('sha256').update(canonicalizeJson({ namespace: 'logic-check-invocation-v1', request: draft.requestPreview,
     logic: draft.logic, workflowVersion: draft.workflowVersion, checkerActorId: draft.checkerActorId, checkerId: draft.checkerId, checkerVersion: draft.checkerVersion })).digest('hex');

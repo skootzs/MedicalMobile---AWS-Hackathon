@@ -23,6 +23,9 @@ export const VERIFICATION_REPORT_SCHEMA_VERSION = verificationReportSchema.prope
 /** The subset of the report R2 reads once the whole document is schema-valid. */
 export interface VerificationReportView {
   schemaVersion: string;
+  /** The plain version string the runner copies onto the job result. */
+  version: string;
+  packageHash: string | null;
   passed: boolean;
   coverageComplete: boolean;
   compileArtifactHash: string;
@@ -57,8 +60,14 @@ export function validateVerificationReport(value: unknown): ReportValidation {
   }
   const v = value as Record<string, unknown>;
   const refs = v.references as Record<string, unknown>;
+  const topPackageHash = (v.packageHash as string | null) ?? null;
+  const refPackageHash = (refs.packageHash as string | null) ?? null;
+  if (v.version !== v.schemaVersion) return { ok: false, report: null, errors: ['/version must equal /schemaVersion'] };
+  if (topPackageHash !== refPackageHash) return { ok: false, report: null, errors: ['/packageHash must equal /references/packageHash'] };
   const report: VerificationReportView = {
     schemaVersion: v.schemaVersion as string,
+    version: v.version as string,
+    packageHash: topPackageHash,
     passed: v.passed as boolean,
     coverageComplete: v.coverageComplete as boolean,
     compileArtifactHash: v.compileArtifactHash as string,
@@ -70,7 +79,7 @@ export function validateVerificationReport(value: unknown): ReportValidation {
       revision: (refs.revision as string | null) ?? null,
       clinicalApprovalId: (refs.clinicalApprovalId as string | null) ?? null,
       compilationJobId: (refs.compilationJobId as string | null) ?? null,
-      packageHash: (refs.packageHash as string | null) ?? null,
+      packageHash: refPackageHash,
     },
   };
   return { ok: true, report, errors: [] };

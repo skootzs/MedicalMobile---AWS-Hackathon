@@ -19,6 +19,12 @@ import type { EvidenceRecord } from './artifacts.ts';
 import { readVerified, writeVerified, sha256, snapshotObjectBytes } from './durable-objects.ts';
 import type { DurableObjects, ImmutableObjectReference } from './durable-objects.ts';
 import { verifySnapshot } from './snapshots.ts';
+import { checkerReportDigest } from '../checker-contracts.ts';
+import { toCompilationPayload } from '../compilation-contracts.ts';
+import type { CompilationJobIntent } from '../compilation-contracts.ts';
+import { toVerifyBuildPayload } from '../verify-build-contracts.ts';
+import type { VerifyBuildJobIntent } from '../verify-build-contracts.ts';
+import { r7InitialCompilationStatus } from '../compilation-integration.ts';
 
 type Tx = NonNullable<TransactWriteCommandInput['TransactItems']>;
 interface IndexContract {
@@ -52,6 +58,22 @@ interface Meta { pk: string; sk: string; requestId: string; r2StorageVersion: nu
 const same = (a: unknown, b: unknown) => canonicalizeJson(a) === canonicalizeJson(b);
 const pk = (id: string) => `REQ#${id}`;
 const entries = (image: RepositoryImage, name: string) => image.collections[name] ?? [];
+
+function checkerDigest(image: RepositoryImage, requestId: string, reportId: string): string {
+  for (const [, value] of entries(image, 'checkerReports')) {
+    const report = (value as { report?: { reportId?: string; requestId?: string } }).report;
+    if (report?.reportId === reportId && report.requestId === requestId) return checkerReportDigest(report);
+  }
+  throw new StorageError('CHECKER_REPORT_REQUIRED');
+}
+
+function wireJobPayload(image: RepositoryImage, requestId: string, jobType: string, reportId: string | undefined, intent: object): Record<string, unknown> {
+  if (!reportId) throw new StorageError('CHECKER_REPORT_REQUIRED');
+  const digest = checkerDigest(image, requestId, reportId);
+  return jobType === 'COMPILE_LOGIC'
+    ? toCompilationPayload(intent as CompilationJobIntent, digest)
+    : toVerifyBuildPayload(intent as VerifyBuildJobIntent, digest);
+}
 const maps = (image: RepositoryImage, name: string) => new Map(entries(image,name));
 const safeId = (id: string) => { if (typeof id !== 'string' || !id.trim() || id.length > 100) throw new StorageError('INVALID_REQUEST_ID'); };
 /** Durable repository. Each operation reads DynamoDB META and an immutable image fresh.
@@ -158,11 +180,15 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
       const r = value as {eventId:string}; put({pk:pk(requestId),sk:this.#o.layout.receiptSortKey(r.eventId),requestId,objectRef:await this.#recordRef(value)});
     }
     for (const name of ['jobs','compilationJobs','verifyBuildJobs']) for (const [,value] of added(name)) {
-      const j = value as {jobId:string;jobType:string;idempotencyKey:string};
+      const j = value as {jobId:string;jobType:string;idempotencyKey:string;checkerReportId?:string};
       const jobCreatedAt=(value as {createdAt?:string}).createdAt??lastAudit!.recordedAt;
-      const payload={...(value as object),createdAt:jobCreatedAt};
-      put({...payload,pk:`JOB#${j.jobId}`,sk:'META',status:'requested',...this.#index(this.#o.layout.jobsByRequestIndex,requestId,jobCreatedAt)});
-      // R7's Pipe sends OUTBOX.payload. No second publisher or direct SQS send.
+      const intent={...(value as object),createdAt:jobCreatedAt};
+      put({...intent,pk:`JOB#${j.jobId}`,sk:'META',status:r7InitialCompilationStatus('PENDING'),...this.#index(this.#o.layout.jobsByRequestIndex,requestId,jobCreatedAt)});
+      // The outbox Pipe sends OUTBOX.payload straight to the runner. Compile and
+      // verify payloads are the published wire shape. Drafting stays inside R2.
+      const payload = j.jobType === 'COMPILE_LOGIC' || j.jobType === 'VERIFY_BUILD'
+        ? wireJobPayload(after, requestId, j.jobType, j.checkerReportId, intent)
+        : intent;
       put({pk:`JOB#${j.jobId}`,sk:'OUTBOX',requestId,jobId:j.jobId,jobType:j.jobType,idempotencyKey:j.idempotencyKey,payload});
     }
     for (const name of ['draftingResults','compilationResults','verificationResults']) for (const [,value] of added(name)) {

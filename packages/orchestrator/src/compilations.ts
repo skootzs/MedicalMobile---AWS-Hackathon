@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { canonicalizeJson } from './snapshots.ts';
 import { checkerId, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
-import { createCompilationIntent, referenceMatches } from './compilation-contracts.ts';
+import { createCompilationIntent, referenceMatches, toCompilationPayload } from './compilation-contracts.ts';
+import { checkerReportDigest } from './checker-contracts.ts';
+import { validateCompilationPayload } from './r7-handoff-contract.ts';
 import type { CompilationJobIntent, LogicModelReferenceProvider } from './compilation-contracts.ts';
 import { compilationEvidenceFailure } from './compilation-eligibility.ts';
 import type { CompilationStore } from './storage/compilations.ts';
@@ -99,10 +101,15 @@ export class CompilationHandoffService {
               // Copy immediately: provider data cannot mutate the command while identity is rechecked.
               const ref = supplied ? JSON.parse(canonicalizeJson(supplied)) : null;
               if (!referenceMatches(ref, model)) failure = 'VERIFIED_SNAPSHOT_REFERENCE_REQUIRED';
-              else job = createCompilationIntent({ requestId: c.requestId, revision: c.revision, requestPreview: identity(c), logicModelRevision: c.logicModelRevision,
-                logicModelHash: model.snapshotHash, logicModelUri: ref.uri, snapshotReference: ref, clinicalApprovalId: s.clinicalApproval!.eventId,
-                checkerReportId: s.checks!.reportId, checkerInvocationId: s.checks!.invocationId!, sourceWorkflowVersion: s.version,
-                handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))() });
+              else {
+                job = createCompilationIntent({ requestId: c.requestId, revision: c.revision, requestPreview: identity(c), logicModelRevision: c.logicModelRevision,
+                  logicModelHash: model.snapshotHash, logicModelUri: ref.uri, snapshotReference: ref, clinicalApprovalId: s.clinicalApproval!.eventId,
+                  checkerReportId: s.checks!.reportId, checkerInvocationId: s.checks!.invocationId!, sourceWorkflowVersion: s.version,
+                  handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))() });
+                const digest = checked?.checkerResult ? checkerReportDigest(checked.checkerResult.report) : null;
+                const wire = digest ? validateCompilationPayload(toCompilationPayload(job, digest)) : { ok: false };
+                if (!wire.ok) { job = null; failure = digest ? 'R7_PAYLOAD_INVALID' : 'CHECKER_REPORT_REQUIRED'; }
+              }
             }
           }
         }
