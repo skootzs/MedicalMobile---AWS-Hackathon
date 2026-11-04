@@ -12,6 +12,9 @@ WorkingDirectory=/opt/cht-nocode/current/runner
 EnvironmentFile=/etc/cht-nocode/env
 EnvironmentFile=/etc/cht-nocode/runner.env
 ExecStart=/usr/bin/node src/main.ts
+# The CloudWatch agent ships this file to /cht-nocode/app, for the error alarm.
+StandardOutput=append:/var/log/cht-nocode/runner.log
+StandardError=append:/var/log/cht-nocode/runner.log
 Restart=always
 RestartSec=5
 # Longer than one stage timeout is not needed: an unfinished job is taken over after its lease.

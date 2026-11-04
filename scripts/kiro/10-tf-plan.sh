@@ -7,6 +7,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TF_DIR="$REPO_ROOT/infra/terraform"
 PLAN_FILE="$TF_DIR/tfplan.out"
 
+[ -n "${TF_VAR_alarm_email:-}" ] || { echo "RESULT: FAIL set TF_VAR_alarm_email first"; exit 1; }
+
 echo "== 10-tf-plan: terraform init =="
 cd "$TF_DIR"
 terraform init -input=false

@@ -116,8 +116,7 @@ Get the instance ID with `terraform -chdir=infra/terraform output -raw app_host_
 | 8080 on the app host | Orchestrator or UI, whichever you publish | Reached only through the port forward |
 | None | Runner | It only makes outbound calls |
 
-- **Outbound is 443 only.** AWS APIs, ECR and Docker Hub work. Anything on port 80 fails, and that
-  includes Ubuntu's default apt mirrors, so install nothing on the host with `apt` and build images on Kiro.
+- **Outbound is ports 443 and 80 only.** AWS APIs, ECR, Docker Hub and apt work. Other ports fail. Build images on Kiro.
 - **Containers can use the instance role.** IMDSv2's hop limit is 2, so don't pass AWS keys.
 - **Hosts stop at 23:00 America/Los_Angeles.** Use a restart policy (`restart: unless-stopped`) so
   the stack comes back when a host starts again. The runner restarts on its own.
@@ -146,7 +145,8 @@ The orchestrator, UI and runner share this one role.
 ## What the runner expects
 
 The runner is a systemd service on the app host (`cht-build-runner`), not part of compose. Check it
-with `systemctl status cht-build-runner` and `journalctl -u cht-build-runner`.
+with `systemctl status cht-build-runner`. It logs to `/var/log/cht-nocode/runner.log`, which is shipped
+to `/cht-nocode/app` in a `runner-<instance-id>` stream.
 
 | It needs | Details |
 |---|---|

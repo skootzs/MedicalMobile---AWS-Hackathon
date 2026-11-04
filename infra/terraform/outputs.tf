@@ -57,3 +57,7 @@ output "job_events_queue_url" {
 output "job_events_dlq_url" {
   value = aws_sqs_queue.job_events_dlq.url
 }
+
+output "log_group_name" {
+  value = aws_cloudwatch_log_group.app.name
+}

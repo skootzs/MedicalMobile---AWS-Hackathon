@@ -3,7 +3,8 @@
 # Terraform shows the plan and asks for confirmation. App-level deploys belong to the
 # integrator (docs/integration-handoff.md); the runner has scripts/kiro/31-deploy-runner.sh.
 #
-# Requires: Terraform, AWS CLI, Python 3, and credentials for the hackathon account.
+# Requires: Terraform, AWS CLI, Python 3, credentials for the hackathon account, and
+# TF_VAR_alarm_email set to the address for the error alarm.
 set -euo pipefail
 
 usage() {
@@ -11,6 +12,8 @@ usage() {
   exit 2
 }
 [ "$#" -eq 0 ] || usage
+
+[ -n "${TF_VAR_alarm_email:-}" ] || { echo "RESULT: FAIL set TF_VAR_alarm_email first"; exit 1; }
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="$REPO_ROOT/infra/terraform"
