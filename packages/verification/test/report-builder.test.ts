@@ -197,3 +197,21 @@ test('pageFallbacks lists ids and stays ok:true', () => {
   assert.equal(pf.ok, true);
   assert.match(pf.detail, /x, y/);
 });
+
+// --- Item G1: top-level version and packageHash mirrors ---
+
+test('G1: report.version equals schemaVersion and packageHash mirrors references', () => {
+  const rep = buildReport({
+    ...baseArgs(),
+    references: { ...references, packageHash: 'pkg-xyz' },
+    cases: [],
+  });
+  assert.equal(rep.version, rep.schemaVersion);
+  assert.equal(rep.version, '2.2.0');
+  assert.equal(rep.packageHash, 'pkg-xyz');
+});
+
+test('G1: packageHash is null when references.packageHash is null', () => {
+  const rep = buildReport({ ...baseArgs(), cases: [] });
+  assert.equal(rep.packageHash, null);
+});

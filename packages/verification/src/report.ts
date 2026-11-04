@@ -18,7 +18,7 @@
  *       python too old, missing inputs, or the harness could not start).
  */
 
-export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.1.0';
+export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.2.0';
 
 /** Any JSON-serialisable value. Used where the shape belongs to a teammate. */
 export type JsonValue =
@@ -211,6 +211,16 @@ export interface Disagreement {
 
 export interface VerificationReport {
   schemaVersion: typeof VERIFICATION_REPORT_SCHEMA_VERSION;
+  /**
+   * Alias of schemaVersion, as a plain string, for R7's verify stage which
+   * reads a top-level `version`. The builder enforces version === schemaVersion.
+   */
+  version: string;
+  /**
+   * Same value as references.packageHash (nullable), promoted to the top level
+   * for R7's verify stage. The builder enforces they are equal.
+   */
+  packageHash: string | null;
   /** ISO 8601 UTC timestamp. */
   generatedAt: string;
   /**

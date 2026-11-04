@@ -23,7 +23,20 @@ export {
   EvaluatorNotWiredSource,
 } from './expected-outcome-source.js';
 
-export { sha256, hashFileSet, hashDirectory, compileArtifactHash, listFilesRelative } from './hashing.js';
+export type {
+  CompileArtifactVerification,
+  FileVerifyResult,
+  ManifestForVerify,
+} from './hashing.js';
+export {
+  sha256,
+  hashFileSet,
+  hashDirectory,
+  listFilesRelative,
+  generatedTranslations,
+  verifyCompileArtifact,
+  TRANSLATIONS_FILE,
+} from './hashing.js';
 
 export type { ChtConfVersion, ChtConfVersionSource, CollectedToolVersions } from './versions.js';
 export {
@@ -40,6 +53,7 @@ export type {
   ExecutionResult,
   FillResult,
   HarnessLike,
+  HarnessTask,
   PatientExecutorOptions,
 } from './case-executor.js';
 export type { CompileManifest, CoverageCase, ResolvedBranchIds } from './case-executor.js';

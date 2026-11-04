@@ -103,11 +103,6 @@
         "appearance": "field-list"
       },
       {
-        "type": "note",
-        "name": "watermark_note",
-        "label::en": "<span style=\"color:red\">DEMONSTRATION ONLY</span>"
-      },
-      {
         "type": "select_one yes_no",
         "name": "has_cough_or_difficult_breathing",
         "label::en": "Does the child have cough or difficult breathing?",
@@ -234,11 +229,6 @@
         "name": "summary",
         "label::en": "Summary",
         "appearance": "field-list summary"
-      },
-      {
-        "type": "note",
-        "name": "summary_watermark_note",
-        "label::en": "<span style=\"color:red\">DEMONSTRATION ONLY</span>"
       },
       {
         "type": "note",

@@ -67,8 +67,10 @@ const INTEGER_QUESTIONS = new Set(['breaths_per_minute']);
 export function mapPatientToPages(patient: MappablePatient, pages: readonly PageSpecLike[]): string[][] {
   return pages.map((page) =>
     page.questions.map((q) => {
-      const inputKey = QUESTION_TO_INPUT[q] ?? q;
-      const value = patient[inputKey];
+      // Accept either the camelCase synth key or the raw form-id key (golden
+      // cases use the form id directly). Prefer whichever is present.
+      const camel = QUESTION_TO_INPUT[q];
+      const value = camel !== undefined && camel in patient ? patient[camel] : patient[q];
       if (INTEGER_QUESTIONS.has(q)) return intAnswer(value as number | null | undefined);
       return yesNo(value as boolean | null | undefined);
     }),

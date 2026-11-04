@@ -263,6 +263,10 @@ export function buildReport(args: BuildReportArgs): VerificationReport {
 
   return {
     schemaVersion: VERIFICATION_REPORT_SCHEMA_VERSION,
+    // Top-level mirrors for R7's verify stage; kept in lock-step here so they
+    // can never drift from their canonical source.
+    version: VERIFICATION_REPORT_SCHEMA_VERSION,
+    packageHash: args.references.packageHash,
     generatedAt: args.generatedAt,
     passed,
     coverageComplete,

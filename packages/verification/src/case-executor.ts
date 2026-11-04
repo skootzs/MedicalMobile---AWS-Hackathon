@@ -10,13 +10,25 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { JsonValue } from './report.js';
 
-/** Minimal shape of the harness we depend on, so this module stays testable. */
+/** A task emission as returned by the harness getTasks() API. */
+export interface HarnessTask {
+  emission?: { title?: unknown; dueDate?: unknown };
+}
+
+/**
+ * Minimal shape of the harness we depend on, so this module stays testable.
+ * getTasks/flush/getNow are optional: when absent, task observation is skipped
+ * and no task fields are recorded.
+ */
 export interface HarnessLike {
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
   clear(): Promise<unknown>;
   setNow(now: string): unknown;
   fillForm(...args: unknown[]): Promise<FillResult>;
+  getTasks?(): Promise<HarnessTask[]>;
+  flush?(amount: number): Promise<unknown>;
+  getNow?(): number;
 }
 
 export interface FillResult {
@@ -121,7 +133,21 @@ export interface PatientExecutorOptions {
   fixedClock: string;
   /** Output field names to record, from manifest.outputFields plus extras. */
   outputFields: string[];
+  /**
+   * When true (and the harness supports getTasks/flush/getNow), record two
+   * OBSERVED task fields on actual: `task_present` (bool) and
+   * `task_due_in_days` (number of days from the fixed clock to the task's due
+   * date, or null when absent). These are observations, never expected values.
+   */
+  observeTasks?: boolean;
+  /** Days to scan forward for a follow-up task when observeTasks is on. */
+  taskWindowDays?: number;
+  /** Substring that identifies a follow-up task by its emission title. */
+  followUpTitleMatch?: string;
 }
+
+const DAY_MS = 86_400_000;
+const DEFAULT_TASK_WINDOW_DAYS = 10;
 
 /**
  * Builds a contact whose date_of_birth yields the requested age in months
@@ -144,11 +170,43 @@ export class PatientExecutor implements CaseExecutor {
     return `${pad(yy, 4)}-${pad(mm, 2)}-${pad(d, 2)}`;
   }
 
-  private pick(result: FillResult): Record<string, JsonValue> {
+  private async pick(result: FillResult): Promise<Record<string, JsonValue>> {
     const fields = result.report?.fields ?? {};
     const out: Record<string, JsonValue> = {};
     for (const key of this.opts.outputFields) out[key] = key in fields ? fields[key]! : null;
+    if (this.opts.observeTasks) {
+      const obs = await this.observeFollowUpTask();
+      out['task_present'] = obs.task_present;
+      out['task_due_in_days'] = obs.task_due_in_days;
+    }
     return out;
+  }
+
+  /**
+   * OBSERVATION only: scan forward up to taskWindowDays for a follow-up task
+   * and record whether one appears and its due date relative to the fixed
+   * clock. Requires getTasks/flush/getNow on the harness; if any is missing,
+   * returns task_present:false / null without judgement. Writes no expected
+   * value. The clock advanced by flush is reset by the next case's setNow.
+   */
+  private async observeFollowUpTask(): Promise<{ task_present: boolean; task_due_in_days: number | null }> {
+    const h = this.opts.harness;
+    if (!h.getTasks || !h.flush || !h.getNow) return { task_present: false, task_due_in_days: null };
+    const match = this.opts.followUpTitleMatch ?? 'follow_up';
+    const submitNow = h.getNow();
+    const window = this.opts.taskWindowDays ?? DEFAULT_TASK_WINDOW_DAYS;
+    for (let d = 0; d <= window; d++) {
+      const tasks = await h.getTasks();
+      const found = tasks.find((t) => t.emission && typeof t.emission.title === 'string' && t.emission.title.includes(match));
+      if (found) {
+        const due = found.emission!.dueDate;
+        const dueMs = typeof due === 'number' ? due : Date.parse(String(due));
+        const days = Number.isFinite(dueMs) ? Math.round((dueMs - submitNow) / DAY_MS) : null;
+        return { task_present: true, task_due_in_days: days };
+      }
+      if (d < window) await h.flush(1);
+    }
+    return { task_present: false, task_due_in_days: null };
   }
 
   private isPageVisibilityError(result: FillResult): boolean {
@@ -190,7 +248,7 @@ export class PatientExecutor implements CaseExecutor {
     }
 
     if (result.report && this.otherErrors(result)!.length === 0) {
-      return { actual: this.pick(result), harnessOutput: null, usedPageFallback: false, status: 'ok' };
+      return { actual: await this.pick(result), harnessOutput: null, usedPageFallback: false, status: 'ok' };
     }
 
     // Fallback only when the sole problem is page visibility (option B).
@@ -212,7 +270,7 @@ export class PatientExecutor implements CaseExecutor {
         const fbOther = this.otherErrors(fb)!;
         if (fb.report && fbOther.length === 0) {
           return {
-            actual: this.pick(fb),
+            actual: await this.pick(fb),
             harnessOutput: `page-count fallback: full arrays had hidden pages; submitted after truncating to ${n} page array(s)${n === 0 ? ' ([[]])' : ''}`,
             usedPageFallback: true,
             status: 'ok',
@@ -221,7 +279,7 @@ export class PatientExecutor implements CaseExecutor {
         if (fbOther.length > 0 && !this.isPageVisibilityError(fb)) {
           // A real (non-visibility) failure: stop, record it as an error.
           return {
-            actual: fb.report ? this.pick(fb) : null,
+            actual: fb.report ? await this.pick(fb) : null,
             harnessOutput: `fallback (truncate to ${n}) failed with non-visibility error: ${JSON.stringify(fbOther)}`,
             usedPageFallback: true,
             status: 'error',
@@ -238,9 +296,17 @@ export class PatientExecutor implements CaseExecutor {
     }
 
     // Any other failure is a real error, never dressed up as a fallback.
+    // A required-but-unanswered visible question blocks submission; surface
+    // that specific reason (H3). We deliberately do NOT map it to "incomplete".
+    const blockedByRequired = (result.errors ?? []).some(
+      (e) => typeof e.msg === 'string' && e.msg.includes('enketo.constraint.required'),
+    );
+    const harnessOutput = blockedByRequired
+      ? `form blocked submission (required question unanswered): ${JSON.stringify(result.errors ?? [])}`
+      : `harness errors: ${JSON.stringify(result.errors ?? [])}`;
     return {
-      actual: result.report ? this.pick(result) : null,
-      harnessOutput: `harness errors: ${JSON.stringify(result.errors ?? [])}`,
+      actual: result.report ? await this.pick(result) : null,
+      harnessOutput,
       usedPageFallback: false,
       status: 'error',
     };
@@ -263,6 +329,9 @@ export interface CompileManifest {
   formId: string;
   snapshotHash: string | null;
   artifactHash: string;
+  inputHash?: string;
+  files?: Array<{ path: string; sha256: string; bytes?: number }>;
+  translations?: Record<string, string>;
   outputFields?: Record<string, string | null>;
   decisionTable?: { otherwise?: unknown };
   outcomes?: Array<{ id?: unknown }>;

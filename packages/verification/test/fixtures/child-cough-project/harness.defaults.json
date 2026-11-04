@@ -1,0 +1,23 @@
+{
+  "coreVersion": "4.11.0",
+  "user": "chw_contact",
+  "subject": "child_24m",
+  "docs": [
+    {
+      "_id": "child_24m",
+      "type": "person",
+      "name": "Demo Child (synthetic)",
+      "date_of_birth": "2024-11-04",
+      "patient_id": "10001",
+      "reported_date": 1730700000000,
+      "parent": { "_id": "household", "parent": { "_id": "chw_area" } }
+    },
+    {
+      "_id": "chw_contact",
+      "type": "person",
+      "name": "CHW (synthetic)",
+      "reported_date": 1730700000000,
+      "parent": { "_id": "chw_area", "parent": { "_id": "district" } }
+    }
+  ]
+}

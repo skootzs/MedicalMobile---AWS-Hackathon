@@ -10,21 +10,31 @@
   "title": "Child Cough and Fast Breathing (Demo)",
   "snapshotHash": null,
   "inputHash": "186214726c73a4b8db5e641a5b28a7fc6c42689078d7fcacdf3839a8f1ee1a67",
-  "artifactHash": "32e7ab30a7729cc682d2be50769bb85b30fdb770c26ab8bfbf5d6031e5281b89",
+  "artifactHash": "d5f520ce1f0c63f7cded5f5fc9ec5eef9899a9843be6e0ad1fb0c3f57156878c",
   "options": {
-    "watermark": "DEMONSTRATION ONLY",
+    "watermark": null,
     "icon": "icon-healthcare"
   },
   "files": [
     {
       "path": "forms/app/child_cough.xlsx",
-      "sha256": "6681c1710a3f76e42a842c7a61c88df005a3ac63b58724e23148e4620547a963",
-      "bytes": 24101
+      "sha256": "edbeccd5489178a3a0e2c63cff9e1785efb0d6488ec6aa06f40b24b037aa7cc7",
+      "bytes": 23483
     },
     {
       "path": "forms/app/child_cough.properties.json",
       "sha256": "eb41a38d6a48b79b6915e4c641c340225bf6ae3cc3a4f4567731b52019e18831",
       "bytes": 247
+    },
+    {
+      "path": "tasks.js",
+      "sha256": "492d9f0f3bbea971f5995b0c0b2d7c11893f740e7756049e0340c59a5ea35095",
+      "bytes": 1436
+    },
+    {
+      "path": "translations/messages-en.properties",
+      "sha256": "9c4c5a4c9bdc94e82f4a3504c75e58fc0859335aa730eb58d27f53b0a51fb059",
+      "bytes": 84
     }
   ],
   "outputFields": {
@@ -77,6 +87,22 @@
       "followUpDays": null
     }
   ],
+  "tasks": {
+    "name": "child_cough_follow_up",
+    "title": "Follow up: Child Cough and Fast Breathing (Demo)",
+    "window": {
+      "start": 0,
+      "end": 2
+    },
+    "windowSource": "default",
+    "outcomes": [
+      "pneumonia",
+      "cough_or_cold"
+    ]
+  },
+  "translations": {
+    "task.child_cough.follow_up.title": "Follow up: Child Cough and Fast Breathing (Demo)"
+  },
   "openAmbiguities": [
     {
       "id": "A1",
@@ -112,7 +138,8 @@
     }
   ],
   "template": {
-    "hash": "c40d71680adeb0bb12eeccbc7ee213436ed90788fe6d26ac549ee7df824623a9",
-    "files": 4
-  }
+    "hash": "534501c7471d69daa076eeb3011e0c147a2ebbd074c9cc96f4561ebb6e480931",
+    "files": 9
+  },
+  "baseline": null
 }

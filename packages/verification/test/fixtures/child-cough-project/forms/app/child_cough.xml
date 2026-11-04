@@ -17,9 +17,6 @@
           <text id="/data/intro:label">
             <value>Cough or difficult breathing</value>
           </text>
-          <text id="/data/intro/watermark_note:label">
-            <value>&lt;span style="color:red"&gt;DEMONSTRATION ONLY&lt;/span&gt;</value>
-          </text>
           <text id="/data/intro/has_cough_or_difficult_breathing:label">
             <value>Does the child have cough or difficult breathing?</value>
           </text>
@@ -61,9 +58,6 @@
           </text>
           <text id="/data/summary:label">
             <value>Summary</value>
-          </text>
-          <text id="/data/summary/summary_watermark_note:label">
-            <value>&lt;span style="color:red"&gt;DEMONSTRATION ONLY&lt;/span&gt;</value>
           </text>
           <text id="/data/summary/outcome_severe_pneumonia_or_very_severe_disease:label">
             <value>&lt;span style="color:red"&gt;SEVERE PNEUMONIA OR VERY SEVERE DISEASE&lt;/span&gt;
@@ -124,7 +118,6 @@ Not all answers needed for a classification were given.</value>
           <patient_age_in_months/>
           <in_scope/>
           <intro>
-            <watermark_note/>
             <has_cough_or_difficult_breathing/>
           </intro>
           <danger_signs>
@@ -146,7 +139,6 @@ Not all answers needed for a classification were given.</value>
           <follow_up_days/>
           <t_follow_up_date/>
           <summary>
-            <summary_watermark_note/>
             <outcome_severe_pneumonia_or_very_severe_disease/>
             <outcome_pneumonia/>
             <outcome_cough_or_cold/>
@@ -187,7 +179,6 @@ Not all answers needed for a classification were given.</value>
       <bind nodeset="/data/patient_name" type="string" calculate="../inputs/contact/name"/>
       <bind nodeset="/data/patient_age_in_months" type="string" calculate="if(../inputs/contact/date_of_birth = '', '', difference-in-months(../inputs/contact/date_of_birth, today()))"/>
       <bind nodeset="/data/in_scope" type="string" calculate="if((( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &gt;= 2) and ( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &lt; 60)), 'yes', if((( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &lt; 2) or ( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &gt;= 60)), 'no', 'unknown'))"/>
-      <bind nodeset="/data/intro/watermark_note" readonly="true()" type="string"/>
       <bind nodeset="/data/intro/has_cough_or_difficult_breathing" type="string" required="true()" relevant=" /data/in_scope  = 'yes'"/>
       <bind nodeset="/data/danger_signs" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
       <bind nodeset="/data/danger_signs/not_able_to_drink_or_breastfeed" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
@@ -205,7 +196,6 @@ Not all answers needed for a classification were given.</value>
       <bind nodeset="/data/referral_urgent" type="string" calculate="if( /data/classification  = 'severe_pneumonia_or_very_severe_disease', 'yes', 'no')"/>
       <bind nodeset="/data/follow_up_days" type="string" calculate="if( /data/classification  = 'pneumonia', 3, if( /data/classification  = 'cough_or_cold', 5, ''))"/>
       <bind nodeset="/data/t_follow_up_date" type="string" calculate="if( /data/follow_up_days  = '', '', date-time(decimal-date-time(today()) +  /data/follow_up_days ))"/>
-      <bind nodeset="/data/summary/summary_watermark_note" readonly="true()" type="string"/>
       <bind nodeset="/data/summary/outcome_severe_pneumonia_or_very_severe_disease" readonly="true()" type="string" relevant=" /data/classification  = 'severe_pneumonia_or_very_severe_disease'"/>
       <bind nodeset="/data/summary/outcome_pneumonia" readonly="true()" type="string" relevant=" /data/classification  = 'pneumonia'"/>
       <bind nodeset="/data/summary/outcome_cough_or_cold" readonly="true()" type="string" relevant=" /data/classification  = 'cough_or_cold'"/>
@@ -227,9 +217,6 @@ Not all answers needed for a classification were given.</value>
     </group>
     <group appearance="field-list" ref="/data/intro">
       <label ref="jr:itext('/data/intro:label')"/>
-      <input ref="/data/intro/watermark_note">
-        <label ref="jr:itext('/data/intro/watermark_note:label')"/>
-      </input>
       <select1 ref="/data/intro/has_cough_or_difficult_breathing">
         <label ref="jr:itext('/data/intro/has_cough_or_difficult_breathing:label')"/>
         <itemset nodeset="instance('yes_no')/root/item">
@@ -299,9 +286,6 @@ Not all answers needed for a classification were given.</value>
     </group>
     <group appearance="field-list summary" ref="/data/summary">
       <label ref="jr:itext('/data/summary:label')"/>
-      <input ref="/data/summary/summary_watermark_note">
-        <label ref="jr:itext('/data/summary/summary_watermark_note:label')"/>
-      </input>
       <input ref="/data/summary/outcome_severe_pneumonia_or_very_severe_disease">
         <label ref="jr:itext('/data/summary/outcome_severe_pneumonia_or_very_severe_disease:label')"/>
       </input>

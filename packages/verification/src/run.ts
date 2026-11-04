@@ -14,11 +14,12 @@
  * runner NEVER writes an expected value or copies actuals into expected.
  */
 import { createRequire } from 'node:module';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { IntegrityCheck, JsonValue, References, RunInfo, VerificationReport } from './report.js';
 import { allToolVersionsKnown, collectToolVersions, PythonTooOldError } from './versions.js';
-import { compileArtifactHash, hashDirectory, sha256 } from './hashing.js';
+import { hashDirectory, sha256, verifyCompileArtifact } from './hashing.js';
 import {
   PatientExecutor,
   derivePages,
@@ -31,12 +32,17 @@ import {
   type HarnessLike,
 } from './case-executor.js';
 import { mapPatientToPages, type MappablePatient } from './patient-mapper.js';
-import { buildReport, type ExecutedCase } from './report-builder.js';
+import { buildReport, type ExecutedCase, type SourceExpectation } from './report-builder.js';
 
 const require = createRequire(import.meta.url);
 
 const DEFAULT_OUT = '/out';
 const FIXED_CLOCK = '2026-02-15'; // deterministic clock for age and date calcs
+
+/** Directory of the compiled runner (dist/), for resolving bundled data. */
+function runnerDir(): string {
+  return dirname(fileURLToPath(import.meta.url));
+}
 
 /**
  * Sanitize argv for the report: keep only the basenames of the node binary and
@@ -60,6 +66,7 @@ interface Env {
   outDir: string;
   tz: string;
   patientsFile: string | null;
+  goldenCasesFile: string | null;
   references: References;
   expectedSnapshotHash: string | null;
 }
@@ -88,6 +95,7 @@ function readEnv(): Env {
     outDir: process.env.OUT_DIR || DEFAULT_OUT,
     tz,
     patientsFile: orNull(process.env.PATIENTS_FILE),
+    goldenCasesFile: orNull(process.env.GOLDEN_CASES_FILE),
     references: {
       snapshotId: orNull(process.env.SNAPSHOT_ID),
       logicModelHash: orNull(process.env.LOGIC_MODEL_HASH),
@@ -134,6 +142,8 @@ export interface PatientCase {
   branchId: string | null;
   kind: ExecutedCase['kind'];
   input: Record<string, unknown>;
+  /** Optional golden expected-outcome source for this case (H). */
+  golden?: SourceExpectation | null;
 }
 
 export interface RunDeps {
@@ -143,6 +153,12 @@ export interface RunDeps {
   patients: PatientCase[];
   /** sha256 of the patients file bytes, or null when no file was supplied. */
   patientSetHash: string | null;
+  /** sha256 of the golden file bytes, or null when no golden file was supplied. */
+  goldenCasesHash?: string | null;
+  /** Extra output fields the golden sources declare, for the executor to read. */
+  extraOutputFields?: string[];
+  /** Info-level integrity note about the golden file (never a failing check). */
+  goldenInfo?: IntegrityCheck | null;
   /** Sample branch ids, used only if the manifest yields no outcomes. */
   sampleBranchIds?: string[] | null;
   log: (line: string) => void;
@@ -164,18 +180,38 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   });
 
   const manifest = readManifest(env.configDir);
-  const formId = manifest.formId;
 
-  // compileArtifactHash: recompute with R5's algorithm and compare to manifest.
-  const recomputed = compileArtifactHash(env.configDir, formId);
-  const hashOk = recomputed === manifest.artifactHash;
+  // compileArtifactHash: verify each manifest file against disk (translations
+  // regenerated from manifest.translations and checked to be present on disk),
+  // plus manifest.artifactHash internal consistency. One line per file.
+  const artifact = verifyCompileArtifact(env.configDir, {
+    artifactHash: manifest.artifactHash,
+    files: manifest.files ?? [],
+    ...(manifest.translations ? { translations: manifest.translations } : {}),
+  });
   integrityChecks.push({
     name: 'compileArtifactHash',
-    ok: hashOk,
-    detail: hashOk
-      ? `recomputed hash matches manifest (${recomputed})`
-      : `recomputed ${recomputed} != manifest ${manifest.artifactHash}`,
+    ok: artifact.ok,
+    detail: artifact.files.map((f) => `${f.path}: ${f.ok ? 'ok' : 'FAIL'} (${f.detail})`).join('; '),
   });
+
+  // LOGIC_MODEL_HASH: if set, must equal manifest.inputHash; if not set,
+  // recorded as "not provided" and NOT ok.
+  {
+    const provided = env.references.logicModelHash;
+    if (provided === null) {
+      integrityChecks.push({ name: 'logicModelHash', ok: false, detail: 'not provided' });
+    } else {
+      const ok = provided === manifest.inputHash;
+      integrityChecks.push({
+        name: 'logicModelHash',
+        ok,
+        detail: ok
+          ? 'LOGIC_MODEL_HASH matches manifest.inputHash'
+          : `LOGIC_MODEL_HASH ${provided} != manifest.inputHash ${String(manifest.inputHash)}`,
+      });
+    }
+  }
 
   // Optional: EXPECTED_SNAPSHOT_HASH must equal manifest.snapshotHash.
   if (env.expectedSnapshotHash !== null) {
@@ -194,9 +230,14 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   // packageHash is echoed via references, never verified. (Deliberate no-op.)
 
   // Run cases.
+  // Add a golden info note (never a failing check) if provided.
+  if (deps.goldenInfo) integrityChecks.push(deps.goldenInfo);
+
   const rowsPath = join(env.configDir, 'compile-rows.json');
-  const outputFields = outputFieldsFromManifest(manifest);
-  const executor = deps.executorFactory(harness, formId, rowsPath, outputFields);
+  // The executor must record every field any source declares (H2), so union
+  // the manifest output fields with the golden sources' declared fields.
+  const outputFields = [...new Set([...outputFieldsFromManifest(manifest), ...(deps.extraOutputFields ?? [])])];
+  const executor = deps.executorFactory(harness, manifest.formId, rowsPath, outputFields);
 
   const executed: ExecutedCase[] = [];
   const fallbackIds: string[] = [];
@@ -212,8 +253,8 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
         }
         if (res.usedPageFallback) fallbackIds.push(p.id);
         log(`case ${p.id}: status=${res.status} fallback=${res.usedPageFallback}`);
-        // No ExpectedOutcomeSource is wired in: golden and evaluator stay null,
-        // so every case derives to status 'error'. We NEVER synthesise expected.
+        // golden comes from GOLDEN_CASES_FILE when present; evaluator is not
+        // wired yet. We NEVER synthesise an expected value.
         executed.push({
           id: p.id,
           input: p.input as never,
@@ -221,7 +262,7 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
           kind: p.kind,
           actual: res.actual,
           harnessOutput: res.harnessOutput,
-          golden: null,
+          golden: p.golden ?? null,
           evaluator: null,
         });
       }
@@ -269,10 +310,10 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     toolVersions,
     run,
     references: env.references,
-    compileArtifactHash: recomputed,
+    compileArtifactHash: manifest.artifactHash,
     testedDirHash,
     patientSetHash: deps.patientSetHash ?? sha256(JSON.stringify([])),
-    goldenCasesHash: null, // no golden file supplied; never hash empty input
+    goldenCasesHash: deps.goldenCasesHash ?? null, // never hash empty input
     coverage,
     classificationField,
     pageFallbackCaseIds: fallbackIds,
@@ -305,14 +346,25 @@ async function main(): Promise<number> {
   }
 
   try {
-    // Load and map patients from PATIENTS_FILE, if supplied. patientSetHash is
-    // the sha256 of the file's raw bytes (not a re-serialisation).
+    // Resolve the patients file: PATIENTS_FILE if set, else the bundled
+    // data/patients.json next to the compiled runner (copied at build time).
+    // patientSetHash is the sha256 of the chosen file's raw bytes.
     let patients: PatientCase[] = [];
     let patientSetHash: string | null = null;
-    if (env.patientsFile) {
-      const bytes = readFileSync(env.patientsFile);
+    let patientsFile: string | null = env.patientsFile;
+    if (!patientsFile) {
+      const bundled = join(runnerDir(), 'data', 'patients.json');
+      if (existsSync(bundled)) {
+        patientsFile = bundled;
+        log(`PATIENTS_FILE unset; using bundled patient set at ${bundled}`);
+      } else {
+        log('no PATIENTS_FILE and no bundled data/patients.json; running with an empty patient set (passed will be false)');
+      }
+    }
+    if (patientsFile) {
+      const bytes = readFileSync(patientsFile);
       patientSetHash = sha256(bytes);
-      const stored = loadPatients(env.patientsFile);
+      const stored = loadPatients(patientsFile);
       // Page derivation is needed to map inputs; done once here.
       const rowsPath = join(env.configDir, 'compile-rows.json');
       const pages = derivePages(rowsPath);
@@ -325,17 +377,69 @@ async function main(): Promise<number> {
           pageAnswers: mapPatientToPages(p as MappablePatient, pages),
         },
       }));
-      log(`loaded ${patients.length} patients from ${env.patientsFile}`);
-    } else {
-      log('no PATIENTS_FILE supplied; running with an empty patient set (passed will be false)');
+      log(`loaded ${patients.length} patients from ${patientsFile}`);
+    }
+
+    // Golden cases (optional). Each becomes an additional case "golden/<id>"
+    // whose golden source declares exactly the keys of its `expected`. Inputs
+    // are the raw form ids; absent/null => unanswered (we never invent answers).
+    let goldenCasesHash: string | null = null;
+    let goldenInfo: IntegrityCheck | null = null;
+    const extraOutputFields = new Set<string>();
+    if (env.goldenCasesFile) {
+      const bytes = readFileSync(env.goldenCasesFile);
+      goldenCasesHash = sha256(bytes);
+      const golden = JSON.parse(bytes.toString('utf8')) as Array<{
+        id: string;
+        approval?: string;
+        input?: Record<string, unknown>;
+        expected: Record<string, JsonValue>;
+      }>;
+      const rowsPath = join(env.configDir, 'compile-rows.json');
+      const pages = derivePages(rowsPath);
+      const approvals = [...new Set(golden.map((c) => c.approval ?? '(none)'))];
+      goldenInfo = {
+        name: 'goldenCasesInfo',
+        ok: true, // informational, never a failing check
+        detail:
+          `${golden.length} golden cases from ${env.goldenCasesFile}; approval values: ${JSON.stringify(approvals)}. ` +
+          'Technical expectations, not clinician-approved; never treated as approval (clinicalApprovalId is the only approval reference).',
+      };
+      for (const gc of golden) {
+        const input = gc.input ?? {};
+        const ageMonths = typeof input['patient_age_in_months'] === 'number' ? (input['patient_age_in_months'] as number) : null;
+        // Map form-id answers directly; absent/null keys stay unanswered.
+        const mappable = input as MappablePatient;
+        for (const k of Object.keys(gc.expected)) extraOutputFields.add(k);
+        const source: SourceExpectation = { expected: gc.expected, fields: Object.keys(gc.expected) };
+        patients.push({
+          id: `golden/${gc.id}`,
+          branchId: null,
+          kind: 'branch',
+          input: { ageMonths, pageAnswers: mapPatientToPages(mappable, pages) },
+          golden: source,
+        });
+      }
+      log(`loaded ${golden.length} golden cases from ${env.goldenCasesFile}`);
     }
 
     const harness = loadHarness(env.configDir, env.tz);
     const report = await runVerification({
       env,
       harness,
+      goldenCasesHash,
+      goldenInfo,
+      extraOutputFields: [...extraOutputFields],
       executorFactory: (h, formId, rowsPath, outputFields) =>
-        new PatientExecutor({ harness: h, formId, rowsFilePath: rowsPath, fixedClock: FIXED_CLOCK, outputFields }),
+        new PatientExecutor({
+          harness: h,
+          formId,
+          rowsFilePath: rowsPath,
+          fixedClock: FIXED_CLOCK,
+          outputFields,
+          observeTasks: true,
+          followUpTitleMatch: 'follow_up',
+        }),
       patients,
       patientSetHash,
       // Sample branch ids (used only if the manifest has no outcomes): the
