@@ -27,8 +27,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 libnspr4 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libdbus-1-3 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libxtst6 \
     libx11-xcb1 libxcb1 libgbm1 libasound2 libpango-1.0-0 libcairo2 libgtk-3-0 \
-    fonts-liberation ca-certificates \
+    fonts-liberation ca-certificates python3-pip \
   && rm -rf /var/lib/apt/lists/*
+
+# R4's validator, run by R6's harness chain. R6 tested this exact version.
+RUN python3 -m pip install --break-system-packages --no-cache-dir jsonschema==4.26.0
 
 WORKDIR /build-image
 COPY package.json package-lock.json ./

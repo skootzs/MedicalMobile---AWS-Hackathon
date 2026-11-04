@@ -1,32 +1,37 @@
 #!/bin/sh
-# Stage 6 (verify), run inside BUILD_IMAGE with --cap-add SYS_ADMIN (Chromium).
-# /project is the already-converted package from COMPILE_LOGIC (forms/app/*.xml
-# + compiled app_settings.json) -- NO reconversion happens here.
+# Stage 6 (verify), run inside BUILD_IMAGE. /project is the already-converted package from
+# COMPILE_LOGIC, so nothing is reconverted here. The runner passes CHT_CONFIG_DIR, OUT_DIR,
+# TZ, PACKAGE_HASH, COMPILE_ARTIFACT_HASH, LOGIC_MODEL_HASH and, for jobs with golden
+# cases, GOLDEN_CASES_FILE.
 #
-# TODO(R6): confirm the exact command and env var names once the verifier is
-# written (see docs/job-delivery.md / r7-infra-instructions.md section 6).
-# Everything that's R6's to confirm is isolated in this block so it's a
-# one-line change later.
+# Exit codes: 0 passed, 1 failed with a valid report, 2 runner error.
 VERIFIER_ENTRYPOINT="/verifier/dist/run.js"
 CHT_CONFIG_DIR="${CHT_CONFIG_DIR:-/project}"
 OUT_DIR="${OUT_DIR:-/out}"
+STAGE_LOG="/tmp/run-verify-stage.log"
 
 set -u
 export TZ="${TZ:-Africa/Nairobi}"
+# /verifier has no node_modules: the harness and its Chromium are baked into the image.
+export NODE_PATH="/build-image/node_modules"
+# The verifier's fallback if `cht --version` can't run. Matches the image's pin.
+export CHT_CONF_VERSION="${CHT_CONF_VERSION:-6.6.1}"
 export CHT_CONFIG_DIR OUT_DIR
 
-{
-  echo "== run-verify: CHT_CONFIG_DIR=$CHT_CONFIG_DIR OUT_DIR=$OUT_DIR =="
-  node "$VERIFIER_ENTRYPOINT"
-} > "$OUT_DIR/verification.log" 2>&1
+# The verifier writes verification.log itself, so its console output goes elsewhere first.
+node "$VERIFIER_ENTRYPOINT" > "$STAGE_LOG" 2>&1
 exit_code=$?
 
+{
+  echo "== run-verify: console output (CHT_CONFIG_DIR=$CHT_CONFIG_DIR OUT_DIR=$OUT_DIR) =="
+  cat "$STAGE_LOG"
+} >> "$OUT_DIR/verification.log"
+
 if [ "$exit_code" -eq 0 ] || [ "$exit_code" -eq 1 ]; then
-  # 0 = passed, 1 = failed-but-ran: both need a valid report.json. The runner
-  # (not this script) validates report.json against R6's schema and treats
-  # exit 0/1 with a missing/invalid report as exit 2.
+  # The runner validates report.json against R6's schema; this only catches a missing one.
   if [ ! -s "$OUT_DIR/report.json" ]; then
     echo "RESULT: FAIL exit $exit_code but no report.json written" >> "$OUT_DIR/verification.log"
+    cat "$OUT_DIR/verification.log"
     exit 2
   fi
   echo "RESULT: PASS exit $exit_code, report.json present" >> "$OUT_DIR/verification.log"
