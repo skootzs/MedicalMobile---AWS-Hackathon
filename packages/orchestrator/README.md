@@ -1438,3 +1438,186 @@ routing event ID and job type. Bind the initial draft job to the request preview
 attach a real LogicModel identity only when one exists. SD/NOT_READY or superseded
 routes must never create a drafting handoff. Do not dispatch just because the route
 endpoint returns. Add a durable outbox with R7 later when a database adapter is agreed.
+
+## Mocked, version-bound drafting handoffs (local milestone)
+
+`DraftingHandoffService` in src/jobs.ts provides two explicit internal operations:
+
+1. start(command, principal) verifies access, ORCHESTRATOR role, the current immutable
+   preview and an accepted clear routing receipt. It atomically records a job intent,
+   START_LOGIC_PROPOSAL transition, event receipt and audit. The result is
+   INTENT_RECORDED, not worker delivery or completion.
+2. deliver(command, principal) loads that recorded job, verifies the current preview,
+   DRAFTING_LOGIC state and bound workflow version, and calls an injected worker once.
+   It appends a transport audit without advancing workflow or changing job identity.
+
+There is no handoff HTTP endpoint, background worker, retry loop, timer, queue service,
+AWS integration or model call. Routing remains separate: returning
+READY_FOR_BEDROCK_REVIEW only commits READY_FOR_LOGIC_PROPOSAL. It does not create or
+deliver jobs. The existing pure state machine remains unchanged. callbacks.ts is still
+an empty placeholder for a later milestone.
+
+### Commands and authorization
+
+The provisional DraftingHandoffCommand contains requestId, eventId, expectedVersion,
+revision, snapshotHash and routingEventId. All fields are required, and extra identity,
+role, trusted, job ID or job-type fields are rejected. These are internal backend
+commands operating on a server-verified principal, never authentication claims from
+a browser. The access policy and identity resolver must be the same trusted sources
+as the existing application/storage boundaries. Default routing permission remains
+ORCHESTRATOR, with an optional restriction hook that cannot elevate another role.
+
+Only a current READY_FOR_LOGIC_PROPOSAL state and its accepted clear routing receipt
+can create an intent. The receipt's version, request identity, routing result and
+processed-event fingerprint must match authoritative state. The store rechecks the
+routing receipt and role/version guards in the atomic commit. Pending/NOT_READY,
+Service Designer, missing-route and superseded-preview cases cannot start drafting.
+Relevant content revisions still reset eligibility through the existing workflow.
+
+The store requires every accepted START_LOGIC_PROPOSAL to include a matching intent.
+When a direct internal command omits it, the store derives it from current state and
+the unique committed routing receipt in that same operation. A supplied intent must
+match this derived record exactly. This preserves existing internal callers while
+preventing a drafting state with no required job record. It does not create jobs on
+routing or on any unrelated transition.
+
+start() fingerprints the complete command and verified actor ID. Exact accepted retries
+return DUPLICATE_EVENT with the existing logical job. A changed routing reference,
+revision/hash/version or actor under an accepted event ID conflicts. Concurrent different
+commands cannot consume the same eligible workflow version twice. Job IDs are stable
+for request identity, source version and routing event, independent of attempt IDs;
+there is also a per-request/source-version uniqueness check in storage. An identical
+retry after later revisions acknowledges history without restoring old workflow state
+or dispatching work. Job-intent reads verify snapshot integrity and linked receipts.
+
+Well-formed accepted/rejected handoff attempts are audited when storage is available.
+Malformed commands and inaccessible resources stop before private storage operations;
+operational security logging remains pending. The storage identity resolver must also
+enforce current membership/roles at commit. Local mock providers are not real auth.
+
+### Fictional intent and delivery example
+
+After the existing fictional clear route at version 4, submit an internal command:
+
+```json
+{
+  "requestId": "fictional-001",
+  "eventId": "fictional-start-drafting",
+  "expectedVersion": 4,
+  "revision": 1,
+  "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952",
+  "routingEventId": "fictional-route"
+}
+```
+
+start() returns INTENT_RECORDED and this stored fictional job:
+
+```json
+{
+  "jobId": "draft-4bfe1ceed09f9d7794d4866073273953867ef1dbb6406a19a97bbe7a6725391d",
+  "idempotencyKey": "draft-logic-v1:4bfe1ceed09f9d7794d4866073273953867ef1dbb6406a19a97bbe7a6725391d",
+  "jobType": "DRAFT_LOGIC",
+  "requestId": "fictional-001",
+  "requestPreview": {
+    "requestId": "fictional-001",
+    "revision": 1,
+    "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952"
+  },
+  "sourceWorkflowVersion": 4,
+  "workflowVersion": 5,
+  "routingEventId": "fictional-route",
+  "handoffEventId": "fictional-start-drafting"
+}
+```
+
+sourceWorkflowVersion is the consumed READY_FOR_LOGIC_PROPOSAL version;
+workflowVersion is the new DRAFTING_LOGIC version. A future callback must reference
+that job/version and exact preview. Job IDs are SHA-256-derived metadata identifiers,
+not new snapshot hashes, credentials or proof of clinical approval. No LogicModel,
+patient information or treatment content is generated or embedded in the intent.
+
+Call deliver() separately with requestId, jobId and expectedVersion: 5. An injected
+mock worker's first acceptance returns DELIVERED / WORKER_ACCEPTED with
+workerOutcome: ACCEPTED. An identical later delivery returns DUPLICATE_DELIVERY /
+WORKER_DUPLICATE with the same job ID and key. The workflow remains DRAFTING_LOGIC
+at version 5 in both cases; no LogicModel, clinical approval or release approval is
+created. No handoff attempt invokes deliver() automatically.
+
+### Worker adapter and transport audit semantics
+
+DraftingWorker.deliver(intent) returns a WorkerResult containing the same jobId and
+idempotencyKey, plus one of ACCEPTED, UNAVAILABLE, FAILED or DUPLICATE. A mismatched
+acknowledgement fails closed. The isolated test/helpers/mock-drafting-worker.ts simulates
+these outcomes and thrown failures; it records fictional delivery IDs only and never
+generates or executes clinical logic. No src file imports the mock.
+
+| Worker outcome / condition | Service result |
+| --- | --- |
+| ACCEPTED | DELIVERED: transport acceptance only, not completed work. |
+| DUPLICATE | DUPLICATE_DELIVERY: same logical job recognized. |
+| UNAVAILABLE | TEMPORARY_UNAVAILABLE: caller may explicitly retry later. |
+| FAILED, thrown exception or invalid acknowledgement | DISPATCH_FAILED: no completion claim. |
+| Missing adapter, wrong role or invalid job/state | REJECTED without worker execution. |
+| Changed preview/version | STALE_VERSION; an old job cannot be delivered as current work. |
+| Storage failure | STORAGE_FAILURE; inspect workerOutcome for acknowledgement ambiguity. |
+
+JobStore extends the existing store with getJob(), listJobs() and recordJobDelivery().
+The in-memory implementation uses the existing staged Map replacement and commit
+mechanism. Intents are append-only; copies returned to callers cannot mutate stored
+records. The handoff receipt links jobId, and the accepted audit includes the intent.
+No accepted start can publish only part of state, intent, receipt and audit.
+
+Delivery is a separate external side effect. recordJobDelivery() re-resolves actor
+identity and checks the current job/state/version, then appends a DELIVER_DRAFTING_JOB
+audit without calling the workflow transition or modifying the job. Audit attempt IDs
+are idempotent and immutable. Transport audits include jobId and worker outcome;
+ACCEPTED here means transport acknowledgement, never human clinical/release approval.
+Failed/unavailable/rejected transport attempts are logged as rejected without changing
+authorized state. A new manual delivery attempt has a new audit attempt ID but the
+same logical job/idempotency key. No COMPLETED transport outcome is supported.
+
+The worker call and local audit cannot be one transaction. If a worker accepts but
+recording its audit fails, STORAGE_FAILURE preserves workerOutcome: ACCEPTED. If an
+acknowledgement is lost, the caller may not know whether acceptance happened. Retry
+must reuse the same ID/key and the worker must deduplicate. If a request changes
+during delivery, the audit may reject current eligibility while preserving the actual
+worker outcome. Already-sent work cannot be recalled by this adapter. Workers and
+future callback ingestion must reject superseded output before accepting results.
+The persistent intent is never deleted to hide such ambiguity.
+
+### Role 3, Role 4 and Role 7 integration
+
+R3 must implement the replaceable worker adapter, accept the exact version-bound
+envelope and durably deduplicate by stable job ID/key and payload. Authenticate any
+snapshot retrieval and fetch/verify the referenced immutable preview. Do not treat
+transport acceptance as successful drafting. Return a separately authenticated,
+version-bound result callback later; generated LogicModel content must go through
+R4 validation/checking and independent clinician approval before compilation.
+
+R4 must finalize envelope/schema versions, job ID/idempotency scope, snapshot metadata,
+result/error contracts and official LogicModel validation. Contracts remain local and
+provisional. Request preview identity and future LogicModel/artifact identities remain
+separate; this milestone never invents a LogicModel or artifact hash.
+
+R7's durable adapter must guarantee conditional workflow versions, immutable snapshots,
+unique logical job per eligible request/version, atomic state+intent+receipt+audit writes,
+and durable retry receipts. Transport audits must be append-only and authenticated.
+A real durable intent/outbox scanner and worker-side idempotency are needed for crash
+recovery and at-least-once delivery. No exactly-once network delivery or distributed
+transaction is claimed. Real auth/membership enforcement, database/job infrastructure,
+leases and retry scheduling remain pending. The current maps and mock-worker dedup
+state disappear on process restart.
+
+Verification: 748 passing tests (665 preserved + 83 new handoff/transport tests), strict
+TypeScript with zero errors. No dependency installation, root configuration or other
+package changes were needed. Tests include atomic rollback, concurrent starts/delivery,
+revisions, unavailable/failing workers and acknowledgement ambiguity. Actual Node 22
+runtime verification remains pending; local checks use Node 24 with Node 22 typings.
+
+Smallest next milestone: define an internal authenticated Role 3 drafting-result
+callback carrying job ID, event ID, expected workflow version, exact preview identity
+and a proposed LogicModel snapshot. Load and verify the stored intent, reject stale/
+wrong-job results, use the replaceable R4 schema boundary, and atomically commit the
+existing LOGIC_PROPOSED event, immutable model, receipt and audit. Test duplicate
+callbacks, revision races, wrong roles and rollback before adding any network endpoint
+or AWS adapter. This milestone leaves callbacks.ts unchanged.

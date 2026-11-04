@@ -1,3 +1,6 @@
+import { createDraftingIntent } from '../job-intents.ts';
+import type { DraftingJobIntent } from '../job-intents.ts';
+import type { JobStore, JobDeliveryAttempt } from './jobs.ts';
 import { canonicalizeJson } from '../snapshots.ts';
 import type { Snapshot } from '../snapshots.ts';
 import { transitionWorkflow } from '../workflow.ts';
@@ -6,12 +9,13 @@ import { evidenceFromEvent } from './artifacts.ts';
 import type { EvidenceRecord } from './artifacts.ts';
 import type { AuditRecord, EventReceipt } from './audit.ts';
 import { StorageError } from './requests.ts';
-import type { ApplyCommand, ApplyResult, OrchestratorStore, ReviewCandidateSource, SnapshotKey, StoreDependencies } from './requests.ts';
+import type { ApplyCommand, ApplyResult, OrchestratorStore, ReviewCandidateSource, SnapshotKey, StoreDependencies, WorkflowCommand } from './requests.ts';
 import { snapshotKey, snapshotSlot, verifySnapshot } from './snapshots.ts';
 
 interface Attempt { fingerprint: string; result: ApplyResult }
 interface MemoryData {
   workflows: Map<string, WorkflowState>;
+  jobs: Map<string, DraftingJobIntent>;
   snapshots: Map<string, string>;
   receipts: Map<string, EventReceipt>;
   evidence: Map<string, EvidenceRecord>;
@@ -35,8 +39,8 @@ const identity = (state: WorkflowState) => ({ requestId: state.brief.requestId, 
  * staged in replacement Maps, then committed by one pointer assignment. No awaits
  * occur in that section. This is NOT distributed/durable database atomicity.
  */
-export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource {
-  #data: MemoryData = { workflows: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
+export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore {
+  #data: MemoryData = { workflows: new Map(), jobs: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
   #options: InMemoryOptions;
   constructor(options: InMemoryOptions) {
     if (typeof options.resolveActor !== 'function' || typeof options.validateSnapshot !== 'function') throw new StorageError('MISSING_BACKEND_BOUNDARY');
@@ -116,6 +120,68 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
   }
   async listAudit(requestId: string): Promise<readonly AuditRecord[]> { return structuredClone(this.#data.audits.get(requestId) ?? []); }
 
+  async getJob(requestId: string, jobId: string): Promise<DraftingJobIntent | null> {
+    const job = this.#data.jobs.get(key(requestId, jobId));
+    if (!job) return null;
+    const preview = this.#readSnapshot(this.#data.snapshots, { kind: 'REQUEST_PREVIEW', requestId, revision: job.requestPreview.revision });
+    const handoff = this.#data.receipts.get(key(requestId, job.handoffEventId));
+    const route = this.#data.receipts.get(key(requestId, job.routingEventId));
+    if (job.requestId !== requestId || job.jobId !== jobId || job.requestPreview.requestId !== requestId ||
+        !preview || preview.snapshotHash !== job.requestPreview.snapshotHash || !handoff || handoff.jobId !== jobId ||
+        handoff.workflowVersion !== job.workflowVersion || canonicalizeJson(handoff.request) !== canonicalizeJson(job.requestPreview) ||
+        !route || route.routing?.route !== 'READY_FOR_BEDROCK_REVIEW' || route.workflowVersion !== job.sourceWorkflowVersion ||
+        canonicalizeJson(route.request) !== canonicalizeJson(job.requestPreview) ||
+        canonicalizeJson(createDraftingIntent(job.requestPreview, job.sourceWorkflowVersion, job.routingEventId, job.handoffEventId)) !== canonicalizeJson(job)) throw new StorageError('JOB_INTEGRITY');
+    return structuredClone(job);
+  }
+  async listJobs(requestId: string): Promise<readonly DraftingJobIntent[]> {
+    const jobs: DraftingJobIntent[] = [];
+    for (const j of this.#data.jobs.values()) if (j.requestId === requestId) jobs.push((await this.getJob(requestId, j.jobId))!);
+    return jobs;
+  }
+  async recordJobDelivery(input: JobDeliveryAttempt, principal: unknown): Promise<ApplyResult> {
+    // Internal, append-only transport audit. No workflow transition, worker call or job mutation.
+    let attempt: JobDeliveryAttempt;
+    try { attempt = JSON.parse(canonicalizeJson(input)) as JobDeliveryAttempt; } catch { throw new StorageError('INVALID_COMMAND'); }
+    if (!obj(attempt) || !id(attempt.requestId) || !id(attempt.jobId) || !id(attempt.attemptId) ||
+        !Number.isSafeInteger(attempt.expectedVersion) || attempt.expectedVersion < 1 ||
+        !['ACCEPTED', 'DUPLICATE', 'FAILED', 'UNAVAILABLE', 'NOT_ATTEMPTED'].includes(attempt.outcome) ||
+        (attempt.expectedActorId !== undefined && !id(attempt.expectedActorId)) ||
+        (attempt.preconditionFailure !== undefined && !id(attempt.preconditionFailure)) ||
+        Object.keys(attempt).some(k => !['requestId', 'jobId', 'attemptId', 'expectedVersion', 'outcome', 'expectedActorId', 'preconditionFailure'].includes(k))) throw new StorageError('INVALID_COMMAND');
+    let actor: Actor | null;
+    try { actor = structuredClone(await this.#options.resolveActor(principal, attempt.requestId)); } catch { actor = null; }
+    const base = this.#data, state = base.workflows.get(attempt.requestId) ?? null;
+    const job = base.jobs.get(key(attempt.requestId, attempt.jobId));
+    const fingerprint = canonicalizeJson({ attempt, actor });
+    const prior = base.attempts.get(key(attempt.requestId, attempt.attemptId));
+    if (prior) {
+      if (prior.fingerprint !== fingerprint) throw new StorageError('ATTEMPT_ID_REUSED');
+      return { ...structuredClone(prior.result), replayed: true };
+    }
+    let failure: string | undefined;
+    if (!actor) failure = 'UNAUTHORIZED';
+    else if (!actor.roles.includes('ORCHESTRATOR')) failure = 'WRONG_ROLE';
+    else if (attempt.expectedActorId !== undefined && attempt.expectedActorId !== actor.id) failure = 'IDENTITY_CHANGED';
+    else if (!state || !job) failure = 'JOB_NOT_FOUND';
+    else {
+      this.#assertSnapshots(state, base.snapshots);
+      if (state.version !== attempt.expectedVersion || state.version !== job.workflowVersion) failure = 'VERSION_CONFLICT';
+      else if (canonicalizeJson(identity(state)) !== canonicalizeJson(job.requestPreview)) failure = 'STALE_REQUEST';
+      else if (state.status !== 'DRAFTING_LOGIC') failure = 'WRONG_STATE';
+    }
+    failure ??= attempt.preconditionFailure;
+    const accepted = !failure && ['ACCEPTED', 'DUPLICATE'].includes(attempt.outcome);
+    const reason = failure ?? (attempt.outcome === 'NOT_ATTEMPTED' ? 'DELIVERY_NOT_ATTEMPTED' : `WORKER_${attempt.outcome}`);
+    const audit: ProposedAuditEvent = { eventId: attempt.attemptId, requestId: attempt.requestId, actorId: actor?.id ?? null,
+      outcome: accepted ? 'ACCEPTED' : 'REJECTED', reason, from: state?.status ?? null, to: state?.status ?? null,
+      stateVersion: state?.version ?? 0, eventType: 'DELIVER_DRAFTING_JOB', note: null,
+      attemptedRequest: job ? { ...job.requestPreview } : null, request: state ? identity(state) : null,
+      logic: state?.logic ? { ...state.logic } : null, artifactHash: state?.artifact?.artifactHash ?? null };
+    const update = this.#append(base, attempt, fingerprint, audit, !actor,
+      { jobDelivery: { jobId: attempt.jobId, outcome: attempt.outcome } });
+    this.#commit(update.data); return structuredClone(update.result);
+  }
   #commit(candidate: MemoryData) {
     try {
       const returned = this.#options.testFaults?.beforeCommit?.();
@@ -123,14 +189,14 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     } catch { throw new StorageError('TRANSACTION_FAILED'); }
     this.#data = candidate;
   }
-  #append(base: MemoryData, command: ApplyCommand, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false): { data: MemoryData; result: ApplyResult } {
+  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery'> = {}): { data: MemoryData; result: ApplyResult } {
     const auditId = key(command.requestId, command.attemptId);
     if (base.attempts.has(auditId)) throw new StorageError('ATTEMPT_ID_REUSED');
     const recordedAt = (this.#options.now ?? (() => new Date().toISOString()))();
     if (typeof recordedAt !== 'string' || !Number.isFinite(Date.parse(recordedAt))) throw new StorageError('INVALID_CLOCK');
     const history = base.audits.get(command.requestId) ?? [];
-    const record: AuditRecord = { ...structuredClone(audit), auditId, sequence: history.length + 1, recordedAt,
-      ...(audit.outcome === 'ACCEPTED' && command.event.type === 'APPLY_ROUTING' ? { routing: structuredClone(command.event.result) } : {}) };
+    const record: AuditRecord = { ...structuredClone(audit), auditId, sequence: history.length + 1, recordedAt, ...structuredClone(attachment),
+      ...(audit.outcome === 'ACCEPTED' && command.event?.type === 'APPLY_ROUTING' ? { routing: structuredClone(command.event.result) } : {}) };
     const result: ApplyResult = { outcome: audit.outcome, reason: audit.reason, version: hiddenVersion ? null : audit.stateVersion, auditId, replayed: false };
     const data = { ...base, audits: new Map(base.audits), attempts: new Map(base.attempts) };
     data.audits.set(command.requestId, [...history, record]);
@@ -172,7 +238,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     };
     if (!actor) return deny('UNAUTHORIZED');
     if (!validJson || !obj(command.event) || Object.hasOwn(command.event, 'actor') ||
-        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint'].includes(k))) return deny('INVALID_COMMAND');
+        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent'].includes(k))) return deny('INVALID_COMMAND');
     if ((command.expectedActorId !== undefined && !id(command.expectedActorId)) ||
         (command.preconditionFailure !== undefined && !id(command.preconditionFailure)) ||
         (command.commandFingerprint !== undefined && !/^[a-f0-9]{64}$/.test(command.commandFingerprint))) return deny('INVALID_COMMAND');
@@ -182,6 +248,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     const priorReceipt = base.receipts.get(key(command.requestId, command.event.eventId));
     if (priorReceipt && priorReceipt.commandFingerprint !== command.commandFingerprint) return deny('EVENT_ID_REUSED');
     if (command.preconditionFailure !== undefined) return deny(command.preconditionFailure);
+    if (command.jobIntent !== undefined && command.event.type !== 'START_LOGIC_PROPOSAL') return deny('UNRELATED_JOB_INTENT');
     const event = { ...command.event, actor } as WorkflowEvent;
     const transition = transitionWorkflow(state, event);
     if (transition.outcome !== 'ACCEPTED') {
@@ -191,6 +258,21 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     // Build all replacement records off to the side. A rejected stage saves only audit.
     try {
       const next = transition.state!;
+      let jobIntent: DraftingJobIntent | undefined;
+      const jobs = new Map(base.jobs);
+      if (event.type === 'START_LOGIC_PROPOSAL') {
+        // Even direct internal store commands cannot advance drafting without an intent.
+        const routes = [...base.receipts.values()].filter(r => r.routing?.route === 'READY_FOR_BEDROCK_REVIEW' &&
+          r.workflowVersion === state!.version && canonicalizeJson(r.request) === canonicalizeJson(identity(state!)) &&
+          canonicalizeJson(r.routing) === canonicalizeJson(state!.routing) && state!.processedEvents.some(e => e.eventId === r.eventId && e.fingerprint === r.fingerprint));
+        if (routes.length !== 1) return deny('CURRENT_ROUTING_RECEIPT_REQUIRED');
+        jobIntent = createDraftingIntent(identity(state!), state!.version, routes[0].eventId, event.eventId);
+        if (command.jobIntent !== undefined && canonicalizeJson(command.jobIntent) !== canonicalizeJson(jobIntent)) return deny('INVALID_JOB_INTENT');
+        if ([...jobs.values()].some(j => j.requestId === command.requestId && j.sourceWorkflowVersion === state!.version)) return deny('JOB_ALREADY_EXISTS');
+        const slot = key(command.requestId, jobIntent.jobId);
+        if (jobs.has(slot)) return deny('JOB_ID_REUSED');
+        jobs.set(slot, structuredClone(jobIntent));
+      }
       const snapshots = new Map(base.snapshots);
       const incoming: string[] = [];
       if (command.snapshots !== undefined && !Array.isArray(command.snapshots)) return deny('INVALID_SNAPSHOTS');
@@ -211,7 +293,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         if (evidence.has(recordKey)) return deny('EVIDENCE_ID_REUSED');
         evidence.set(recordKey, record);
       }
-      const update = this.#append(base, command, fingerprint, transition.audit);
+      const update = this.#append(base, command, fingerprint, transition.audit, false, jobIntent ? { jobIntent } : {});
       const receiptKey = key(command.requestId, event.eventId);
       if (base.receipts.has(receiptKey)) throw new StorageError('RECEIPT_CONFLICT');
       const processed = next.processedEvents.find(item => item.eventId === event.eventId);
@@ -219,8 +301,9 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
       const receipt: EventReceipt = { request: identity(next), eventId: event.eventId,
         fingerprint: processed.fingerprint, workflowVersion: next.version, auditId: update.result.auditId,
         ...(command.commandFingerprint === undefined ? {} : { commandFingerprint: command.commandFingerprint }),
+        ...(jobIntent ? { jobId: jobIntent.jobId } : {}),
         ...(event.type === 'APPLY_ROUTING' ? { routing: structuredClone(event.result) } : {}) };
-      const candidate: MemoryData = { ...update.data, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
+      const candidate: MemoryData = { ...update.data, jobs, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
       candidate.workflows.set(command.requestId, structuredClone(next));
       candidate.receipts.set(receiptKey, receipt);
       this.#commit(candidate);

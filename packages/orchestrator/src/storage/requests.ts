@@ -1,5 +1,6 @@
 import type { Actor, WorkflowEvent, WorkflowState } from '../workflow.ts';
 import type { RevisionIdentity } from '../routing.ts';
+import type { DraftingJobIntent } from '../job-intents.ts';
 import type { Snapshot, SnapshotValidator } from '../snapshots.ts';
 import type { AuditRecord, EventReceipt } from './audit.ts';
 import type { EvidenceRecord } from './artifacts.ts';
@@ -16,6 +17,8 @@ export interface ApplyCommand {
   requestId: string;
   event: WorkflowCommand;
   snapshots?: readonly Snapshot[];
+  /** Only valid with START_LOGIC_PROPOSAL; store verifies authoritative bindings. */
+  jobIntent?: DraftingJobIntent;
   /** Internal application guards; these can reject, never grant permission. */
   expectedActorId?: string;
   preconditionFailure?: string;
