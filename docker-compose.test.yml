@@ -1,0 +1,11 @@
+# Test-support stack only (not the local dev-mode stack — that's
+# docker-compose.local.yml, section 11/Commit 9, still TODO).
+#
+# Used by: runner tests on Srithan's Mac (section 7/Commit 5) and the CI
+# "Runner tests against DynamoDB Local" job (section 13/Commit 11).
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.3
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "8000:8000"
