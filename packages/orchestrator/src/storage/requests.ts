@@ -1,5 +1,7 @@
 import type { CompilationResultRecord, CompilationExecution } from '../compilation-result-contracts.ts';
 import type { CompilationJobIntent } from '../compilation-contracts.ts';
+import type { VerifyBuildJobIntent } from '../verify-build-contracts.ts';
+import type { VerificationResultRecord, VerificationExecution } from '../verification-result-contracts.ts';
 import type { AcceptedCheckerResult, CheckerReport } from '../checker-contracts.ts';
 import type { Actor, WorkflowEvent, WorkflowState } from '../workflow.ts';
 import type { RevisionIdentity } from '../routing.ts';
@@ -28,6 +30,12 @@ export interface ApplyCommand {
   compilationResult?: CompilationResultRecord;
   /** Audit only: rejected/unavailable result never grants transition authority. */
   compilationAttempt?: { execution: CompilationExecution; reason: string };
+  /** START_VERIFICATION only; committed with its VERIFY_BUILD outbox atomically. */
+  verifyBuildIntent?: VerifyBuildJobIntent;
+  /** VERIFIED | FAIL only; the accepted R6 verification result. */
+  verificationResult?: VerificationResultRecord;
+  /** Audit only: rejected/stale verification attempt, never transition authority. */
+  verificationAttempt?: { execution: VerificationExecution; reason: string };
   /** Authenticated callback metadata; only valid with LOGIC_PROPOSED. */
   draftingResult?: DraftingResultRecord;
   /** Audit-only provider references; never permission or a passing checker record. */

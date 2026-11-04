@@ -12,6 +12,9 @@ import type { AuthenticationBoundary, VerifiedPrincipal } from './auth.ts';
 import type { OrchestratorStore } from './storage/requests.ts';
 import { registerApprovalRoutes } from './routes/approve.ts';
 import { registerStatusRoute } from './routes/status.ts';
+import { registerDownloadRoute } from './routes/download.ts';
+import type { VerificationResultStore } from './storage/verification-results.ts';
+import type { CompilationResultStore } from './storage/compilation-results.ts';
 import { apiError, notFound, unavailable } from './routes/http.ts';
 
 export interface LocalApiDependencies {
@@ -85,6 +88,11 @@ export function buildApp(deps: LocalApiDependencies): FastifyInstance {
   });
   app.setNotFoundHandler((_request, reply) => notFound(reply));
   registerStatusRoute(app, deps.store);
+  // Approved-artifact access for R1, only when the store can read the artifact.
+  const store = deps.store as Partial<VerificationResultStore & CompilationResultStore>;
+  if (typeof store.getCompilationResult === 'function') {
+    registerDownloadRoute(app, deps.store as VerificationResultStore & CompilationResultStore);
+  }
   const principalFor = (request: FastifyRequest) => {
     const principal = principals.get(request);
     if (!principal) throw new Error('Authentication guard did not establish a principal.');

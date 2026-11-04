@@ -5,6 +5,12 @@ import { compilationOutbox, validCompilationIntent } from '../compilation-contra
 import type { CompilationJobIntent, CompilationOutbox } from '../compilation-contracts.ts';
 import { compilationEvidenceFailure } from '../compilation-eligibility.ts';
 import type { CompilationStore } from './compilations.ts';
+import { verifyBuildOutbox, validVerifyBuildIntent } from '../verify-build-contracts.ts';
+import type { VerifyBuildJobIntent, VerifyBuildOutbox } from '../verify-build-contracts.ts';
+import { verificationResultMatchesJob, verificationExecutionMatchesJob } from '../verification-result-contracts.ts';
+import type { VerificationResultRecord, VerificationExecution } from '../verification-result-contracts.ts';
+import type { VerifyBuildStore } from './verify-build.ts';
+import type { VerificationResultStore } from './verification-results.ts';
 import { createHash } from 'node:crypto';
 import { checkerSame, checkerEvidenceMatches, validInvocation, validCheckerResult, parseCheckerReport } from '../checker-contracts.ts';
 import type { CheckerInvocation, AcceptedCheckerResult } from '../checker-contracts.ts';
@@ -32,6 +38,9 @@ interface MemoryData {
   compilationJobs: Map<string, CompilationJobIntent>;
   compilationResults: Map<string, CompilationResultRecord>;
   compilationOutboxes: Map<string, CompilationOutbox>;
+  verifyBuildJobs: Map<string, VerifyBuildJobIntent>;
+  verificationResults: Map<string, VerificationResultRecord>;
+  verifyBuildOutboxes: Map<string, VerifyBuildOutbox>;
   jobs: Map<string, DraftingJobIntent>;
   draftingResults: Map<string, DraftingResultRecord>;
   checkerInvocations: Map<string, CheckerInvocation>;
@@ -52,6 +61,8 @@ export interface InMemoryOptions extends StoreDependencies {
   /** Local synchronous conditional read against the injected authoritative R7 test source.
    * Real DynamoDB adapter MUST condition JOB/META record version/attempt in its transaction. */
   compilationExecutionIsCurrent?(expected: Readonly<CompilationExecution>): boolean;
+  /** Same role for VERIFY_BUILD attempts; the Dynamo adapter conditions JOB/META. */
+  verificationExecutionIsCurrent?(expected: Readonly<VerificationExecution>): boolean;
   /** Fault injection for tests only; real adapters must not expose these hooks. */
   testFaults?: {
     beforeCommit?: () => void;
@@ -68,8 +79,8 @@ const identity = (state: WorkflowState) => ({ requestId: state.brief.requestId, 
  * staged in replacement Maps, then committed by one pointer assignment. No awaits
  * occur in that section. This is NOT distributed/durable database atomicity.
  */
-export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore, DraftingResultStore, CheckerStore, CompilationStore, CompilationResultStore {
-  #data: MemoryData = { workflows: new Map(), compilationJobs: new Map(), compilationResults: new Map(), compilationOutboxes: new Map(), jobs: new Map(), draftingResults: new Map(), checkerInvocations: new Map(), checkerReports: new Map(), checkerEventFingerprints: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
+export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore, DraftingResultStore, CheckerStore, CompilationStore, CompilationResultStore, VerifyBuildStore, VerificationResultStore {
+  #data: MemoryData = { workflows: new Map(), compilationJobs: new Map(), compilationResults: new Map(), compilationOutboxes: new Map(), verifyBuildJobs: new Map(), verificationResults: new Map(), verifyBuildOutboxes: new Map(), jobs: new Map(), draftingResults: new Map(), checkerInvocations: new Map(), checkerReports: new Map(), checkerEventFingerprints: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
   #options: InMemoryOptions;
   constructor(options: InMemoryOptions) {
     if (typeof options.resolveActor !== 'function' || typeof options.validateSnapshot !== 'function') throw new StorageError('MISSING_BACKEND_BOUNDARY');
@@ -245,6 +256,38 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     if (!job) throw new StorageError('COMPILATION_OUTBOX_INTEGRITY');
     return structuredClone(outbox);
   }
+  async getVerifyBuildJob(requestId: string, jobId: string): Promise<VerifyBuildJobIntent | null> {
+    const job = this.#data.verifyBuildJobs.get(key(requestId, jobId));
+    if (!job) return null;
+    const receipt = this.#data.receipts.get(key(requestId, job.handoffEventId));
+    const audit = (this.#data.audits.get(requestId) ?? []).find(a => a.auditId === receipt?.auditId);
+    const outbox = this.#data.verifyBuildOutboxes.get(key(requestId, jobId));
+    if (!validVerifyBuildIntent(job) || job.requestId !== requestId || job.jobId !== jobId ||
+        !receipt || receipt.verifyBuildJobId !== jobId || receipt.workflowVersion !== job.workflowVersion || !checkerSame(receipt.request, job.requestPreview) ||
+        !audit || audit.outcome !== 'ACCEPTED' || !checkerSame(audit.verifyBuildIntent ?? null, job) || !checkerSame(outbox ?? null, verifyBuildOutbox(job))) throw new StorageError('VERIFY_BUILD_JOB_INTEGRITY');
+    return structuredClone(job);
+  }
+  async listVerifyBuildJobs(requestId: string): Promise<readonly VerifyBuildJobIntent[]> {
+    const result: VerifyBuildJobIntent[] = [];
+    for (const job of this.#data.verifyBuildJobs.values()) if (job.requestId === requestId) result.push((await this.getVerifyBuildJob(requestId, job.jobId))!);
+    return result;
+  }
+  async getVerifyBuildOutbox(requestId: string, jobId: string): Promise<VerifyBuildOutbox | null> {
+    const outbox = this.#data.verifyBuildOutboxes.get(key(requestId, jobId));
+    if (!outbox) return null;
+    const job = await this.getVerifyBuildJob(requestId, jobId);
+    if (!job) throw new StorageError('VERIFY_BUILD_OUTBOX_INTEGRITY');
+    return structuredClone(outbox);
+  }
+  async getVerificationResult(requestId: string, jobId: string): Promise<VerificationResultRecord | null> {
+    const result = this.#data.verificationResults.get(key(requestId, jobId));
+    if (!result) return null;
+    const job = await this.getVerifyBuildJob(requestId, jobId);
+    const receipt = this.#data.receipts.get(key(requestId, result.eventId));
+    if (!job || !verificationResultMatchesJob(result, job) || !receipt ||
+        !checkerSame(receipt.verificationResult ?? null, result) || receipt.workflowVersion !== result.acceptedWorkflowVersion) throw new StorageError('VERIFICATION_RESULT_INTEGRITY');
+    return structuredClone(result);
+  }
   async getCheckerInvocation(requestId: string, invocationId: string): Promise<CheckerInvocation | null> {
     const invocation = this.#data.checkerInvocations.get(key(requestId, invocationId));
     if (!invocation) return null;
@@ -357,7 +400,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     } catch { throw new StorageError('TRANSACTION_FAILED'); }
     this.#data = candidate;
   }
-  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery' | 'draftingResult' | 'callbackValidation' | 'checkerInvocation' | 'checkerResult' | 'checkerAttempt' | 'compilationIntent' | 'compilationOutbox' | 'compilationResult'> = {}): { data: MemoryData; result: ApplyResult } {
+  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery' | 'draftingResult' | 'callbackValidation' | 'checkerInvocation' | 'checkerResult' | 'checkerAttempt' | 'compilationIntent' | 'compilationOutbox' | 'compilationResult' | 'verifyBuildIntent' | 'verifyBuildOutbox' | 'verificationResult'> = {}): { data: MemoryData; result: ApplyResult } {
     const auditId = key(command.requestId, command.attemptId);
     if (base.attempts.has(auditId)) throw new StorageError('ATTEMPT_ID_REUSED');
     const recordedAt = (this.#options.now ?? (() => new Date().toISOString()))();
@@ -421,7 +464,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     };
     if (!actor) return deny('UNAUTHORIZED');
     if (!validJson || !obj(command.event) || Object.hasOwn(command.event, 'actor') ||
-        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent', 'draftingResult', 'callbackValidation', 'checkerResult', 'checkerAttempt', 'compilationIntent', 'compilationResult', 'compilationAttempt'].includes(k))) return deny('INVALID_COMMAND');
+        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent', 'draftingResult', 'callbackValidation', 'checkerResult', 'checkerAttempt', 'compilationIntent', 'compilationResult', 'compilationAttempt', 'verifyBuildIntent', 'verificationResult', 'verificationAttempt'].includes(k))) return deny('INVALID_COMMAND');
     if ((command.expectedActorId !== undefined && !id(command.expectedActorId)) ||
         (command.preconditionFailure !== undefined && !id(command.preconditionFailure)) ||
         (command.commandFingerprint !== undefined && !/^[a-f0-9]{64}$/.test(command.commandFingerprint))) return deny('INVALID_COMMAND');
@@ -439,6 +482,12 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     if (command.compilationIntent !== undefined && command.event.type !== 'START_COMPILATION') return deny('UNRELATED_COMPILATION_INTENT');
     // Existing legacy fixture-only paths stay compatible; formal/app paths require an atomic intent/outbox.
     if (command.event.type === 'START_COMPILATION' && (command.commandFingerprint !== undefined || state?.checks?.invocationId !== undefined) && !command.compilationIntent) return deny('COMPILATION_INTENT_REQUIRED');
+    if (command.verifyBuildIntent !== undefined && command.event.type !== 'START_VERIFICATION') return deny('UNRELATED_VERIFY_BUILD_INTENT');
+    // A formal START_VERIFICATION (via the handoff service, carrying a fingerprint) requires the atomic intent/outbox.
+    if (command.event.type === 'START_VERIFICATION' && command.commandFingerprint !== undefined && !command.verifyBuildIntent) return deny('VERIFY_BUILD_INTENT_REQUIRED');
+    if (command.verificationResult !== undefined && !['VERIFIED', 'FAIL'].includes(command.event.type)) return deny('UNRELATED_VERIFICATION_RESULT');
+    if ((command.event.type === 'VERIFIED' || command.event.type === 'FAIL' && state?.status === 'VERIFYING') &&
+        (state?.verificationId && base.verifyBuildJobs.has(key(command.requestId, state.verificationId))) && !command.verificationResult) return deny('VERIFICATION_RESULT_REQUIRED');
     if (command.jobIntent !== undefined && command.event.type !== 'START_LOGIC_PROPOSAL') return deny('UNRELATED_JOB_INTENT');
     if (command.callbackValidation !== undefined && (command.event.type !== 'LOGIC_PROPOSED' || !validationReference(command.callbackValidation))) return deny('INVALID_VALIDATION_REFERENCE');
     if (command.draftingResult !== undefined && command.event.type !== 'LOGIC_PROPOSED') return deny('UNRELATED_DRAFTING_RESULT');
@@ -493,6 +542,27 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         if (compilationJobs.has(slot) || compilationOutboxes.has(slot)) return deny('COMPILATION_JOB_ID_REUSED');
         compilationIntent = structuredClone(job); outbox = compilationOutbox(job);
         compilationJobs.set(slot, compilationIntent); compilationOutboxes.set(slot, outbox);
+      }
+      const verifyBuildJobs = new Map(base.verifyBuildJobs), verifyBuildOutboxes = new Map(base.verifyBuildOutboxes);
+      let verifyBuildIntent: VerifyBuildJobIntent | undefined, verifyOutbox: VerifyBuildOutbox | undefined;
+      if (command.verifyBuildIntent !== undefined) {
+        const job = command.verifyBuildIntent;
+        if (!state || event.type !== 'START_VERIFICATION') return deny('INVALID_VERIFY_BUILD_INTENT');
+        // The compiled artifact the verification binds to must be the current accepted one.
+        // compileArtifactHash/manifestHash/packageUri are bound by the handoff service from
+        // the accepted compilation result; validVerifyBuildIntent confirms internal consistency.
+        if (!validVerifyBuildIntent(job) || job.sourceWorkflowVersion !== state.version || job.workflowVersion !== next.version ||
+            job.handoffEventId !== event.eventId || job.jobId !== event.verificationId || job.createdBy !== actor.id ||
+            !state.artifact || job.compileJobId !== state.artifact.compilationId || job.packageHash !== state.artifact.artifactHash ||
+            job.logicModelRevision !== state.artifact.logicRevision || job.logicModelHash !== state.artifact.logicHash ||
+            !checkerSame(identity(state), job.requestPreview) || state.clinicalApproval?.eventId !== job.clinicalApprovalId ||
+            state.checks?.reportId !== job.checkerReportId) return deny('INVALID_VERIFY_BUILD_INTENT');
+        if ([...verifyBuildJobs.values()].some(old => old.requestId === command.requestId && old.compileJobId === job.compileJobId &&
+            old.packageHash === job.packageHash && old.manifestHash === job.manifestHash)) return deny('VERIFY_BUILD_JOB_ALREADY_EXISTS');
+        const slot = key(command.requestId, job.jobId);
+        if (verifyBuildJobs.has(slot) || verifyBuildOutboxes.has(slot)) return deny('VERIFY_BUILD_JOB_ID_REUSED');
+        verifyBuildIntent = structuredClone(job); verifyOutbox = verifyBuildOutbox(job);
+        verifyBuildJobs.set(slot, verifyBuildIntent); verifyBuildOutboxes.set(slot, verifyOutbox);
       }
       const snapshots = new Map(base.snapshots);
       const incoming: string[] = [];
@@ -571,14 +641,37 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         if (compilationResults.has(slot)) return deny('COMPILATION_RESULT_ALREADY_ACCEPTED');
         compilationResult = structuredClone(r); compilationResults.set(slot, compilationResult);
       }
+      const verificationResults = new Map(base.verificationResults);
+      let verificationResult: VerificationResultRecord | undefined;
+      if (command.verificationResult !== undefined) {
+        const r = command.verificationResult, job = base.verifyBuildJobs.get(key(command.requestId, r.jobId));
+        if (!state || !job || !['VERIFIED', 'FAIL'].includes(event.type)) return deny('VERIFY_BUILD_JOB_REQUIRED');
+        if (!verificationResultMatchesJob(r, job) || r.eventId !== event.eventId || r.acceptedWorkflowVersion !== next.version ||
+            job.workflowVersion !== state.version || state.verificationId !== job.jobId || !checkerSame(identity(state), job.requestPreview) ||
+            state.clinicalApproval?.eventId !== job.clinicalApprovalId || !state.artifact || state.artifact.compilationId !== job.compileJobId ||
+            r.execution.runnerActorId !== actor.id || actor.id === state.clinicalApproval.actorId || actor.id === state.compilerId) return deny('INVALID_VERIFICATION_RESULT');
+        if (!this.#options.verificationExecutionIsCurrent) return deny('VERIFICATION_EXECUTION_CONDITION_REQUIRED');
+        if (this.#options.verificationExecutionIsCurrent(structuredClone(r.execution)) !== true) return deny('STALE_JOB_ATTEMPT');
+        // The workflow VERIFIED/FAIL event must agree with the accepted outcome.
+        if (event.type === 'VERIFIED') {
+          if (r.outcome !== 'VERIFIED' || !event.evidence.passed || event.evidence.verificationId !== job.jobId ||
+            event.evidence.reportHash !== r.reportHash || event.evidence.artifactHash !== state.artifact.artifactHash ||
+            event.evidence.compilationId !== state.artifact.compilationId) return deny('VERIFICATION_RESULT_MISMATCH');
+        } else if (event.type === 'FAIL') {
+          if (r.outcome !== 'FAILED' || event.verificationId !== job.jobId) return deny('VERIFICATION_RESULT_MISMATCH');
+        } else return deny('VERIFICATION_RESULT_MISMATCH');
+        const slot = key(command.requestId, job.jobId);
+        if (verificationResults.has(slot)) return deny('VERIFICATION_RESULT_ALREADY_ACCEPTED');
+        verificationResult = structuredClone(r); verificationResults.set(slot, verificationResult);
+      }
       const evidence = new Map(base.evidence);
       const record = evidenceFromEvent(event);
       if (record) {
         const recordKey = key(command.requestId, record.kind, record.recordId);
         if (evidence.has(recordKey)) return deny('EVIDENCE_ID_REUSED');
-        evidence.set(recordKey, { ...record, ...(checkerResult ? { checkerResult: structuredClone(checkerResult) } : {}), ...(compilationResult ? { compilationResult } : {}) });
+        evidence.set(recordKey, { ...record, ...(checkerResult ? { checkerResult: structuredClone(checkerResult) } : {}), ...(compilationResult ? { compilationResult } : {}), ...(verificationResult ? { verificationResult } : {}) });
       }
-      const update = this.#append(base, command, fingerprint, transition.audit, false, { ...(jobIntent ? { jobIntent } : {}), ...(draftingResult ? { draftingResult } : {}), ...(checkerResult ? { checkerResult } : {}), ...(compilationIntent ? { compilationIntent, compilationOutbox: outbox } : {}), ...(compilationResult ? { compilationResult } : {}) });
+      const update = this.#append(base, command, fingerprint, transition.audit, false, { ...(jobIntent ? { jobIntent } : {}), ...(draftingResult ? { draftingResult } : {}), ...(checkerResult ? { checkerResult } : {}), ...(compilationIntent ? { compilationIntent, compilationOutbox: outbox } : {}), ...(compilationResult ? { compilationResult } : {}), ...(verifyBuildIntent ? { verifyBuildIntent, verifyBuildOutbox: verifyOutbox } : {}), ...(verificationResult ? { verificationResult } : {}) });
       const receiptKey = key(command.requestId, event.eventId);
       if (base.receipts.has(receiptKey)) throw new StorageError('RECEIPT_CONFLICT');
       const processed = next.processedEvents.find(item => item.eventId === event.eventId);
@@ -589,10 +682,12 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         ...(jobIntent ? { jobId: jobIntent.jobId } : {}),
         ...(compilationIntent ? { compilationJobId: compilationIntent.jobId } : {}),
         ...(compilationResult ? { compilationResult } : {}),
+        ...(verifyBuildIntent ? { verifyBuildJobId: verifyBuildIntent.jobId } : {}),
+        ...(verificationResult ? { verificationResult } : {}),
         ...(draftingResult ? { draftingResult: structuredClone(draftingResult) } : {}),
         ...(checkerResult ? { checkerResult: structuredClone(checkerResult) } : {}),
         ...(event.type === 'APPLY_ROUTING' ? { routing: structuredClone(event.result) } : {}) };
-      const candidate: MemoryData = { ...update.data, jobs, compilationJobs, compilationResults, compilationOutboxes, draftingResults, checkerReports, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
+      const candidate: MemoryData = { ...update.data, jobs, compilationJobs, compilationResults, compilationOutboxes, verifyBuildJobs, verificationResults, verifyBuildOutboxes, draftingResults, checkerReports, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
       candidate.workflows.set(command.requestId, structuredClone(next));
       candidate.receipts.set(receiptKey, receipt);
       this.#commit(candidate);

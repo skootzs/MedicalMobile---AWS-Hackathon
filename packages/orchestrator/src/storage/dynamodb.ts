@@ -4,6 +4,7 @@ import { canonicalizeJson } from '../snapshots.ts';
 import type { Snapshot } from '../snapshots.ts';
 import type { WorkflowState, WorkflowStatus } from '../workflow.ts';
 import type { CompilationExecution } from '../compilation-result-contracts.ts';
+import type { VerificationExecution } from '../verification-result-contracts.ts';
 import { InMemoryOrchestratorStore } from './memory.ts';
 import type { InMemoryOptions, RepositoryImage } from './memory.ts';
 import { StorageError } from './requests.ts';
@@ -12,6 +13,7 @@ import type { JobDeliveryAttempt } from './jobs.ts';
 import type { AuthorizeCheckerInput, CheckerStore } from './checkers.ts';
 import type { DraftingResultStore } from './drafting-results.ts';
 import type { CompilationResultStore } from './compilation-results.ts';
+import type { VerificationResultStore } from './verification-results.ts';
 import type { AuditRecord } from './audit.ts';
 import type { EvidenceRecord } from './artifacts.ts';
 import { readVerified, writeVerified, sha256, snapshotObjectBytes } from './durable-objects.ts';
@@ -40,6 +42,8 @@ export interface DynamoStoreOptions extends StoreDependencies {
   /** Required for compilation finalization. Condition JOB/META version/attempt/status
    * in THIS transaction, using R7's published field names. No blind client flags. */
   executionCondition?(expected: Readonly<CompilationExecution>): NonNullable<Tx[number]['ConditionCheck']>;
+  /** Same for VERIFY_BUILD finalization: condition the R7 verify JOB/META attempt. */
+  verificationCondition?(expected: Readonly<VerificationExecution>): NonNullable<Tx[number]['ConditionCheck']>;
   /** Integration-test fault only. Cannot be used to emulate an accepted transaction. */
   testBeforeTransaction?(actions: Tx): void;
 }
@@ -53,7 +57,7 @@ const safeId = (id: string) => { if (typeof id !== 'string' || !id.trim() || id.
 /** Durable repository. Each operation reads DynamoDB META and an immutable image fresh.
  * InMemory is used ONLY as a stateless transition planner; it never backs a fallback.
  * Provisional repository-image serialization needs R7 review before sandbox integration. */
-export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStore, CompilationResultStore, ReviewCandidateSource {
+export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStore, CompilationResultStore, VerificationResultStore, ReviewCandidateSource {
   #o: DynamoStoreOptions;
   constructor(options: DynamoStoreOptions) {
     if (!options?.tableName || !options.client || !options.objects || !options.layout || typeof options.resolveActor !== 'function' || typeof options.validateSnapshot !== 'function') throw new StorageError('DURABLE_CONFIGURATION_REQUIRED');
@@ -68,7 +72,8 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
   #planner(image?: RepositoryImage) {
     const options: InMemoryOptions = { resolveActor: this.#o.resolveActor, validateSnapshot: this.#o.validateSnapshot, ...(this.#o.now ? { now: this.#o.now } : {}),
       // The actual acceptance condition is appended to the DynamoDB transaction below.
-      ...(this.#o.executionCondition ? { compilationExecutionIsCurrent: () => true } : {}) };
+      ...(this.#o.executionCondition ? { compilationExecutionIsCurrent: () => true } : {}),
+      ...(this.#o.verificationCondition ? { verificationExecutionIsCurrent: () => true } : {}) };
     return image ? InMemoryOrchestratorStore.restoreRepositoryImage(options,image) : new InMemoryOrchestratorStore(options);
   }
   async #load(requestId: string) {
@@ -152,7 +157,7 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
     for (const [,value] of added('receipts')) {
       const r = value as {eventId:string}; put({pk:pk(requestId),sk:this.#o.layout.receiptSortKey(r.eventId),requestId,objectRef:await this.#recordRef(value)});
     }
-    for (const name of ['jobs','compilationJobs']) for (const [,value] of added(name)) {
+    for (const name of ['jobs','compilationJobs','verifyBuildJobs']) for (const [,value] of added(name)) {
       const j = value as {jobId:string;jobType:string;idempotencyKey:string};
       const jobCreatedAt=(value as {createdAt?:string}).createdAt??lastAudit!.recordedAt;
       const payload={...(value as object),createdAt:jobCreatedAt};
@@ -160,7 +165,7 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
       // R7's Pipe sends OUTBOX.payload. No second publisher or direct SQS send.
       put({pk:`JOB#${j.jobId}`,sk:'OUTBOX',requestId,jobId:j.jobId,jobType:j.jobType,idempotencyKey:j.idempotencyKey,payload});
     }
-    for (const name of ['draftingResults','compilationResults']) for (const [,value] of added(name)) {
+    for (const name of ['draftingResults','compilationResults','verificationResults']) for (const [,value] of added(name)) {
       const r = value as {jobId:string;eventId:string}; put({pk:`JOB#${r.jobId}`,sk:`RECEIPT#R2#${r.eventId}`,requestId,objectRef:await this.#recordRef(value)});
     }
     for (const [,value] of added('evidence')) {
@@ -181,6 +186,12 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
       if (condition.TableName !== this.#o.tableName || condition.Key?.pk !== `JOB#${command.compilationResult.jobId}` || condition.Key?.sk !== 'META' || !condition.ConditionExpression) throw new StorageError('INVALID_EXECUTION_CONDITION');
       actions.push({ConditionCheck:condition});
     }
+    if (command?.verificationResult && maps(after,'verificationResults').has(JSON.stringify([requestId,command.verificationResult.jobId])) && !maps(before,'verificationResults').has(JSON.stringify([requestId,command.verificationResult.jobId]))) {
+      if (!this.#o.verificationCondition) throw new StorageError('VERIFICATION_CONDITION_REQUIRED');
+      const condition = this.#o.verificationCondition(command.verificationResult.execution);
+      if (condition.TableName !== this.#o.tableName || condition.Key?.pk !== `JOB#${command.verificationResult.jobId}` || condition.Key?.sk !== 'META' || !condition.ConditionExpression) throw new StorageError('INVALID_VERIFICATION_CONDITION');
+      actions.push({ConditionCheck:condition});
+    }
     const keys=actions.map(a=>canonicalizeJson(a.Put?.Item?{pk:a.Put.Item.pk,sk:a.Put.Item.sk}:a.ConditionCheck?.Key??a.Update?.Key));
     if (new Set(keys).size!==keys.length || actions.length>100 || Buffer.byteLength(JSON.stringify(actions))>3*1024*1024) throw new StorageError('DYNAMODB_TRANSACTION_LIMIT');
     return actions;
@@ -199,6 +210,11 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
           // Reload and durably audit the stale attempt, without retrying an authorized transition.
           command.preconditionFailure='STALE_JOB_ATTEMPT';delete command.compilationResult;
           if(command.compilationAttempt)command.compilationAttempt.reason='STALE_JOB_ATTEMPT';
+          continue;
+        }
+        if(e.name==='TransactionCanceledException' && command?.verificationResult && e.CancellationReasons?.some((r,i)=>r.Code==='ConditionalCheckFailed' && actions[i]?.ConditionCheck?.Key?.pk===`JOB#${command.verificationResult!.jobId}` && actions[i]?.ConditionCheck?.Key?.sk==='META')) {
+          command.preconditionFailure='STALE_JOB_ATTEMPT';delete command.verificationResult;
+          if(command.verificationAttempt)command.verificationAttempt.reason='STALE_JOB_ATTEMPT';
           continue;
         }
         if(e.name==='TransactionCanceledException' && e.CancellationReasons?.some(r=>['ConditionalCheckFailed','TransactionConflict'].includes(r.Code??''))) continue;
@@ -225,6 +241,10 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
   async listCompilationJobs(id:string){return (await this.#load(id)).planner.listCompilationJobs(id);}
   async getCompilationOutbox(id:string,job:string){return (await this.#load(id)).planner.getCompilationOutbox(id,job);}
   async getCompilationResult(id:string,job:string){return (await this.#load(id)).planner.getCompilationResult(id,job);}
+  async getVerifyBuildJob(id:string,job:string){return (await this.#load(id)).planner.getVerifyBuildJob(id,job);}
+  async listVerifyBuildJobs(id:string){return (await this.#load(id)).planner.listVerifyBuildJobs(id);}
+  async getVerifyBuildOutbox(id:string,job:string){return (await this.#load(id)).planner.getVerifyBuildOutbox(id,job);}
+  async getVerificationResult(id:string,job:string){return (await this.#load(id)).planner.getVerificationResult(id,job);}
   async listReviewCandidates(status:WorkflowStatus) {
     const index=this.#o.layout.reviewerIndex, ids=new Set<string>();
     const partition=index.partitionValue(status);if(partition===null)return []; let start:Record<string,unknown>|undefined;
