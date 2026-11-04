@@ -12,7 +12,6 @@ CHT_CONFIG_DIR="${CHT_CONFIG_DIR:-/project}"
 OUT_DIR="${OUT_DIR:-/out}"
 
 set -u
-export HOME="${HOME:-/tmp}"
 export TZ="${TZ:-Africa/Nairobi}"
 export CHT_CONFIG_DIR OUT_DIR
 

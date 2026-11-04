@@ -6,7 +6,7 @@
 // behavior): docs/job-delivery.md in the r7-infra branch.
 //
 // Confirmed with R4 (skootzs): this is the agreed home for these types.
-import Ajv, { type JSONSchemaType, type ValidateFunction } from 'ajv';
+import { Ajv, type JSONSchemaType, type ValidateFunction } from 'ajv';
 
 export const CONTRACT_VERSION = '1.0.0';
 

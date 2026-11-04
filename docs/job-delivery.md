@@ -40,42 +40,68 @@ disagree with the table:
 the orchestrator for the outbox (runner idempotency makes duplicate sends
 safe), and R2 polling job status instead of consuming events.
 
-## Lease, retry and failure behavior (section 7)
+## Lease, retry and failure behavior
 
-1. **Receive** from `jobs` (long polling). Payload fails schema validation →
-   fail the job with `errorCode = INVALID_PAYLOAD`.
-2. **Take the job** in one `TransactWriteItems`: write a receipt keyed by the
-   SQS message ID (`attribute_not_exists(pk)` guards duplicates), flip
-   `JOB#<jobId>/META` to `RUNNING` with `leaseOwner`/`leaseUntil`/`attempt`,
-   conditioned on `status = PENDING OR (status = RUNNING AND leaseUntil <
-   now)`. Condition failure = someone else already owns it; delete the SQS
-   message and stop.
-3. **Heartbeat** every `LEASE_SECONDS / 3`: extend `leaseUntil` (conditional
-   on `leaseOwner` + `attempt`) and extend the SQS visibility timeout.
-4. **Second guard** (mode = `approved` only): the referenced
-   `APPROVAL#<clinicalApprovalId>` must exist, be `decision = approved`,
-   match `logicModelHash`, and not be superseded. Otherwise
-   `errorCode = APPROVAL_INVALID`.
-5. **Terminal vs. retryable failure:**
-   - Compiler exit 1 (`MODEL_REJECTED`), `cht` convert/validate rejection
-     (`CONVERT_FAILED`), hash mismatches (`HASH_MISMATCH`,
-     `INPUT_HASH_MISMATCH`) → **terminal `FAILED`**, no retry.
-   - Compiler exit 2, infra errors during convert, or timeout
-     (`COMPILE_INFRA_ERROR`) → **retryable**: one transaction resets the job
-     to `PENDING` and clears the lease, plus an `attempt_failed_retryable`
-     audit event; SQS visibility is set to 30s (message is not deleted) so
-     it's redelivered.
-   - After `maxReceiveCount = 3`, SQS moves the message to `jobs-dlq`. The
-     DLQ reconciler (section 10, later) marks it `FAILED` /
-     `DELIVERY_EXHAUSTED`.
-   - A lease that expires with `attempt >= 3` and no reconciler action yet is
-     swept to `FAILED` / `LEASE_EXPIRED`.
-6. **Commit the result** in one `TransactWriteItems`: update
-   `JOB#<jobId>/META` with the final status + result fields, conditioned on
-   `leaseOwner = WORKER_ID AND attempt = <n> AND status = RUNNING`, plus an
-   audit event. Then delete the SQS message. A job is never left silently
-   `RUNNING` — every path (success, terminal failure, or error) commits a
-   result.
+Implemented in `runner/src/worker.ts` and `runner/src/store.ts`.
+
+1. **Receive** from `jobs` (long polling) and validate against
+   `packages/schema/src/handoffs.ts`. An invalid payload fails the job
+   `INVALID_PAYLOAD`, but only if the job is still `PENDING`, so a garbled message
+   can't kill a running job. A message with no usable `jobId` stays on the queue and
+   reaches the DLQ.
+2. **Take the job** in one `TransactWriteItems`: put a receipt, update
+   `JOB#<jobId>/META` to `RUNNING` with `leaseOwner`/`leaseUntil`/`attempt + 1`
+   (condition: `PENDING`, or `RUNNING` with an expired lease), put an audit event.
+   - The receipt key is `RECEIPT#<msgId>#<receiveCount>`. SQS redelivers a retried or
+     crashed job under the same `MessageId`, so a key on `msgId` alone would block the
+     retry. Exclusivity comes from the META condition.
+3. **If the take fails:**
+
+   | Job state | Action |
+   |---|---|
+   | `SUCCEEDED` / `FAILED` | Delete the message |
+   | `RUNNING`, lease live | Keep the message and set visibility to just past the lease. It is the only route to takeover if the owner crashes |
+   | No META item | Leave it for the DLQ and log an error |
+   | Any other status | Throw and leave the message. It is never acked away |
+
+4. **Heartbeat** every `LEASE_SECONDS / 3`: extend `leaseUntil` (conditional on
+   `leaseOwner` + `attempt` + `RUNNING`) and the SQS visibility. If the lease is lost,
+   the running container is killed and nothing is recorded.
+5. **Second guard** (`mode = approved`): `REQ#<requestId>/APPROVAL#<clinicalApprovalId>`
+   must exist with `decision = approved`, a matching `logicModelHash` (compared on the
+   hex part), and neither `superseded = true` nor `status = SUPERSEDED`. Otherwise
+   `APPROVAL_INVALID`.
+6. **Failure handling:**
+
+   | Failure | errorCode | Behavior |
+   |---|---|---|
+   | Compiler exit 1 with `{ ok: false, errors }` on stderr | `MODEL_REJECTED` | Terminal, stores `compileErrors` |
+   | Compiler exit 1 with anything else on stderr, or exit 2 | `COMPILE_INFRA_ERROR` | Retryable |
+   | `cht` exits non-zero and `convert.log` exists | `CONVERT_FAILED` | Terminal |
+   | Convert container never ran (exit >= 125 or no `convert.log`) | `COMPILE_INFRA_ERROR` | Retryable |
+   | Stage timeout | `TIMEOUT` | Retryable |
+   | Snapshot, package or baseline bytes don't match | `HASH_MISMATCH` | Terminal |
+   | Manifest `inputHash` or `snapshotHash` doesn't match | `INPUT_HASH_MISMATCH` | Terminal |
+   | Verifier exit 0/1 with a valid report that fails a cross-check | `VERIFY_ERROR` | Terminal |
+   | Verifier exit 2, or exit 0/1 with no valid report | `VERIFY_ERROR` | Retryable |
+   | A URI outside the artifact bucket | `INVALID_PAYLOAD` | Terminal |
+
+   Retryable means one transaction resets the job to `PENDING`, clears the lease and
+   adds an `attempt_failed_retryable` audit event, then visibility is set to 30 s. On
+   the last permitted delivery (`ApproximateReceiveCount >= MAX_RECEIVE_COUNT`) the job
+   ends `FAILED` with `retryable = true` instead, so it can't sit in `PENDING` after
+   the message moves to the DLQ. A worker crash on the last delivery still needs the
+   section 10 reconciler.
+7. **Commit the result** in one `TransactWriteItems`: update META with the `JobResult`
+   fields, conditional on `leaseOwner` + `attempt` + `RUNNING`, plus an audit event.
+   Then delete the message.
+
+### Packaging
+
+`project.tgz` is written in-process (`runner/src/package.ts`): sorted entries, mtime
+0, uid/gid 0, and a pinned gzip OS byte, so `packageHash` matches on any host.
+`shiv/` and `convert.log` are left out. `manifest.json` is stored next to the package
+rather than inside it, and lists `files` and `logs` separately.
 
 ## Result fields
 
@@ -133,6 +159,17 @@ Release approval binds to `packageHash` (exact bytes downloaded) +
 `manifestHash`. R6's report references `packageHash`. R2 stores per build:
 `snapshotHash`, `inputHash`, `compileArtifactHash`, `templateHash`,
 `manifestHash`, `packageHash`.
+
+### R2 alignment still needed
+
+Branch `feature/task-2-orchestrator` @ `19e75e1` doesn't match this contract yet. Until
+one side changes, real R2 jobs won't run:
+
+| | R2 today | Runner / `handoffs.ts` |
+|---|---|---|
+| Initial `JOB#/META` status | `requested` | `PENDING` |
+| Job payload | `CompilationJobIntent`, with `logicModelUri`, `snapshotReference` and more | `JobPayload`, with `snapshotUri`, `checkReportHash`, `contractVersion`, closed schema |
+| Terminal statuses it reads | also `TIMED_OUT`, `EXHAUSTED` | `SUCCEEDED`, `FAILED` |
 
 ### Pinned compiler commit
 

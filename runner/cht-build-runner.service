@@ -1,0 +1,21 @@
+[Unit]
+Description=CHT No-Code build runner (COMPILE_LOGIC and VERIFY_BUILD)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+# uid 1000 matches the --user 1000:1000 the stage containers run as.
+User=ubuntu
+SupplementaryGroups=docker
+WorkingDirectory=/opt/cht-nocode/runner
+EnvironmentFile=/etc/cht-nocode/env
+EnvironmentFile=/etc/cht-nocode/runner.env
+ExecStart=/usr/bin/node src/main.ts
+Restart=always
+RestartSec=5
+# Longer than one stage timeout is not needed: an unfinished job is taken over after its lease.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

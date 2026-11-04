@@ -59,14 +59,15 @@ fi
 echo
 echo "== stage 2/4: copy /out -> /work (host) =="
 cp -a "$OUT_DIR"/. "$WORK_DIR"/
+chmod -R a+rwX "$WORK_DIR"
 ls -la "$WORK_DIR"
 
 echo
 echo "== stage 3/4: convert ($BUILD_IMAGE_TAG, run-convert.sh) =="
-if ! docker run --rm --platform linux/amd64 \
+if ! docker run --rm --platform linux/amd64 --network none --read-only \
+  --cap-drop ALL --tmpfs /tmp --user 1000:1000 \
   -e SHIV_ROOT=/work/shiv -e npm_config_cache=/tmp/npm -e TZ=Africa/Nairobi \
   -v "$WORK_DIR:/work:rw" \
-  -v "$REPO_ROOT/build-image/run-convert.sh:/run-convert.sh:ro" \
   -w /work \
   "$BUILD_IMAGE_TAG" \
   sh /run-convert.sh; then
@@ -76,8 +77,9 @@ fi
 
 echo
 echo "== stage 4/4: harness (test/harness/child-cough.spec.cjs, inside $BUILD_IMAGE_TAG) =="
-if ! docker run --rm --platform linux/amd64 --cap-add SYS_ADMIN \
-  -e CHT_PROJECT=/project -e TZ=Africa/Nairobi \
+if ! docker run --rm --platform linux/amd64 --network none --read-only \
+  --cap-drop ALL --cap-add SYS_ADMIN --tmpfs /tmp --user 1000:1000 \
+  -e CHT_PROJECT=/project -e TZ=Africa/Nairobi -e npm_config_cache=/tmp/npm \
   -e NODE_PATH=/build-image/node_modules \
   -v "$WORK_DIR:/project:ro" \
   -v "$HARNESS_SPEC:/harness/child-cough.spec.cjs:ro" \

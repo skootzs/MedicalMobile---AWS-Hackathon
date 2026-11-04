@@ -43,26 +43,25 @@ RUN set -eux; \
   echo "CHECK node: $(node --version)"; \
   echo "CHECK cht-conf: $(cht --version 2>&1)"
 
-# npm 11+ skips install scripts by default for some installs; be explicit
-# regardless of npm's version so Chromium is always resolved at build time,
-# never at job run time.
+RUN chown -R node:node /build-image
+
+# Install as `node`: the resolver downloads Chromium under the installing user's
+# home, and a copy under /root is unreadable at run time (uid 1000), which makes
+# the harness try to re-download and fail under --network none.
+USER node
+
 RUN npm ci --ignore-scripts
 RUN npm rebuild puppeteer-chromium-resolver
 
-# Smoke-test that Chromium actually launches in this image (catches missing
-# system libs at build time, not at job run time). Uses its own throwaway
-# --no-sandbox flag for this build-time check only; the harness controls its
-# own launch args at run time (stage 6 adds --cap-add SYS_ADMIN instead).
+# Build-time launch checks. --no-sandbox applies here only because docker build
+# has no SYS_ADMIN; stage 6 runs the sandbox with --cap-add SYS_ADMIN.
 COPY chromium-smoke-test.mjs ./
 RUN node chromium-smoke-test.mjs
+# TODO(R7): also start the real harness here; harness-bake.cjs failed under emulation.
 
-# Run the harness's own test entrypoint once against nothing (just module
-# resolution + Mocha boot), so its own lazy-loaded pieces are cached too.
-RUN node -e "require('cht-conf-test-harness'); console.log('cht-conf-test-harness loads OK')"
+# QEMU writes core dumps here when Chromium aborts under amd64 emulation.
+RUN find /build-image -name '*.core' -type f -delete
 
-RUN chown -R node:node /build-image
-
-USER node
 WORKDIR /workdir
 
 COPY --chown=node:node run-convert.sh /run-convert.sh

@@ -14,7 +14,7 @@ set -u
 cd /work || exit 2
 
 # /home/node isn't writable under --read-only (only /out, /work, /tmp are).
-export HOME="${HOME:-/tmp}"
+export HOME=/tmp
 
 {
   echo "== run-convert =="
