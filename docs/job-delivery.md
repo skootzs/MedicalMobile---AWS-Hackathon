@@ -189,22 +189,16 @@ Read-only mounts: `/project`, `/in` (`logic.json`, plus `golden-cases.json` when
 
 ### R2 alignment still needed
 
-Checked against `feature/task-2-orchestrator` @ `0a00233`. Until the first two rows change, real R2
-jobs fail or never start.
+Checked against `feature/task-2-orchestrator` @ `b791af9`, which fixed the job status, the outbox
+payload, the verify `snapshotUri`, `checkReportHash`, contract 1.1.0 and report 2.3.0.
 
-| | R2 today | Contract | Next step |
-|---|---|---|---|
-| Initial `JOB#/META` status | `requested` | `PENDING` | R2 switches to `PENDING`, as agreed. The runner won't take a `requested` job |
-| `OUTBOX.payload` | The internal intent, with `logicModelUri`, `snapshotReference` and more | `JobPayload` or `VerifyBuildPayload`, closed schema | R2 stores the projected payload, and adds a compile projection. `toVerifyBuildPayload` exists but is only used for validation |
-| Verify `snapshotUri` | Placeholder `s3://r2/snapshots/...` | Inside the artifact bucket | R2 uses the real snapshot reference |
-| Report `references.logicModelHash` | R2 requires null or the envelope hash | R6 sets it to `inputHash` | R6 stops echoing `inputHash` there, or R2 drops the check. See [Verify stage](#verify-stage-r6s-verifier--90fd841) |
-| Result fields | Mirror is on contract 1.0.0 | 1.1.0 adds version IDs, compile report, `compilerExitCode`, `chtConfStatus`, `failureKind` | R2 updates its mirror. The runner still accepts 1.0.0 payloads |
-| Service actors | Caller supplies `resolveServiceActor` | Runner records `cht-runner-compile` and `cht-runner-verify` | The integrator registers both, with the COMPILER and VERIFIER roles |
-| Golden cases | Not in R2's intents or mirror | Optional `goldenCasesUri` and `goldenCasesHash` | R2 adds them when it has golden cases. Without them, the verifier runs without golden cases |
-| `checkReportHash` on verify jobs | Sends `compileArtifactHash` | The checker report's hash | R2 sends the real hash. The runner doesn't read it, so nothing fails |
+| | Status | Next step |
+|---|---|---|
+| `job-events` consumer | Nothing reads the queue | The integrator consumes it and calls R2's reconciler, converting `attempt` with `Number()`. Otherwise R2 never learns a job finished |
+| Service actors | The runner records `cht-runner-compile` and `cht-runner-verify` | The integrator registers both in `resolveServiceActor`, with the COMPILER and VERIFIER roles |
+| Golden cases | R2 deliberately omits `goldenCasesUri` and `goldenCasesHash`, since it has no authoritative object for them | Until it does, verification runs without golden cases and uses the evaluator |
 
-Already aligned: approval records, `sha256:` prefix handling, report schema 2.2.0, and `TIMED_OUT` and
-`EXHAUSTED`, which R2 can read but the runner never writes.
+Reading R2's code is not the same as running it: no real R2 job has gone through the runner yet.
 
 ### Pinned compiler commit
 
