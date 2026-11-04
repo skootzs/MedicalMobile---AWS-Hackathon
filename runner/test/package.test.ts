@@ -18,6 +18,8 @@ function project(): string {
   writeFileSync(join(root, 'convert.log'), `log ${Math.random()}`);
   mkdirSync(join(root, 'shiv'));
   writeFileSync(join(root, 'shiv/cache'), String(Math.random()));
+  mkdirSync(join(root, 'node_modules/.cache'), { recursive: true });
+  writeFileSync(join(root, 'node_modules/.cache/.eslintcache'), String(Math.random()));
   return root;
 }
 
@@ -27,7 +29,7 @@ describe('deterministic package', () => {
     assert.equal(sha256(deterministicTgz(root)), sha256(deterministicTgz(root)));
   });
 
-  it('mtimes, logs and the shiv cache do not change the hash', () => {
+  it('mtimes, logs and the shiv and eslint caches do not change the hash', () => {
     const a = project();
     const b = project();
     utimesSync(join(b, 'tasks.js'), new Date(1000), new Date(1000));
@@ -71,6 +73,7 @@ describe('deterministic package', () => {
     assert.equal(bytes, canonicalJson(JSON.parse(bytes)));
     assert.ok(manifest.files.some((f) => f.path === 'forms/app/f.xml'));
     assert.ok(!manifest.files.some((f) => f.path.startsWith('shiv')));
+    assert.ok(!manifest.files.some((f) => f.path.startsWith('node_modules')));
     assert.deepEqual(manifest.logs, [{ path: 'convert.log', sha256: sha256('x') }]);
   });
 });
