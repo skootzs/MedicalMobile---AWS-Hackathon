@@ -1,0 +1,358 @@
+{
+  "_status": "TECHNICAL DEMONSTRATION ONLY. Not clinician-approved. Not for patient care.",
+  "_purpose": "Handwritten target output for the Role 5 compiler. Every row here is written by hand; keys starting with '_' are review annotations and are not written to the XLSForm.",
+  "_source_document": "WHO, Integrated Management of Childhood Illness (IMCI) Chart Booklet, March 2014. PDF sha256 d10fd1d040bdbdb6db4254b8095e1d1722d0a3d2f80c3651b3003301a8a6959f. 'p.N' below means page N of that PDF file.",
+  "columns": {
+    "survey": [
+      "type",
+      "name",
+      "label::en",
+      "required",
+      "relevant",
+      "appearance",
+      "constraint",
+      "constraint_message::en",
+      "calculation",
+      "default"
+    ],
+    "choices": [
+      "list_name",
+      "name",
+      "label::en"
+    ],
+    "settings": [
+      "form_title",
+      "form_id",
+      "version",
+      "style",
+      "default_language"
+    ]
+  },
+  "survey": [
+    {
+      "type": "begin group",
+      "name": "inputs",
+      "relevant": "./source = 'user'",
+      "appearance": "field-list",
+      "_convention": "cht-core config/default pregnancy_danger_sign.xlsx"
+    },
+    {
+      "type": "hidden",
+      "name": "source",
+      "default": "user"
+    },
+    {
+      "type": "hidden",
+      "name": "source_id"
+    },
+    {
+      "type": "begin group",
+      "name": "contact"
+    },
+    {
+      "type": "string",
+      "name": "_id",
+      "label::en": "Which child are you assessing?",
+      "appearance": "select-contact type-person"
+    },
+    {
+      "type": "hidden",
+      "name": "name"
+    },
+    {
+      "type": "hidden",
+      "name": "patient_id"
+    },
+    {
+      "type": "hidden",
+      "name": "date_of_birth"
+    },
+    {
+      "type": "begin group",
+      "name": "parent"
+    },
+    {
+      "type": "hidden",
+      "name": "_id"
+    },
+    {
+      "type": "end group",
+      "name": "parent"
+    },
+    {
+      "type": "end group",
+      "name": "contact"
+    },
+    {
+      "type": "end group",
+      "name": "inputs"
+    },
+    {
+      "type": "calculate",
+      "name": "patient_uuid",
+      "calculation": "../inputs/contact/_id",
+      "_convention": "Top-level patient_uuid/patient_id link the report to the contact (cht-ai-tools cht-forms.md section 6)"
+    },
+    {
+      "type": "calculate",
+      "name": "patient_id",
+      "calculation": "../inputs/contact/patient_id"
+    },
+    {
+      "type": "calculate",
+      "name": "patient_name",
+      "calculation": "../inputs/contact/name"
+    },
+    {
+      "type": "calculate",
+      "name": "patient_age_in_months",
+      "calculation": "if(../inputs/contact/date_of_birth = '', '', difference-in-months(../inputs/contact/date_of_birth, today()))",
+      "_convention": "difference-in-months as used in pregnancy_danger_sign.xlsx"
+    },
+    {
+      "type": "calculate",
+      "name": "in_scope",
+      "calculation": "if(${patient_age_in_months} = '', 'unknown', if(${patient_age_in_months} >= 2 and ${patient_age_in_months} < 60, 'yes', 'no'))",
+      "_source": "p.5-6: chart applies to 'SICK CHILD AGE 2 MONTHS UP TO 5 YEARS'",
+      "_ambiguity": "A1 (boundary reading of 'up to')"
+    },
+    {
+      "type": "begin group",
+      "name": "intro",
+      "label::en": "Child cough and fast breathing (demonstration)",
+      "appearance": "field-list"
+    },
+    {
+      "type": "note",
+      "name": "demo_banner",
+      "label::en": "<span style=\"color:red\">DEMONSTRATION ONLY. This form is not clinician-approved and must not be used for patient care.</span>"
+    },
+    {
+      "type": "note",
+      "name": "age_unknown_note",
+      "label::en": "This child has no date of birth recorded, so this form cannot be used.",
+      "relevant": "${in_scope} = 'unknown'"
+    },
+    {
+      "type": "note",
+      "name": "out_of_scope_note",
+      "label::en": "This form only covers children aged 2 months up to 5 years. Do not use it for this child.",
+      "relevant": "${in_scope} = 'no'",
+      "_ambiguity": "A2 (what the CHW should do instead is not specified)"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "has_cough_or_difficult_breathing",
+      "label::en": "Does the child have cough or difficult breathing?",
+      "required": "yes",
+      "relevant": "${in_scope} = 'yes'",
+      "_source": "p.6: 'Does the child have cough or difficult breathing?'"
+    },
+    {
+      "type": "end group",
+      "name": "intro"
+    },
+    {
+      "type": "begin group",
+      "name": "danger_signs",
+      "label::en": "General danger signs",
+      "appearance": "field-list",
+      "relevant": "${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes')",
+      "_source": "p.5: CHECK FOR GENERAL DANGER SIGNS",
+      "_ambiguity": "A3 (WHO checks danger signs for every sick child, not only those with cough)"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "not_able_to_drink_or_breastfeed",
+      "label::en": "Is the child NOT able to drink or breastfeed?",
+      "required": "yes",
+      "_source": "p.5 'Is the child able to drink or breastfeed?'; phrased as the sign itself per p.64 'NOT ABLE TO DRINK OR BREASTFEED'"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "vomits_everything",
+      "label::en": "Does the child vomit everything?",
+      "required": "yes",
+      "_source": "p.5"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "had_convulsions",
+      "label::en": "Has the child had convulsions?",
+      "required": "yes",
+      "_source": "p.5"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "lethargic_or_unconscious",
+      "label::en": "Is the child lethargic or unconscious?",
+      "required": "yes",
+      "_source": "p.5"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "convulsing_now",
+      "label::en": "Is the child convulsing now?",
+      "required": "yes",
+      "_source": "p.5"
+    },
+    {
+      "type": "end group",
+      "name": "danger_signs"
+    },
+    {
+      "type": "begin group",
+      "name": "breathing",
+      "label::en": "Breathing",
+      "appearance": "field-list",
+      "relevant": "${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes')"
+    },
+    {
+      "type": "note",
+      "name": "calm_child_note",
+      "label::en": "The child must be calm while you count breaths and look and listen.",
+      "_source": "p.6 'CHILD MUST BE CALM'"
+    },
+    {
+      "type": "integer",
+      "name": "breaths_per_minute",
+      "label::en": "Count the breaths in one minute. How many breaths per minute?",
+      "required": "yes",
+      "constraint": ". >= 0",
+      "constraint_message::en": "Enter the number of breaths counted in one minute.",
+      "_source": "p.6 'Count the breaths in one minute'",
+      "_ambiguity": "A6 (no plausible upper bound given; '. >= 0' is a technical check only)"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "chest_indrawing",
+      "label::en": "Do you see chest indrawing?",
+      "required": "yes",
+      "_source": "p.6 'Look for chest indrawing'"
+    },
+    {
+      "type": "select_one yes_no",
+      "name": "stridor_in_calm_child",
+      "label::en": "Do you hear stridor while the child is calm?",
+      "required": "yes",
+      "_source": "p.6 'Look and listen for stridor' / 'Stridor in calm child'"
+    },
+    {
+      "type": "end group",
+      "name": "breathing"
+    },
+    {
+      "type": "calculate",
+      "name": "fast_breathing",
+      "calculation": "if(${breaths_per_minute} = '', '', if((${patient_age_in_months} < 12 and ${breaths_per_minute} >= 50) or (${patient_age_in_months} >= 12 and ${breaths_per_minute} >= 40), 'yes', 'no'))",
+      "_source": "p.6 '2 months up to 12 months: 50 breaths per minute or more; 12 Months up to 5 years: 40 breaths per minute or more'; '... or more' => greater than or equal",
+      "_ambiguity": "A1",
+      "_convention": "Literal thresholds per age band, no field-to-field comparison (matches docs/logic-model-v1-proposal.md)"
+    },
+    {
+      "type": "calculate",
+      "name": "any_general_danger_sign",
+      "calculation": "if(selected(${not_able_to_drink_or_breastfeed}, 'yes') or selected(${vomits_everything}, 'yes') or selected(${had_convulsions}, 'yes') or selected(${lethargic_or_unconscious}, 'yes') or selected(${convulsing_now}, 'yes'), 'yes', if(selected(${not_able_to_drink_or_breastfeed}, 'no') and selected(${vomits_everything}, 'no') and selected(${had_convulsions}, 'no') and selected(${lethargic_or_unconscious}, 'no') and selected(${convulsing_now}, 'no'), 'no', ''))",
+      "_convention": "yes / no / '' (unknown) pattern from r_danger_sign_present in pregnancy_danger_sign.xlsx"
+    },
+    {
+      "type": "calculate",
+      "name": "classification",
+      "calculation": "if(${in_scope} = 'unknown', 'age_unknown', if(${in_scope} = 'no', 'out_of_scope', if(selected(${has_cough_or_difficult_breathing}, 'no'), 'not_in_pathway', if(${any_general_danger_sign} = 'yes' or selected(${stridor_in_calm_child}, 'yes'), 'severe_pneumonia_or_very_severe_disease', if(${any_general_danger_sign} = 'no' and selected(${stridor_in_calm_child}, 'no') and (selected(${chest_indrawing}, 'yes') or ${fast_breathing} = 'yes'), 'pneumonia', if(${any_general_danger_sign} = 'no' and selected(${stridor_in_calm_child}, 'no') and selected(${chest_indrawing}, 'no') and ${fast_breathing} = 'no', 'cough_or_cold', 'incomplete'))))))",
+      "_source": "p.6 classification table: Pink SEVERE PNEUMONIA OR VERY SEVERE DISEASE / Yellow PNEUMONIA / Green COUGH OR COLD",
+      "_ambiguity": "A4 (wheeze re-assessment step omitted)"
+    },
+    {
+      "type": "calculate",
+      "name": "referral_urgent",
+      "calculation": "if(${classification} = 'severe_pneumonia_or_very_severe_disease', 'yes', 'no')",
+      "_source": "p.6 'Refer URGENTLY to hospital'"
+    },
+    {
+      "type": "calculate",
+      "name": "follow_up_days",
+      "calculation": "if(${classification} = 'pneumonia', 3, if(${classification} = 'cough_or_cold', 5, ''))",
+      "_source": "p.6 PNEUMONIA 'Follow-up in 3 days'; COUGH OR COLD 'Follow-up in 5 days if not improving'",
+      "_ambiguity": "A5 ('if not improving' is not captured)"
+    },
+    {
+      "type": "calculate",
+      "name": "t_follow_up_date",
+      "calculation": "if(${follow_up_days} = '', '', date-time(decimal-date-time(today()) + ${follow_up_days}))",
+      "_convention": "t_danger_signs_referral_follow_up_date pattern in pregnancy_danger_sign.xlsx"
+    },
+    {
+      "type": "begin group",
+      "name": "summary",
+      "label::en": "Summary",
+      "appearance": "field-list summary"
+    },
+    {
+      "type": "note",
+      "name": "summary_demo_banner",
+      "label::en": "<span style=\"color:red\">DEMONSTRATION ONLY. Not clinician-approved.</span>"
+    },
+    {
+      "type": "note",
+      "name": "summary_severe",
+      "label::en": "<span style=\"color:red\">SEVERE PNEUMONIA OR VERY SEVERE DISEASE. Refer URGENTLY to hospital.</span>",
+      "relevant": "${classification} = 'severe_pneumonia_or_very_severe_disease'",
+      "_source": "p.6",
+      "_omitted": "O1 (pre-referral antibiotic dose)"
+    },
+    {
+      "type": "note",
+      "name": "summary_pneumonia",
+      "label::en": "PNEUMONIA. Follow up in 3 days.",
+      "relevant": "${classification} = 'pneumonia'",
+      "_source": "p.6",
+      "_omitted": "O1 (amoxicillin), O2 (HIV-exposed rule), O3 (cough > 14 days)"
+    },
+    {
+      "type": "note",
+      "name": "summary_cough_or_cold",
+      "label::en": "COUGH OR COLD. Follow up in 5 days if not improving.",
+      "relevant": "${classification} = 'cough_or_cold'",
+      "_source": "p.6",
+      "_omitted": "O1, O3"
+    },
+    {
+      "type": "note",
+      "name": "summary_not_in_pathway",
+      "label::en": "No cough or difficult breathing. This form does not assess other problems.",
+      "relevant": "${classification} = 'not_in_pathway'"
+    },
+    {
+      "type": "note",
+      "name": "summary_out_of_scope",
+      "label::en": "Child is outside the 2 months to 5 years age range. No classification was made.",
+      "relevant": "${classification} = 'out_of_scope' or ${classification} = 'age_unknown'"
+    },
+    {
+      "type": "end group",
+      "name": "summary"
+    }
+  ],
+  "choices": [
+    {
+      "list_name": "yes_no",
+      "name": "yes",
+      "label::en": "Yes"
+    },
+    {
+      "list_name": "yes_no",
+      "name": "no",
+      "label::en": "No"
+    }
+  ],
+  "settings": [
+    {
+      "form_title": "Child Cough and Fast Breathing (Demo)",
+      "form_id": "child_cough",
+      "version": "reference-1",
+      "style": "pages",
+      "default_language": "en",
+      "_note": "Fixed version string instead of =NOW() so the output is reproducible"
+    }
+  ]
+}

@@ -1,0 +1,497 @@
+[
+  {
+    "id": "age-1-month",
+    "approval": "not-clinician-approved",
+    "basis": "Age 1 month is below the fixture's 2 months up to 5 years range, so no classification is made.",
+    "input": { "patient_age_in_months": 1 },
+    "expected": {
+      "classification": "out_of_scope",
+      "in_scope": "no",
+      "referral_urgent": "no",
+      "follow_up_days": "",
+      "fast_breathing": "",
+      "any_general_danger_sign": ""
+    }
+  },
+  {
+    "id": "age-60-months",
+    "approval": "not-clinician-approved",
+    "basis": "Age 60 months is the end of the range: the fixture includes 2 months up to, but not including, 60 months.",
+    "input": { "patient_age_in_months": 60 },
+    "expected": {
+      "classification": "out_of_scope",
+      "in_scope": "no",
+      "referral_urgent": "no",
+      "follow_up_days": "",
+      "fast_breathing": "",
+      "any_general_danger_sign": ""
+    }
+  },
+  {
+    "id": "age-unknown",
+    "approval": "not-clinician-approved",
+    "basis": "No date of birth, so age is unknown and the form stops before classifying.",
+    "input": { "patient_age_in_months": null },
+    "expected": {
+      "classification": "age_unknown",
+      "in_scope": "unknown",
+      "referral_urgent": "no",
+      "follow_up_days": "",
+      "fast_breathing": "",
+      "any_general_danger_sign": ""
+    }
+  },
+  {
+    "id": "no-cough-at-24-months",
+    "approval": "not-clinician-approved",
+    "basis": "A child in range with no cough or difficult breathing is not classified on this pathway. Later questions stay unanswered.",
+    "input": { "patient_age_in_months": 24, "has_cough_or_difficult_breathing": false },
+    "expected": {
+      "classification": "not_in_pathway",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "",
+      "fast_breathing": "",
+      "any_general_danger_sign": ""
+    }
+  },
+  {
+    "id": "breaths-49-at-2-months",
+    "approval": "not-clinician-approved",
+    "basis": "Age 2 months is in range and in the under-12-months band. 49 breaths is below 50, with no danger sign, chest indrawing, or stridor.",
+    "input": {
+      "patient_age_in_months": 2,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 49,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "cough_or_cold",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "5",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-50-at-2-months",
+    "approval": "not-clinician-approved",
+    "basis": "At 2 months, 50 breaths per minute is the fast-breathing threshold.",
+    "input": {
+      "patient_age_in_months": 2,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 50,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "pneumonia",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "3",
+      "fast_breathing": "yes",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-49-at-11-months",
+    "approval": "not-clinician-approved",
+    "basis": "11 months is still the under-12-months band, so 49 breaths is not fast breathing.",
+    "input": {
+      "patient_age_in_months": 11,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 49,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "cough_or_cold",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "5",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-50-at-11-months",
+    "approval": "not-clinician-approved",
+    "basis": "11 months is still the under-12-months band, so 50 breaths is fast breathing.",
+    "input": {
+      "patient_age_in_months": 11,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 50,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "pneumonia",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "3",
+      "fast_breathing": "yes",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-39-at-12-months",
+    "approval": "not-clinician-approved",
+    "basis": "The fixture puts 12 months in the second band (40 breaths or more). 39 is not fast breathing. This is open ambiguity A1, not a clinician decision.",
+    "input": {
+      "patient_age_in_months": 12,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 39,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "cough_or_cold",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "5",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-40-at-12-months",
+    "approval": "not-clinician-approved",
+    "basis": "At 12 months the fixture's fast-breathing threshold is 40 breaths per minute.",
+    "input": {
+      "patient_age_in_months": 12,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 40,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "pneumonia",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "3",
+      "fast_breathing": "yes",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-39-at-59-months",
+    "approval": "not-clinician-approved",
+    "basis": "59 months is the last in-range age and uses the 40-breath band. 39 is not fast breathing.",
+    "input": {
+      "patient_age_in_months": 59,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 39,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "cough_or_cold",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "5",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "breaths-40-at-59-months",
+    "approval": "not-clinician-approved",
+    "basis": "At 59 months, 40 breaths per minute is fast breathing.",
+    "input": {
+      "patient_age_in_months": 59,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 40,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "pneumonia",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "3",
+      "fast_breathing": "yes",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "danger-sign-not-able-to-drink",
+    "approval": "not-clinician-approved",
+    "basis": "Not able to drink or breastfeed is a general danger sign. With cough and slow breathing this is severe disease, not pneumonia.",
+    "input": {
+      "patient_age_in_months": 6,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": true,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 30,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "yes"
+    }
+  },
+  {
+    "id": "danger-sign-vomits-everything",
+    "approval": "not-clinician-approved",
+    "basis": "Vomiting everything is a general danger sign and outranks a slow breathing rate.",
+    "input": {
+      "patient_age_in_months": 6,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": true,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 30,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "yes"
+    }
+  },
+  {
+    "id": "danger-sign-had-convulsions",
+    "approval": "not-clinician-approved",
+    "basis": "Convulsions during this illness are a general danger sign and outrank a slow breathing rate.",
+    "input": {
+      "patient_age_in_months": 6,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": true,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 30,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "yes"
+    }
+  },
+  {
+    "id": "danger-sign-lethargic-or-unconscious",
+    "approval": "not-clinician-approved",
+    "basis": "Lethargic or unconscious is a general danger sign and outranks a slow breathing rate.",
+    "input": {
+      "patient_age_in_months": 6,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": true,
+      "convulsing_now": false,
+      "breaths_per_minute": 30,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "yes"
+    }
+  },
+  {
+    "id": "danger-sign-convulsing-now",
+    "approval": "not-clinician-approved",
+    "basis": "Convulsing now is a general danger sign and outranks a slow breathing rate.",
+    "input": {
+      "patient_age_in_months": 6,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": true,
+      "breaths_per_minute": 30,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "yes"
+    }
+  },
+  {
+    "id": "danger-sign-overrides-fast-breathing",
+    "approval": "not-clinician-approved",
+    "basis": "Fast breathing and a general danger sign together are severe disease. The danger-sign row is tried before the pneumonia row.",
+    "input": {
+      "patient_age_in_months": 8,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": true,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 55,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "yes",
+      "any_general_danger_sign": "yes"
+    }
+  },
+  {
+    "id": "stridor-in-calm-child",
+    "approval": "not-clinician-approved",
+    "basis": "Stridor in a calm child, with no general danger sign and slow breathing, is severe disease.",
+    "input": {
+      "patient_age_in_months": 18,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 36,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": true
+    },
+    "expected": {
+      "classification": "severe_pneumonia_or_very_severe_disease",
+      "in_scope": "yes",
+      "referral_urgent": "yes",
+      "follow_up_days": "",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "chest-indrawing",
+    "approval": "not-clinician-approved",
+    "basis": "Chest indrawing with no danger sign, no stridor, and slow breathing is pneumonia, with a follow-up in 3 days.",
+    "input": {
+      "patient_age_in_months": 36,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": 36,
+      "chest_indrawing": true,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "pneumonia",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "3",
+      "fast_breathing": "no",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "incomplete-breaths-missing",
+    "approval": "not-clinician-approved",
+    "basis": "Cough is present and the danger signs, chest indrawing, and stridor are no, but the breath count is missing. An unanswered count is unknown, not slow, so the result is incomplete rather than cough or cold.",
+    "input": {
+      "patient_age_in_months": 24,
+      "has_cough_or_difficult_breathing": true,
+      "not_able_to_drink_or_breastfeed": false,
+      "vomits_everything": false,
+      "had_convulsions": false,
+      "lethargic_or_unconscious": false,
+      "convulsing_now": false,
+      "breaths_per_minute": null,
+      "chest_indrawing": false,
+      "stridor_in_calm_child": false
+    },
+    "expected": {
+      "classification": "incomplete",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "",
+      "fast_breathing": "",
+      "any_general_danger_sign": "no"
+    }
+  },
+  {
+    "id": "incomplete-cough-unanswered",
+    "approval": "not-clinician-approved",
+    "basis": "Age is in range but cough was not answered. No row is definitely true, so the result is incomplete rather than no cough.",
+    "input": { "patient_age_in_months": 24, "has_cough_or_difficult_breathing": null },
+    "expected": {
+      "classification": "incomplete",
+      "in_scope": "yes",
+      "referral_urgent": "no",
+      "follow_up_days": "",
+      "fast_breathing": "",
+      "any_general_danger_sign": ""
+    }
+  }
+]
