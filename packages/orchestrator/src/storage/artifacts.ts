@@ -1,3 +1,4 @@
+import type { CompilationResultRecord } from '../compilation-result-contracts.ts';
 import type { AcceptedCheckerResult } from '../checker-contracts.ts';
 import type { WorkflowEvent } from '../workflow.ts';
 
@@ -12,6 +13,7 @@ export interface EvidenceRecord {
   recordId: string;
   event: EvidenceEvent;
   checkerResult?: AcceptedCheckerResult;
+  compilationResult?: CompilationResultRecord;
 }
 /** Only called for a transition accepted by workflow.ts. Never a public approval writer. */
 export function evidenceFromEvent(event: WorkflowEvent): EvidenceRecord | null {

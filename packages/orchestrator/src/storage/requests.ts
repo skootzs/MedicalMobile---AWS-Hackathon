@@ -1,3 +1,4 @@
+import type { CompilationResultRecord, CompilationExecution } from '../compilation-result-contracts.ts';
 import type { CompilationJobIntent } from '../compilation-contracts.ts';
 import type { AcceptedCheckerResult, CheckerReport } from '../checker-contracts.ts';
 import type { Actor, WorkflowEvent, WorkflowState } from '../workflow.ts';
@@ -24,6 +25,9 @@ export interface ApplyCommand {
   jobIntent?: DraftingJobIntent;
   /** START_COMPILATION only; committed with its outbox in the same transaction. */
   compilationIntent?: CompilationJobIntent;
+  compilationResult?: CompilationResultRecord;
+  /** Audit only: rejected/unavailable result never grants transition authority. */
+  compilationAttempt?: { execution: CompilationExecution; reason: string };
   /** Authenticated callback metadata; only valid with LOGIC_PROPOSED. */
   draftingResult?: DraftingResultRecord;
   /** Audit-only provider references; never permission or a passing checker record. */

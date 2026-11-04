@@ -24,7 +24,7 @@ export interface LogicModelReferenceProvider {
   getVerifiedReference(snapshot: LogicModelSnapshot): Promise<VerifiedLogicModelReference | null>;
 }
 /** Same hash coverage as snapshots.ts: UTF-8 JCS envelope EXCLUDING snapshotHash.
- * R5 must extract content only AFTER verifying these complete object bytes. */
+ * R7 must verify these object bytes, then extract content for R5 /in/logic.json. */
 export function logicObjectBytes(snapshot: LogicModelSnapshot): Buffer {
   const { snapshotHash, ...envelope } = snapshot;
   const bytes = Buffer.from(canonicalizeJson(envelope), 'utf8');
