@@ -29,10 +29,14 @@ export interface LocalApi {
   close(): Promise<void>;
 }
 /**
- * Local integration harness only. No listen(), raw server, start script, mock
- * provider, credentials, or production authentication is exposed by this factory.
+ * Builds the configured Fastify instance and registers every route exactly once.
+ * This is the single source of route/guard wiring; createLocalApi and the
+ * production bootstrap both delegate here so there is no second copy of the
+ * routes, auth hooks, or approval logic. The returned instance is only exposed
+ * to in-process callers: createLocalApi deliberately hides it (no listen()),
+ * while buildServer() hands it to the bootstrap that owns listen()/close().
  */
-export function createLocalApi(deps: LocalApiDependencies): LocalApi {
+export function buildApp(deps: LocalApiDependencies): FastifyInstance {
   const app = Fastify({ logger: false, exposeHeadRoutes: false, bodyLimit: 32 * 1024,
     ajv: { customOptions: { coerceTypes: false, useDefaults: false, removeAdditional: false } } });
   const authentication = deps.authentication ?? denyAllAuthentication;
@@ -75,5 +79,25 @@ export function createLocalApi(deps: LocalApiDependencies): LocalApi {
   if (deps.routing) registerRoutingRoute(app, deps.routing, principalFor);
   if (deps.reviews) registerReviewRoutes(app, deps.reviews, principalFor);
   if (deps.requests) registerRequestRoutes(app, deps.requests, principalFor);
+  return app;
+}
+/**
+ * Local integration harness only. No listen(), raw server, start script, mock
+ * provider, credentials, or production authentication is exposed by this factory.
+ * The underlying Fastify instance is intentionally hidden so tests cannot start
+ * a listening socket from the harness.
+ */
+export function createLocalApi(deps: LocalApiDependencies): LocalApi {
+  const app = buildApp(deps);
   return { inject: app.inject.bind(app), close: () => app.close() };
+}
+/**
+ * Production composition seam: returns the full Fastify instance so the owning
+ * bootstrap can call listen()/close(). It reuses buildApp(), so routes, auth
+ * hooks and approval logic are never duplicated. A real AuthenticationBoundary
+ * must be supplied; omitting it falls back to denyAllAuthentication (fail
+ * closed), exactly as the harness does.
+ */
+export function buildServer(deps: LocalApiDependencies): FastifyInstance {
+  return buildApp(deps);
 }

@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test test/routing.test.ts test/workflow.test.ts test/snapshots.test.ts test/storage.test.ts test/approvals.test.ts test/api.test.ts test/requests.test.ts test/request-api.test.ts test/reviews.test.ts test/review-api.test.ts test/routing-service.test.ts test/routing-api.test.ts test/jobs.test.ts test/callbacks.test.ts test/checkers.test.ts test/compilations.test.ts test/compilation-results.test.ts test/compilation-reconciliation.test.ts",
+    "start": "node --experimental-strip-types src/main.ts",
+    "test": "node --experimental-strip-types --test test/routing.test.ts test/workflow.test.ts test/snapshots.test.ts test/storage.test.ts test/approvals.test.ts test/api.test.ts test/requests.test.ts test/request-api.test.ts test/reviews.test.ts test/review-api.test.ts test/routing-service.test.ts test/routing-api.test.ts test/jobs.test.ts test/callbacks.test.ts test/checkers.test.ts test/compilations.test.ts test/compilation-results.test.ts test/compilation-reconciliation.test.ts test/config.test.ts test/cognito-auth.test.ts test/bootstrap.test.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test:dynamodb": "node --experimental-strip-types --test test/dynamodb.integration.test.ts"
   },
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1161.0",
+    "@aws-sdk/client-s3": "3.1161.0",
     "@aws-sdk/lib-dynamodb": "3.1161.0",
     "canonicalize": "3.0.0",
     "fastify": "5.12.8"
