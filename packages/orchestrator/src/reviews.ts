@@ -1,3 +1,5 @@
+import { checkerEvidenceMatches } from './checker-contracts.ts';
+import type { CheckerReport } from './checker-contracts.ts';
 import { commandEvent, evidenceFailure } from './approvals.ts';
 import type { ApprovalCommand } from './approvals.ts';
 import { canonicalizeJson } from './snapshots.ts';
@@ -28,6 +30,8 @@ export interface ReviewContext {
   preview: Snapshot | null;
   logicModel: Snapshot | null;
   checker: WorkflowState['checks'];
+  /** Present for a current formal report; metadata-only legacy evidence stays unchanged. */
+  checkerReport?: CheckerReport;
   clinicalApproval: { eventId: string; logicRevision: number; logicHash: string } | null;
   artifact: WorkflowState['artifact'];
   verification: WorkflowState['verification'];
@@ -109,7 +113,8 @@ export class ReviewService {
       if (!s) return fail('NOT_FOUND', 'REQUEST_NOT_FOUND');
       if (s.brief.requestId !== requestId) return fail('STORAGE_FAILURE', 'REQUEST_SCOPE_MISMATCH');
       if (expectedVersion !== undefined && s.version !== expectedVersion) return fail('STALE', 'VERSION_CONFLICT');
-      if (s.status !== pending[category]) return fail('STALE', 'REVIEW_NOT_PENDING');
+      const blockedChecks = category === 'CLINICAL' && s.status === 'FAILED' && s.stoppedAt === 'WAITING_FOR_LOGIC_CHECKS' && !!s.checks;
+      if (s.status !== pending[category] && !blockedChecks) return fail('STALE', 'REVIEW_NOT_PENDING');
       const request = identity(s);
       const preview = await this.#deps.store.getSnapshot({ kind: 'REQUEST_PREVIEW', requestId, revision: request.revision });
       const model = category !== 'SERVICE_DESIGNER' && s.logic ? await this.#deps.store.getSnapshot({ kind: 'LOGIC_MODEL', requestId,
@@ -118,7 +123,12 @@ export class ReviewService {
       const safeModel = model?.kind === 'LOGIC_MODEL' && model.requestId === requestId && model.revision === s.logic?.logicRevision && model.snapshotHash === s.logic.logicHash && same(model.requestPreview, request) ? model : null;
       const safeScreening = s.screening && s.screening.requestId === requestId && s.screening.revision === request.revision && s.screening.snapshotHash === request.snapshotHash ? s.screening : null;
       const records = await this.#deps.store.listEvidence(requestId);
+      const formalRecords = category !== 'SERVICE_DESIGNER' && s.logic && s.checks?.invocationId ? records.filter(r => r.kind === 'LOGIC_CHECKED' && r.requestId === requestId &&
+        r.event.type === 'LOGIC_CHECKED' && r.recordId === s.checks!.reportId && r.event.invocationId === s.checks!.invocationId && same(r.event.request, request) &&
+        checkerEvidenceMatches(r.checkerResult, { request, logic: s.logic!, reportId: s.checks!.reportId, eventId: r.event.eventId, invocationId: s.checks!.invocationId, passed: s.checks!.passed, actorId: r.event.actor.id })) : [];
+      const formal = formalRecords.length === 1 ? formalRecords[0].checkerResult : undefined;
       const reasons: string[] = [];
+      if (formal && !formal.passed) reasons.push('CHECKER_BLOCKING_FINDINGS');
       if (category === 'SERVICE_DESIGNER') {
         if (!preview || preview.kind !== 'REQUEST_PREVIEW' || preview.snapshotHash !== request.snapshotHash || preview.requestId !== requestId || preview.revision !== request.revision) reasons.push('SNAPSHOT_REQUIRED');
         const screening = records.filter(r => r.kind === 'SCREENING_COMPLETED' && r.requestId === requestId &&
@@ -162,6 +172,7 @@ export class ReviewService {
         preview: category === 'SERVICE_DESIGNER' ? safePreview : null,
         logicModel: category === 'SERVICE_DESIGNER' ? null : safeModel,
         checker: category === 'SERVICE_DESIGNER' ? null : s.checks,
+        ...(formal ? { checkerReport: formal.report } : {}),
         clinicalApproval: category === 'RELEASE' && s.clinicalApproval ? { eventId: s.clinicalApproval.eventId,
           logicRevision: s.clinicalApproval.logicRevision, logicHash: s.clinicalApproval.logicHash } : null,
         artifact: category === 'RELEASE' ? s.artifact : null,

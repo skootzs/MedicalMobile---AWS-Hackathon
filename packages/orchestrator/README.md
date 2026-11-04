@@ -1847,3 +1847,135 @@ model and actual artifact identities. Keep clinician approval mandatory before
 compilation and separate release approval mandatory after verification; add no model
 calls, generic trusted-flag callbacks or production endpoints until identity/storage
 contracts are ready.
+
+## Formal R4 checker-result ingestion (local integration)
+
+`src/checkers.ts` provides an internal `CheckerResultService`; there is no checker
+HTTP endpoint, listener, worker execution, AWS connection or default mock identity.
+The fictional adapter and opaque service sessions live only in
+`test/helpers/checker-fixtures.ts`. The existing server-side identity resolver and
+request-visibility policy must be injected. Caller-supplied actors, roles and trust
+flags are rejected. An authenticated CHECKER role alone is insufficient: its actor
+ID must match the server-configured target recorded on the invocation.
+
+The lifecycle is:
+
+```mermaid
+stateDiagram-v2
+  WAITING_FOR_LOGIC_CHECKS --> WAITING_FOR_LOGIC_CHECKS: Authorize exact checker invocation (metadata only)
+  WAITING_FOR_LOGIC_CHECKS --> WAITING_FOR_LOGIC_CHECKS: Unavailable / incomplete (blocked attempt)
+  WAITING_FOR_LOGIC_CHECKS --> WAITING_FOR_CLINICAL_APPROVAL: LOGIC_CHECKED / formal passing report
+  WAITING_FOR_LOGIC_CHECKS --> FAILED: LOGIC_CHECKED / failed or blocking report
+  WAITING_FOR_CLINICAL_APPROVAL --> CLINICALLY_APPROVED: Independent human clinical decision
+```
+
+1. The internal ORCHESTRATOR calls `authorize(command, principal)` while the current
+   model is `WAITING_FOR_LOGIC_CHECKS`. The command has requestId, eventId,
+   expectedVersion, revision, snapshotHash, logicRevision and logicHash. The backend
+   supplies the checker actor ID, checker ID and checker version from trusted
+   configuration, not from this command. A stable invocation ID, authorization
+   receipt and audit are recorded atomically without advancing the workflow or
+   dispatching a job. Only one invocation is authorized per exact proposal.
+2. R4 returns `ingest({ ...command, eventId: resultEventId, invocationId, report },
+   verifiedWorkerPrincipal)`. Use a different event ID for authorization and result.
+   Its report includes reportId, resultId, requestId, requestPreview, logic,
+   invocationId, checkerId, checkerVersion, outcome, findings and references.
+   Findings retain id, code, severity, blocking, message and references. These are
+   transport/provenance checks; this service does not run R4's checker algorithms.
+3. Ingestion checks the stored invocation, worker, current request/model identities,
+   workflow version and hash-verified immutable model. It uses the existing
+   `LOGIC_CHECKED` transition, then atomically saves report, evidence, state, accepted
+   receipt and audit. The original drafting admission-validation report is separate;
+   it never substitutes for this formal completion.
+4. Report outcomes PASS, FAIL and ERROR are completed results. Policy
+   `r2-conservative-check-v1` permits only PASS with no blocking findings and no
+   WARNING or ERROR severity findings. INFO findings must also be nonblocking.
+   PASS with a warning is retained unchanged but mapped to `passed: false`.
+   FAIL/ERROR likewise enter the existing FAILED state. No clinical interpretation
+   or medical threshold is invented by this mapping.
+5. UNAVAILABLE and INCOMPLETE return BLOCKED without changing workflow or saving an
+   accepted report. Their well-formed attempts are retained in audit history. A
+   changed/completed result needs a new event ID; an identical blocked retry stays
+   blocked. Recovery after a completed failed check requires a relevant revision
+   under the existing state machine; no automatic recheck or retry loop is added.
+
+### Fictional examples
+
+The tests seed request `fictional-001`, preview revision 1, LogicModel revision 1,
+workflow version 6. The model hash computed from the fictional training model is
+`b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1`.
+Its server-recorded invocation is
+`check-97779b118ccc62112f22900cb3d0d625000ccb7185648626169939b9b7f86f2a`.
+The test adapter returns report `fictional-formal-report`, result
+`fictional-formal-result`, checker `fictional-r4-checker`, version `fixture-v1`.
+
+Separate fixture scenarios produce these abbreviated responses:
+
+```json
+{"status":"ACCEPTED","reason":"CHECKS_PASSED","workflowVersion":7,"result":{"passed":true}}
+```
+
+The clinical queue now includes the request at version 7. Its authorized context
+has `eligibility.eligible: true`, the exact model hash, checkerReportId and decision
+references required by the existing approval API. It still has no clinical approval.
+
+A report with a fictional source-reference warning (even with `blocking: false`)
+is accepted as evidence, but does not authorize clinical approval:
+
+```json
+{"status":"ACCEPTED","reason":"CHECKS_BLOCKED","workflowVersion":7,"result":{"passed":false}}
+```
+
+The workflow is FAILED and excluded from the active clinical queue. An authorized
+clinician can still request the current review context: `checkerReport` preserves
+all findings and source references, eligibility includes `CHECKER_BLOCKING_FINDINGS`,
+and decisionReferences is null. Queue/context reads do not write events. The HTTP
+response schema preserves the report fields. Approval submission independently
+rechecks the formal evidence as well as the existing independence and workflow guards.
+
+A result submitted after the model/request revision changed is rejected:
+
+```json
+{"status":"STALE_VERSION","reason":"VERSION_CONFLICT","result":null}
+```
+
+No old report unlocks the new revision. Previously accepted identical retries return
+DUPLICATE_EVENT with the original report/version/audit, even after later revisions;
+this acknowledges historical completion without restoring old state. Changed content
+under an accepted event ID is rejected. Concurrent callbacks can commit only one
+outcome for an exact proposal. Failed atomic commits leave no partial report,
+receipt, state or audit. Stored reports are append-only, returned as detached copies,
+and checked against invocation, snapshot and receipt on reads.
+
+### Pending Role 4 Integration
+
+The report, invocation and finding contracts in `checker-contracts.ts` are provisional
+R2 contracts. R4 must agree on schema/version identifiers, findings/reference shapes,
+report/result ID scope, checker provenance, and which findings permit clinical review.
+Warnings currently block by explicit conservative policy; changing that requires an
+agreed policy/version, not silently interpreting them as safe. Agree on recheck and
+recovery semantics for the same content, checker-version upgrades, incomplete outcomes,
+and report/reference size limits. No R4 schema or checker algorithms were modified.
+
+R7 must supply real service authentication, mapping to an authorized checker target,
+tenant/request access and revocation policy. A durable adapter must atomically save
+invocations with receipts/audit, and results with state/evidence/receipt/audit; enforce
+expected versions, unique invocation and accepted outcome per proposal, report identity
+and event-payload conflicts, including blocked attempts. Historical snapshots/reports
+must remain immutable and readable. The in-memory adapter is volatile and single-process,
+not production distributed transactions or durable authentication.
+
+Older local fixtures retain trusted metadata-only LOGIC_CHECKED events for compatibility.
+The authenticated drafting path and proposals with recorded checker invocations require
+formal checker evidence even for direct store calls; a bare `passed: true` cannot bypass
+that boundary. Never expose raw store.apply(), invocation authorization or legacy fixture
+writers as browser/worker APIs. Real database adapters must preserve these restrictions.
+
+Verification: 901 tests pass (all 825 existing plus 76 checker tests), strict TypeScript
+has zero errors, and whitespace checks pass. Actual runtime: Node v24.18.0; Node 22
+execution remains pending. No dependency, root configuration or shared-schema changes.
+
+Next: add a version-bound compilation intent after CLINICALLY_APPROVED. Bind it to the
+exact clinical approval event and LogicModel hash, retain existing START_COMPILATION
+and separation guards, and use a mock R5 adapter before adding authenticated compilation
+result ingestion. Clinical and separate release approvals remain mandatory.

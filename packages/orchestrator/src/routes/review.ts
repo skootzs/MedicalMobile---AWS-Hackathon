@@ -23,9 +23,11 @@ const snapshot = { type: 'object', additionalProperties: false,
     hashPolicyVersion: { type: 'string' }, content: { type: 'object', additionalProperties: true }, requestPreview: requestIdentity,
   } };
 const decisionCommon = { expectedVersion: integer, requestRevision: integer, requestSnapshotHash: hashSchema, ...logicProperties };
+const checkerSchema = object({ ...logicProperties, reportId: identifierSchema, passed: { type: 'boolean' } });
+checkerSchema.properties.invocationId = identifierSchema;
 const contextSchema = object({ ...common,
   eligibility: object({ eligible: { type: 'boolean' }, reasons: strings }), preview: nullable(snapshot), logicModel: nullable(snapshot),
-  checker: nullable(object({ ...logicProperties, reportId: identifierSchema, passed: { type: 'boolean' } })),
+  checker: nullable(checkerSchema),
   clinicalApproval: nullable(object({ ...logicProperties, eventId: identifierSchema })), artifact: nullable(object(artifactProperties)),
   verification: nullable(object(verificationProperties)),
   screening: nullable(object({ ...requestProperties, screeningId: identifierSchema, status: { type: 'string' },
@@ -37,6 +39,13 @@ const contextSchema = object({ ...common,
     object({ ...decisionCommon, clinicalApprovalEventId: identifierSchema, compilationId: identifierSchema, artifactHash: hashSchema,
       verificationId: identifierSchema, verificationReportHash: hashSchema })] },
   clinicalApprovalRequired: { type: 'boolean', const: true },
+});
+// Optional extension preserves existing response contracts and every report finding/reference.
+contextSchema.properties.checkerReport = object({ reportId: identifierSchema, resultId: identifierSchema, requestId: identifierSchema,
+  requestPreview: requestIdentity, logic: object(logicProperties), invocationId: identifierSchema, checkerId: identifierSchema, checkerVersion: identifierSchema,
+  outcome: { type: 'string', enum: ['PASS', 'FAIL', 'ERROR', 'UNAVAILABLE', 'INCOMPLETE'] }, references: strings,
+  findings: { type: 'array', items: object({ id: identifierSchema, code: identifierSchema, severity: { type: 'string', enum: ['INFO', 'WARNING', 'ERROR'] },
+    blocking: { type: 'boolean' }, message: { type: 'string' }, references: strings }) },
 });
 function failure(reply: FastifyReply, result: Exclude<ReviewQueueResult | ReviewContextResult, { status: 'SUCCESS' }>) {
   if (result.status === 'STORAGE_FAILURE') return unavailable(reply);

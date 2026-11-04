@@ -1,3 +1,4 @@
+import type { AcceptedCheckerResult, CheckerReport } from '../checker-contracts.ts';
 import type { Actor, WorkflowEvent, WorkflowState } from '../workflow.ts';
 import type { RevisionIdentity } from '../routing.ts';
 import type { DraftingResultRecord, LogicValidationReference } from '../callback-contracts.ts';
@@ -24,6 +25,9 @@ export interface ApplyCommand {
   draftingResult?: DraftingResultRecord;
   /** Audit-only provider references; never permission or a passing checker record. */
   callbackValidation?: LogicValidationReference;
+  checkerResult?: AcceptedCheckerResult;
+  /** Well-formed report preserved on a blocked/rejected attempt, never approval authority. */
+  checkerAttempt?: CheckerReport;
   /** Internal application guards; these can reject, never grant permission. */
   expectedActorId?: string;
   preconditionFailure?: string;

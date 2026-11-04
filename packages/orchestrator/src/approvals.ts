@@ -1,3 +1,4 @@
+import { checkerEvidenceMatches } from './checker-contracts.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { canonicalizeJson } from './snapshots.ts';
 import { transitionWorkflow } from './workflow.ts';
@@ -99,8 +100,13 @@ export function evidenceFailure(c: ApprovalCommand, s: WorkflowState | null, pre
       !model || model.kind !== 'LOGIC_MODEL' || model.requestId !== c.requestId || model.revision !== c.logicRevision || model.snapshotHash !== c.logicHash || !same(model.requestPreview, request)) return 'SNAPSHOT_REQUIRED';
   if (s.checks?.passed !== true || !matchesLogic(s, s.checks)) return 'CHECKER_EVIDENCE_REQUIRED';
   if (c.type === 'CLINICAL_DECISION' && c.checkerReportId !== s.checks.reportId) return 'CHECKER_EVIDENCE_MISMATCH';
-  const checked = findEvidence(records, 'LOGIC_CHECKED', s.checks.reportId, request)?.event;
+  const checkedRecord = findEvidence(records, 'LOGIC_CHECKED', s.checks.reportId, request);
+  const checked = checkedRecord?.event;
   if (!checked || checked.type !== 'LOGIC_CHECKED' || checked.passed !== true || checked.reportId !== s.checks.reportId || !matchesLogic(s, checked)) return 'CHECKER_EVIDENCE_REQUIRED';
+  if (s.checks.invocationId !== undefined || checked.invocationId !== undefined || checkedRecord?.checkerResult !== undefined) {
+    if (s.checks.invocationId !== checked.invocationId || !checkerEvidenceMatches(checkedRecord?.checkerResult, { request, logic: s.logic, reportId: s.checks.reportId,
+      eventId: checked.eventId, invocationId: s.checks.invocationId, passed: true, actorId: checked.actor.id })) return 'CHECKER_EVIDENCE_REQUIRED';
+  }
   if (c.type === 'CLINICAL_DECISION') return;
   if (!s.clinicalApproval || !matchesLogic(s, s.clinicalApproval)) return 'CLINICAL_APPROVAL_REQUIRED';
   if (c.clinicalApprovalEventId !== s.clinicalApproval.eventId) return 'CLINICAL_APPROVAL_MISMATCH';

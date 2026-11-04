@@ -29,7 +29,7 @@ export interface WorkflowState {
   confirmation: POConfirmation | null;
   routing: RoutingResult | null;
   logic: LogicIdentity | null;
-  checks: (LogicIdentity & { reportId: string; passed: boolean }) | null;
+  checks: (LogicIdentity & { reportId: string; passed: boolean; invocationId?: string }) | null;
   clinicalApproval: (LogicIdentity & Approval) | null;
   compilationId: string | null;
   compilerId: string | null;
@@ -49,7 +49,7 @@ type Payload =
   | { type: 'APPLY_ROUTING'; result: RoutingResult }
   | { type: 'START_LOGIC_PROPOSAL' }
   | ({ type: 'LOGIC_PROPOSED' | 'REVISE_LOGIC' } & LogicIdentity)
-  | ({ type: 'LOGIC_CHECKED'; reportId: string; passed: boolean } & LogicIdentity)
+  | ({ type: 'LOGIC_CHECKED'; reportId: string; passed: boolean; invocationId?: string } & LogicIdentity)
   | ({ type: 'CLINICAL_DECISION'; decision: 'APPROVE' | 'REJECT' | 'RETURN'; note?: string } & LogicIdentity)
   | { type: 'START_COMPILATION'; compilationId: string }
   | { type: 'COMPILED'; artifact: ArtifactIdentity }
@@ -230,7 +230,7 @@ export function transitionWorkflow(state: WorkflowState | null, event: WorkflowE
         if (!has('CHECKER')) return reject('WRONG_ROLE');
         if (!allowed('WAITING_FOR_LOGIC_CHECKS')) return reject('WRONG_STATE');
         if (!sameLogic(state.logic, event) || !id(event.reportId) || typeof event.passed !== 'boolean') return reject('INVALID_CHECK_EVIDENCE');
-        next.checks = { ...state.logic!, reportId: event.reportId, passed: event.passed };
+        next.checks = { ...state.logic!, reportId: event.reportId, passed: event.passed, ...(event.invocationId === undefined ? {} : { invocationId: event.invocationId }) };
         next.status = event.passed ? 'WAITING_FOR_CLINICAL_APPROVAL' : 'FAILED';
         next.stoppedAt = event.passed ? null : state.status; contributor = true; break;
       case 'CLINICAL_DECISION':

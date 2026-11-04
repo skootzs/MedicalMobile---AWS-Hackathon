@@ -1,3 +1,4 @@
+import type { AcceptedCheckerResult, CheckerInvocation, CheckerReport } from '../checker-contracts.ts';
 import type { DraftingResultRecord, LogicValidationReference } from '../callback-contracts.ts';
 import type { DraftingJobIntent, WorkerOutcome } from '../job-intents.ts';
 import type { ProposedAuditEvent } from '../workflow.ts';
@@ -8,6 +9,9 @@ export interface AuditRecord extends ProposedAuditEvent {
   auditId: string;
   sequence: number;
   recordedAt: string;
+  checkerInvocation?: CheckerInvocation;
+  checkerResult?: AcceptedCheckerResult;
+  checkerAttempt?: CheckerReport;
   jobIntent?: DraftingJobIntent;
   callbackValidation?: LogicValidationReference;
   draftingResult?: DraftingResultRecord;
@@ -24,6 +28,8 @@ export interface EventReceipt {
   auditId: string;
   /** Optional for commands predating the application-service boundary. */
   commandFingerprint?: string;
+  checkerInvocation?: CheckerInvocation;
+  checkerResult?: AcceptedCheckerResult;
   /** START_LOGIC_PROPOSAL intent committed with this receipt. */
   jobId?: string;
   /** Original accepted callback outcome, independent of later workflow revisions. */

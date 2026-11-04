@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto';
+import { checkerSame, checkerEvidenceMatches, validInvocation, validCheckerResult, parseCheckerReport } from '../checker-contracts.ts';
+import type { CheckerInvocation, AcceptedCheckerResult } from '../checker-contracts.ts';
+import type { CheckerStore, AuthorizeCheckerInput } from './checkers.ts';
 import { validationMatches, validationReference } from '../callback-contracts.ts';
 import type { DraftingResultRecord } from '../callback-contracts.ts';
 import type { DraftingResultStore } from './drafting-results.ts';
@@ -20,6 +24,9 @@ interface MemoryData {
   workflows: Map<string, WorkflowState>;
   jobs: Map<string, DraftingJobIntent>;
   draftingResults: Map<string, DraftingResultRecord>;
+  checkerInvocations: Map<string, CheckerInvocation>;
+  checkerReports: Map<string, AcceptedCheckerResult>;
+  checkerEventFingerprints: Map<string, string>;
   snapshots: Map<string, string>;
   receipts: Map<string, EventReceipt>;
   evidence: Map<string, EvidenceRecord>;
@@ -43,8 +50,8 @@ const identity = (state: WorkflowState) => ({ requestId: state.brief.requestId, 
  * staged in replacement Maps, then committed by one pointer assignment. No awaits
  * occur in that section. This is NOT distributed/durable database atomicity.
  */
-export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore, DraftingResultStore {
-  #data: MemoryData = { workflows: new Map(), jobs: new Map(), draftingResults: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
+export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore, DraftingResultStore, CheckerStore {
+  #data: MemoryData = { workflows: new Map(), jobs: new Map(), draftingResults: new Map(), checkerInvocations: new Map(), checkerReports: new Map(), checkerEventFingerprints: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
   #options: InMemoryOptions;
   constructor(options: InMemoryOptions) {
     if (typeof options.resolveActor !== 'function' || typeof options.validateSnapshot !== 'function') throw new StorageError('MISSING_BACKEND_BOUNDARY');
@@ -108,7 +115,8 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
   }
   async listEvidence(requestId: string): Promise<readonly EvidenceRecord[]> {
     const records = [...this.#data.evidence.values()].filter(record => record.requestId === requestId);
-    for (const { event } of records) {
+    for (const record of records) {
+      const { event } = record;
       const preview = this.#readSnapshot(this.#data.snapshots, { kind: 'REQUEST_PREVIEW', requestId, revision: event.request.revision });
       if (!preview || preview.snapshotHash !== event.request.snapshotHash) throw new StorageError('SNAPSHOT_INTEGRITY');
       const logic = event.type === 'COMPILED' ? event.artifact
@@ -118,6 +126,12 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         const snapshot = this.#readSnapshot(this.#data.snapshots, { kind: 'LOGIC_MODEL', requestId,
           revision: logic.logicRevision, requestPreview: event.request });
         if (!snapshot || snapshot.snapshotHash !== logic.logicHash) throw new StorageError('SNAPSHOT_INTEGRITY');
+      }
+      if (event.type === 'LOGIC_CHECKED' && (event.invocationId !== undefined || record.checkerResult !== undefined)) {
+        const result = await this.getCheckerReport(requestId, event.reportId);
+        if (!result || !checkerSame(result, record.checkerResult) || !checkerEvidenceMatches(result, { request: event.request,
+          logic: { logicRevision: event.logicRevision, logicHash: event.logicHash }, reportId: event.reportId, eventId: event.eventId,
+          invocationId: event.invocationId, passed: event.passed, actorId: event.actor.id })) throw new StorageError('CHECKER_REPORT_INTEGRITY');
       }
     }
     return structuredClone(records);
@@ -155,6 +169,68 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         canonicalizeJson(receipt.request) !== canonicalizeJson(result.requestPreview) || canonicalizeJson(receipt.draftingResult ?? null) !== canonicalizeJson(result) ||
         !model || model.snapshotHash !== result.logic.logicHash || !validationMatches(result.validation, model)) throw new StorageError('DRAFTING_RESULT_INTEGRITY');
     return structuredClone(result);
+  }
+  async getCheckerInvocation(requestId: string, invocationId: string): Promise<CheckerInvocation | null> {
+    const invocation = this.#data.checkerInvocations.get(key(requestId, invocationId));
+    if (!invocation) return null;
+    const receipt = this.#data.receipts.get(key(requestId, invocation.eventId));
+    const model = this.#readSnapshot(this.#data.snapshots, { kind: 'LOGIC_MODEL', requestId, revision: invocation.logic.logicRevision, requestPreview: invocation.requestPreview });
+    if (!validInvocation(invocation) || invocation.requestId !== requestId || !receipt || !checkerSame(receipt.checkerInvocation ?? null, invocation) ||
+        receipt.workflowVersion !== invocation.workflowVersion || !checkerSame(receipt.request, invocation.requestPreview) || !model || model.snapshotHash !== invocation.logic.logicHash) throw new StorageError('CHECKER_INVOCATION_INTEGRITY');
+    return structuredClone(invocation);
+  }
+  async getCheckerReport(requestId: string, reportId: string): Promise<AcceptedCheckerResult | null> {
+    const result = this.#data.checkerReports.get(key(requestId, reportId));
+    if (!result) return null;
+    const invocation = await this.getCheckerInvocation(requestId, result.invocation.invocationId);
+    const receipt = this.#data.receipts.get(key(requestId, result.eventId));
+    if (!validCheckerResult(result) || result.report.requestId !== requestId || result.report.reportId !== reportId || !invocation || !checkerSame(invocation, result.invocation) ||
+        !receipt || !checkerSame(receipt.checkerResult ?? null, result) || receipt.workflowVersion !== result.workflowVersion || !checkerSame(receipt.request, invocation.requestPreview)) throw new StorageError('CHECKER_REPORT_INTEGRITY');
+    return structuredClone(result);
+  }
+  async authorizeChecker(input: AuthorizeCheckerInput, principal: unknown): Promise<ApplyResult> {
+    let command: AuthorizeCheckerInput;
+    try { command = JSON.parse(canonicalizeJson(input)); } catch { throw new StorageError('INVALID_COMMAND'); }
+    if (!obj(command) || !id(command.requestId) || !id(command.attemptId) || !validInvocation(command.invocation) || command.invocation.requestId !== command.requestId ||
+        Object.keys(command).some(k => !['requestId', 'attemptId', 'invocation', 'expectedActorId'].includes(k)) || command.expectedActorId !== undefined && !id(command.expectedActorId)) throw new StorageError('INVALID_COMMAND');
+    let actor: Actor | null;
+    try { actor = structuredClone(await this.#options.resolveActor(principal, command.requestId)); } catch { actor = null; }
+    // Atomic metadata authorization, not a second workflow state machine.
+    const base = this.#data, state = base.workflows.get(command.requestId) ?? null, invocation = command.invocation;
+    const fingerprint = canonicalizeJson({ command, actor });
+    const commandFingerprint = createHash('sha256').update(canonicalizeJson({ invocation, actorId: actor?.id ?? null })).digest('hex');
+    const prior = base.attempts.get(key(command.requestId, command.attemptId));
+    if (prior) { if (prior.fingerprint !== fingerprint) throw new StorageError('ATTEMPT_ID_REUSED'); return { ...structuredClone(prior.result), replayed: true }; }
+    let reason = 'CHECKER_AUTHORIZED';
+    let outcome: ApplyResult['outcome'] = 'ACCEPTED';
+    if (!actor) reason = 'UNAUTHORIZED';
+    else if (!actor.roles.includes('ORCHESTRATOR')) reason = 'WRONG_ROLE';
+    else if (command.expectedActorId !== undefined && command.expectedActorId !== actor.id) reason = 'IDENTITY_CHANGED';
+    else {
+      if (state) this.#assertSnapshots(state, base.snapshots);
+      const receipt = base.receipts.get(key(command.requestId, invocation.eventId));
+      if (receipt) {
+        if (receipt.commandFingerprint === commandFingerprint && checkerSame(receipt.checkerInvocation ?? null, invocation)) { reason = 'ALREADY_AUTHORIZED'; outcome = 'DUPLICATE'; }
+        else reason = 'EVENT_ID_REUSED';
+      } else if (!state) reason = 'REQUEST_NOT_FOUND';
+      else if (state.version !== invocation.workflowVersion) reason = 'VERSION_CONFLICT';
+      else if (!checkerSame(identity(state), invocation.requestPreview) || !checkerSame(state.logic, invocation.logic)) reason = 'STALE_LOGIC';
+      else if (state.status !== 'WAITING_FOR_LOGIC_CHECKS') reason = 'WRONG_STATE';
+      else if ([...base.checkerInvocations.values()].some(old => old.requestId === command.requestId && checkerSame(old.requestPreview, invocation.requestPreview) && checkerSame(old.logic, invocation.logic))) reason = 'CHECKER_INVOCATION_ALREADY_EXISTS';
+    }
+    if (!['CHECKER_AUTHORIZED', 'ALREADY_AUTHORIZED'].includes(reason)) outcome = 'REJECTED';
+    const audit: ProposedAuditEvent = { eventId: invocation.eventId, requestId: command.requestId, actorId: actor?.id ?? null,
+      outcome, reason, from: state?.status ?? null, to: state?.status ?? null, stateVersion: state?.version ?? 0, eventType: 'AUTHORIZE_LOGIC_CHECK',
+      note: null, attemptedRequest: invocation.requestPreview, request: state ? identity(state) : null, logic: state?.logic ? { ...state.logic } : null, artifactHash: null };
+    const update = this.#append(base, command, fingerprint, audit, !actor, outcome === 'ACCEPTED' ? { checkerInvocation: invocation } : {});
+    if (outcome === 'ACCEPTED') {
+      const candidate = { ...update.data, checkerInvocations: new Map(base.checkerInvocations), receipts: new Map(base.receipts) };
+      candidate.checkerInvocations.set(key(command.requestId, invocation.invocationId), structuredClone(invocation));
+      candidate.receipts.set(key(command.requestId, invocation.eventId), { request: invocation.requestPreview, eventId: invocation.eventId,
+        fingerprint: commandFingerprint, commandFingerprint, workflowVersion: invocation.workflowVersion, auditId: update.result.auditId, checkerInvocation: structuredClone(invocation) });
+      this.#commit(candidate);
+    } else this.#commit(update.data);
+    return structuredClone(update.result);
   }
   async recordJobDelivery(input: JobDeliveryAttempt, principal: unknown): Promise<ApplyResult> {
     // Internal, append-only transport audit. No workflow transition, worker call or job mutation.
@@ -206,17 +282,26 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     } catch { throw new StorageError('TRANSACTION_FAILED'); }
     this.#data = candidate;
   }
-  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery' | 'draftingResult' | 'callbackValidation'> = {}): { data: MemoryData; result: ApplyResult } {
+  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery' | 'draftingResult' | 'callbackValidation' | 'checkerInvocation' | 'checkerResult' | 'checkerAttempt'> = {}): { data: MemoryData; result: ApplyResult } {
     const auditId = key(command.requestId, command.attemptId);
     if (base.attempts.has(auditId)) throw new StorageError('ATTEMPT_ID_REUSED');
     const recordedAt = (this.#options.now ?? (() => new Date().toISOString()))();
     if (typeof recordedAt !== 'string' || !Number.isFinite(Date.parse(recordedAt))) throw new StorageError('INVALID_CLOCK');
     const history = base.audits.get(command.requestId) ?? [];
     const record: AuditRecord = { ...structuredClone(audit), auditId, sequence: history.length + 1, recordedAt, ...structuredClone(attachment),
+      ...(command.event?.type === 'LOGIC_CHECKED' && 'checkerAttempt' in command && parseCheckerReport(command.checkerAttempt) ? { checkerAttempt: parseCheckerReport(command.checkerAttempt)! } : {}),
       ...(command.event?.type === 'LOGIC_PROPOSED' && 'callbackValidation' in command && validationReference(command.callbackValidation) ? { callbackValidation: validationReference(command.callbackValidation)! } : {}),
       ...(audit.outcome === 'ACCEPTED' && command.event?.type === 'APPLY_ROUTING' ? { routing: structuredClone(command.event.result) } : {}) };
     const result: ApplyResult = { outcome: audit.outcome, reason: audit.reason, version: hiddenVersion ? null : audit.stateVersion, auditId, replayed: false };
-    const data = { ...base, audits: new Map(base.audits), attempts: new Map(base.attempts) };
+    const data = { ...base, audits: new Map(base.audits), attempts: new Map(base.attempts), checkerEventFingerprints: new Map(base.checkerEventFingerprints) };
+    // Bind a well-formed checker event even when it reports unavailable/incomplete.
+    // A changed report needs a new event ID; retries may repeat the exact payload.
+    if (command.event?.type === 'LOGIC_CHECKED' && 'commandFingerprint' in command && typeof command.commandFingerprint === 'string' &&
+        'checkerAttempt' in command && parseCheckerReport(command.checkerAttempt) &&
+        ['CHECKER_UNAVAILABLE', 'CHECKER_INCOMPLETE'].includes(audit.reason)) {
+      const slot = key(command.requestId, command.event.eventId);
+      if (!data.checkerEventFingerprints.has(slot)) data.checkerEventFingerprints.set(slot, command.commandFingerprint);
+    }
     data.audits.set(command.requestId, [...history, record]);
     data.attempts.set(auditId, { fingerprint, result: structuredClone(result) });
     return { data, result };
@@ -256,13 +341,15 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     };
     if (!actor) return deny('UNAUTHORIZED');
     if (!validJson || !obj(command.event) || Object.hasOwn(command.event, 'actor') ||
-        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent', 'draftingResult', 'callbackValidation'].includes(k))) return deny('INVALID_COMMAND');
+        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent', 'draftingResult', 'callbackValidation', 'checkerResult', 'checkerAttempt'].includes(k))) return deny('INVALID_COMMAND');
     if ((command.expectedActorId !== undefined && !id(command.expectedActorId)) ||
         (command.preconditionFailure !== undefined && !id(command.preconditionFailure)) ||
         (command.commandFingerprint !== undefined && !/^[a-f0-9]{64}$/.test(command.commandFingerprint))) return deny('INVALID_COMMAND');
     if (command.expectedActorId !== undefined && actor.id !== command.expectedActorId) return deny('IDENTITY_CHANGED');
     if (!obj(command.event.request) || command.event.request.requestId !== command.requestId) return deny('REQUEST_SCOPE_MISMATCH');
     if (state) this.#assertSnapshots(state, base.snapshots); // Corrupt stored state/evidence blocks writes.
+    const checkerFingerprint = base.checkerEventFingerprints.get(key(command.requestId, command.event.eventId));
+    if (checkerFingerprint !== undefined && checkerFingerprint !== command.commandFingerprint) return deny('EVENT_ID_REUSED');
     const priorReceipt = base.receipts.get(key(command.requestId, command.event.eventId));
     if (priorReceipt && priorReceipt.commandFingerprint !== command.commandFingerprint) return deny('EVENT_ID_REUSED');
     if (command.preconditionFailure !== undefined) return deny(command.preconditionFailure);
@@ -270,6 +357,10 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     if (command.callbackValidation !== undefined && (command.event.type !== 'LOGIC_PROPOSED' || !validationReference(command.callbackValidation))) return deny('INVALID_VALIDATION_REFERENCE');
     if (command.draftingResult !== undefined && command.event.type !== 'LOGIC_PROPOSED') return deny('UNRELATED_DRAFTING_RESULT');
     if (command.event.type === 'LOGIC_PROPOSED' && command.commandFingerprint !== undefined && command.draftingResult === undefined) return deny('DRAFTING_RESULT_REQUIRED');
+    if (command.checkerResult !== undefined && command.event.type !== 'LOGIC_CHECKED') return deny('UNRELATED_CHECKER_RESULT');
+    if (command.event.type === 'LOGIC_CHECKED' && (command.event.invocationId !== undefined || command.commandFingerprint !== undefined ||
+        [...base.draftingResults.values()].some(r => r.requestId === command.requestId && checkerSame(r.requestPreview, command.event.request)) ||
+        [...base.checkerInvocations.values()].some(i => i.requestId === command.requestId && checkerSame(i.requestPreview, command.event.request))) && command.checkerResult === undefined) return deny('CHECKER_RESULT_REQUIRED');
     const event = { ...command.event, actor } as WorkflowEvent;
     const transition = transitionWorkflow(state, event);
     if (transition.outcome !== 'ACCEPTED') {
@@ -329,14 +420,33 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         if (draftingResults.has(slot)) return deny('JOB_RESULT_ALREADY_ACCEPTED');
         draftingResult = structuredClone(expected); draftingResults.set(slot, draftingResult);
       }
+      const checkerReports = new Map(base.checkerReports);
+      let checkerResult: AcceptedCheckerResult | undefined;
+      if (command.checkerResult !== undefined) {
+        const r = command.checkerResult;
+        if (!validCheckerResult(r) || event.type !== 'LOGIC_CHECKED') return deny('INVALID_CHECKER_RESULT');
+        const invocation = base.checkerInvocations.get(key(command.requestId, r.invocation.invocationId));
+        if (!invocation || !checkerSame(invocation, r.invocation)) return deny('CHECKER_INVOCATION_REQUIRED');
+        const authorization = base.receipts.get(key(command.requestId, invocation.eventId));
+        if (!authorization?.checkerInvocation || !checkerSame(authorization.checkerInvocation, invocation)) return deny('CHECKER_INVOCATION_INTEGRITY');
+        if (actor.id !== invocation.checkerActorId) return deny('WORKER_NOT_AUTHORIZED');
+        if (state!.version !== invocation.workflowVersion || !checkerSame(identity(state!), invocation.requestPreview) || !checkerSame(state!.logic, invocation.logic)) return deny('STALE_CHECKER_INVOCATION');
+        if (r.eventId !== event.eventId || r.workflowVersion !== next.version || r.report.requestId !== command.requestId ||
+            r.report.reportId !== event.reportId || r.passed !== event.passed || event.invocationId !== invocation.invocationId ||
+            !checkerSame({ logicRevision: event.logicRevision, logicHash: event.logicHash }, invocation.logic)) return deny('CHECKER_EVIDENCE_MISMATCH');
+        if ([...checkerReports.values()].some(old => old.report.requestId === command.requestId && checkerSame(old.report.requestPreview, invocation.requestPreview) && checkerSame(old.report.logic, invocation.logic))) return deny('CHECKER_RESULT_ALREADY_ACCEPTED');
+        const reportSlot = key(command.requestId, r.report.reportId);
+        if (checkerReports.has(reportSlot)) return deny('CHECKER_REPORT_ID_REUSED');
+        checkerResult = structuredClone(r); checkerReports.set(reportSlot, checkerResult);
+      }
       const evidence = new Map(base.evidence);
       const record = evidenceFromEvent(event);
       if (record) {
         const recordKey = key(command.requestId, record.kind, record.recordId);
         if (evidence.has(recordKey)) return deny('EVIDENCE_ID_REUSED');
-        evidence.set(recordKey, record);
+        evidence.set(recordKey, { ...record, ...(checkerResult ? { checkerResult: structuredClone(checkerResult) } : {}) });
       }
-      const update = this.#append(base, command, fingerprint, transition.audit, false, { ...(jobIntent ? { jobIntent } : {}), ...(draftingResult ? { draftingResult } : {}) });
+      const update = this.#append(base, command, fingerprint, transition.audit, false, { ...(jobIntent ? { jobIntent } : {}), ...(draftingResult ? { draftingResult } : {}), ...(checkerResult ? { checkerResult } : {}) });
       const receiptKey = key(command.requestId, event.eventId);
       if (base.receipts.has(receiptKey)) throw new StorageError('RECEIPT_CONFLICT');
       const processed = next.processedEvents.find(item => item.eventId === event.eventId);
@@ -346,8 +456,9 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         ...(command.commandFingerprint === undefined ? {} : { commandFingerprint: command.commandFingerprint }),
         ...(jobIntent ? { jobId: jobIntent.jobId } : {}),
         ...(draftingResult ? { draftingResult: structuredClone(draftingResult) } : {}),
+        ...(checkerResult ? { checkerResult: structuredClone(checkerResult) } : {}),
         ...(event.type === 'APPLY_ROUTING' ? { routing: structuredClone(event.result) } : {}) };
-      const candidate: MemoryData = { ...update.data, jobs, draftingResults, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
+      const candidate: MemoryData = { ...update.data, jobs, draftingResults, checkerReports, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
       candidate.workflows.set(command.requestId, structuredClone(next));
       candidate.receipts.set(receiptKey, receipt);
       this.#commit(candidate);

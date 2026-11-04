@@ -1,3 +1,4 @@
+import type { AcceptedCheckerResult } from '../checker-contracts.ts';
 import type { WorkflowEvent } from '../workflow.ts';
 
 /** Immutable accepted evidence history, including rejected/returned review decisions. */
@@ -10,6 +11,7 @@ export interface EvidenceRecord {
   kind: EvidenceEvent['type'];
   recordId: string;
   event: EvidenceEvent;
+  checkerResult?: AcceptedCheckerResult;
 }
 /** Only called for a transition accepted by workflow.ts. Never a public approval writer. */
 export function evidenceFromEvent(event: WorkflowEvent): EvidenceRecord | null {
