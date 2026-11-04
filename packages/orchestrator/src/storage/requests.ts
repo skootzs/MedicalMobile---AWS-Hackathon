@@ -1,3 +1,4 @@
+import type { CompilationJobIntent } from '../compilation-contracts.ts';
 import type { AcceptedCheckerResult, CheckerReport } from '../checker-contracts.ts';
 import type { Actor, WorkflowEvent, WorkflowState } from '../workflow.ts';
 import type { RevisionIdentity } from '../routing.ts';
@@ -21,6 +22,8 @@ export interface ApplyCommand {
   snapshots?: readonly Snapshot[];
   /** Only valid with START_LOGIC_PROPOSAL; store verifies authoritative bindings. */
   jobIntent?: DraftingJobIntent;
+  /** START_COMPILATION only; committed with its outbox in the same transaction. */
+  compilationIntent?: CompilationJobIntent;
   /** Authenticated callback metadata; only valid with LOGIC_PROPOSED. */
   draftingResult?: DraftingResultRecord;
   /** Audit-only provider references; never permission or a passing checker record. */

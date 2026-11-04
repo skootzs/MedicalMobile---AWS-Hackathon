@@ -1979,3 +1979,164 @@ Next: add a version-bound compilation intent after CLINICALLY_APPROVED. Bind it 
 exact clinical approval event and LogicModel hash, retain existing START_COMPILATION
 and separation guards, and use a mock R5 adapter before adding authenticated compilation
 result ingestion. Clinical and separate release approvals remain mandatory.
+
+## Approved compilation handoff (Prompt 24, local integration)
+
+`CompilationHandoffService.start(command, verifiedPrincipal)` in `src/compilations.ts`
+uses the same application-service / `store.apply()` pattern as drafting handoffs.
+Drafting's typed service and worker transport remain unchanged. This adds a typed
+compilation adapter to the same workflow and atomic repository, not a second state
+machine, runner, queue, publisher or retry framework. No shared handoff contract was
+found in the local `packages/schema`; the new contracts are isolated and provisional.
+
+The internal command contains requestId, eventId, expectedVersion, revision,
+snapshotHash, logicModelRevision, logicModelHash and clinicalApprovalId. These are
+expected identities, not permission. No URI, baseline, role, actor, status, mode or
+trusted flag is accepted from a caller. There is no new HTTP endpoint. Only a verified
+ORCHESTRATOR actor with request visibility and any additional injected restriction
+may initiate this handoff. A clinician, developer/compiler or release approver is
+not elevated to orchestration authority by that role alone.
+
+The service loads current state, immutable preview/model, formal checker evidence,
+clinical decision and their accepted receipts. `compilationEvidenceFailure` reuses
+ApprovalService's evidence binding check and the original clinical-decision workflow
+guard (a discarded pure probe) to recheck reviewer independence, rather than inventing
+new approval rules. The existing START_COMPILATION transition is authoritative.
+The atomic store repeats evidence/version validation at commit time. Formal checked
+paths cannot use bare START_COMPILATION to advance without an intent/outbox.
+Metadata-only legacy fixture paths remain compatible for existing tests; do not expose
+raw store.apply() as an API. They cannot authorize this new application service.
+
+A valid handoff moves CLINICALLY_APPROVED to COMPILING and atomically records:
+
+- Workflow version and compilationId (the compilation jobId).
+- Immutable COMPILE_LOGIC intent, mode approved, initial local job status PENDING.
+- Accepted event receipt and audit with exact evidence references.
+- Thin `JOB#<jobId>` / `OUTBOX` record pointing to the authoritative job.
+
+The job ID/idempotency key is derived from the exact request-preview identity, model
+revision/hash and clinical approval event. Delivery attempts cannot generate new logical
+jobs. Request revision, LogicModel revision, source workflow version and resulting
+workflow version are separate fields. `clinicalApprovalId` maps to the existing accepted
+CLINICAL_DECISION **eventId**, scoped by requestId; no separate approval ID was invented.
+
+Identical accepted retries return the original job, timestamp, receipt audit ID and
+version, without resolving S3 again. They remain historical acknowledgements after
+later revisions and never restore an old state. Changed commands under the same event
+ID conflict. Different events competing for one version cannot both commit. Rejected
+attempts are audited where identity/access/storage allow; no job/outbox is created.
+Storage faults leave state, job, receipt, audit and outbox uncommitted together.
+An S3-first upload may remain orphaned after a failed DynamoDB transaction; it is not
+an authorization. No cleanup/deletion process is added.
+
+### Immutable object representation and S3-first boundary
+
+`LogicModelReferenceProvider.getVerifiedReference(snapshot)` is a trusted backend port.
+There is no default production implementation. R7 must upload/locate and verify an
+immutable, private, encrypted, versioned object before returning this reference.
+The test-only adapter uses an in-memory fictional object registry and verifies bytes;
+it does not access S3. The service rejects missing/unsupported references and requires
+matching request/model identities, byte hash/length, policy/representation, object
+version, verification record ID and `s3://<bucket>/snapshots/<hash>.json` URI.
+These metadata checks cannot themselves prove an S3 object exists: the injected server
+adapter must actually verify it and enforce allowed bucket, tenant and object version.
+Client flags must never implement that provider.
+
+Existing `jcs-sha256-v1` hashes UTF-8 RFC 8785 canonical JSON of the **entire snapshot
+envelope excluding snapshotHash**, including kind, requestId, LogicModel revision,
+schemaVersion, hashPolicyVersion, requestPreview and full content. `logicObjectBytes()`
+returns precisely these bytes and checks SHA-256 against the approved snapshotHash.
+The reference declares representation `r2-snapshot-envelope-without-hash-v1`.
+`logicModelHash` equals the SHA-256 of those object bytes. It is neither the hash of
+raw LogicModel content alone nor of an envelope containing its own snapshotHash.
+R7 downloads the pinned version and verifies SHA-256/length before R5 extracts content.
+Do not reformat, normalize, omit sources, or hash the object including snapshotHash.
+
+This byte format is an explicit provisional adapter, not an assertion that R5/R7 have
+adopted it. If their existing object format is raw LogicModel JSON or a full envelope
+including snapshotHash, agree on a migration or separate object hash; do not silently
+change approved hashes. No real object URIs or baseline hashes are generated by the
+service. There is no authoritative baseline record locally, so baselineHash is omitted.
+If R5 requires one, an agreed authoritative baseline adapter/contract is a prerequisite
+for actual execution; an invented value must not fill that gap.
+
+### Fictional job and outbox example
+
+The fixture records request revision 1 / LogicModel revision 1 at source workflow
+version 8 and transitions to COMPILING version 9. These are synthetic training data.
+The following is the core payload; the actual intent additionally preserves
+requestPreview, snapshotReference (versionId, verificationId, representation, hash
+policy, byte hash and length), checkerInvocationId and handoffEventId.
+
+```json
+{
+  "jobId": "compile-515c9eeb6cf47fd7392b9fd05414cf427e8c9f7d12342bb61524e75dcc612e97",
+  "jobType": "COMPILE_LOGIC",
+  "mode": "approved",
+  "requestId": "fictional-001",
+  "revision": 1,
+  "logicModelRevision": 1,
+  "logicModelHash": "b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1",
+  "logicModelUri": "s3://fictional-local-snapshots/snapshots/b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1.json",
+  "clinicalApprovalId": "fictional-clinical-approval",
+  "checkerReportId": "fictional-formal-report",
+  "sourceWorkflowVersion": 8,
+  "workflowVersion": 9,
+  "idempotencyKey": "approved-compilation-v1:515c9eeb6cf47fd7392b9fd05414cf427e8c9f7d12342bb61524e75dcc612e97",
+  "createdBy": "fictional-backend",
+  "createdAt": "2026-11-04T12:00:00.000Z",
+  "status": "PENDING"
+}
+```
+
+`getCompilationJob`, `listCompilationJobs` and `getCompilationOutbox` are read-only
+internal ports; returned records are detached. The outbox contains pk, sk OUTBOX,
+jobId, jobType, requestId, idempotencyKey, createdAt and initial PENDING status, without
+clinical content or a second copy of the full job. R7 must load/enrich from
+`JOB#jobId / META`; the outbox alone is not a runnable authorization.
+
+### Pending Role 4 / Role 5 / Role 7 Integration
+
+Agree on shared handoff types with the schema owner before adopting them. Outstanding
+mappings include the envelope byte format versus raw compiler input, approval eventId
+versus R7 approval-record IDs, optional baseline requirements, createdBy as the resolved
+service actor ID (rather than a magic literal), and R7's exact initial job-status enum.
+PENDING is provisional local intent status; no execution status updates exist here.
+The older drafting envelope is unchanged and will need separate R7 outbox alignment.
+No preview build mode was added or modified.
+
+R7's adapter must use the existing single table and agreed keys: conditionally update
+REQ#requestId/META at expected version; check authoritative current approval/checker/
+snapshot references; conditionally put JOB#jobId/META, receipt, append-only audit and
+JOB#jobId/OUTBOX in one TransactWriteItems operation. Reject existing IDs or conflicting
+payloads; keep unique job identity per approval/model and support historical retries.
+S3-first references must already be verified and immutable; pin version IDs and use
+If-None-Match: * on uploads. Job/outbox records here carry small references, not model
+content. The real adapter must keep every DynamoDB item below 400 KB, externalize large
+snapshots/reports/history as agreed, and avoid copying unbounded in-memory state blobs
+into one item. This milestone adds no DynamoDB schema or infrastructure implementation.
+
+Use R7's Cognito JWT verification and group mapping for humans; internal ORCHESTRATOR
+and worker service identity/permissions still require an agreed R7 mapping. The mock
+resolvers remain test-only. A developer group must never imply clinical or release
+approval authority. R7 owns Streams/Pipes, SQS/DLQ, at-least-once delivery, leases,
+heartbeats, retries, offline credential-free COMPILE_LOGIC containers and execution
+status in DynamoDB. No components from that list are implemented here.
+
+### Prompt 25: compilation result readiness
+
+Treat `{jobId,status,attempt}` notifications as hints, not artifact or approval evidence.
+Load the detailed authoritative job, validate its completed attempt and runner identity,
+and match current workflow, compilationId/jobId, request preview, approved model,
+clinical approval and immutable artifact manifest/bytes/hash before accepting COMPILED.
+Atomically record artifact references/result receipt/audit with the existing transition.
+A running job never advances to verification. A successful compilation only reaches
+WAITING_FOR_VERIFICATION; independent synthetic-case verification and separate human
+release approval remain mandatory before download. R7 must recheck approval has not
+been superseded before execution; stale intents are historical, not permission to run.
+
+Local verification: 964 tests passed (all 901 existing + 63 compilation tests), strict
+TypeScript zero errors, whitespace clean. Runtime Node v24.18.0; no Node 22 executable
+was found on PATH or the inspected Homebrew/nvm/Volta locations. Node 22 execution
+remains pending; no runtime installation/root changes were made. No dependencies,
+AWS integrations, public endpoint, commits, pushes or deployments were added.

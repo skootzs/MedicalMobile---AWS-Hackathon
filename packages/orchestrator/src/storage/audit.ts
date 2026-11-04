@@ -1,3 +1,4 @@
+import type { CompilationJobIntent, CompilationOutbox } from '../compilation-contracts.ts';
 import type { AcceptedCheckerResult, CheckerInvocation, CheckerReport } from '../checker-contracts.ts';
 import type { DraftingResultRecord, LogicValidationReference } from '../callback-contracts.ts';
 import type { DraftingJobIntent, WorkerOutcome } from '../job-intents.ts';
@@ -13,6 +14,8 @@ export interface AuditRecord extends ProposedAuditEvent {
   checkerResult?: AcceptedCheckerResult;
   checkerAttempt?: CheckerReport;
   jobIntent?: DraftingJobIntent;
+  compilationIntent?: CompilationJobIntent;
+  compilationOutbox?: CompilationOutbox;
   callbackValidation?: LogicValidationReference;
   draftingResult?: DraftingResultRecord;
   jobDelivery?: { jobId: string; outcome: WorkerOutcome | 'NOT_ATTEMPTED' };
@@ -32,6 +35,7 @@ export interface EventReceipt {
   checkerResult?: AcceptedCheckerResult;
   /** START_LOGIC_PROPOSAL intent committed with this receipt. */
   jobId?: string;
+  compilationJobId?: string;
   /** Original accepted callback outcome, independent of later workflow revisions. */
   draftingResult?: DraftingResultRecord;
   /** Immutable accepted routing decision; absent on older/non-routing receipts. */
