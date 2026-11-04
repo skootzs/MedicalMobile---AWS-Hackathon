@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { validateVerificationReport, VERIFICATION_REPORT_SCHEMA_VERSION } from '../src/verification-report-contract.ts';
 import { fictionalReport } from './helpers/verification-report-fixtures.ts';
 
-test('R6 schema version is 2.1.0 (verified against the verification branch)', () => {
-  assert.equal(VERIFICATION_REPORT_SCHEMA_VERSION, '2.1.0');
+test('R6 schema version matches the published verification-report schema', () => {
+  assert.equal(VERIFICATION_REPORT_SCHEMA_VERSION, '2.2.0');
 });
 
 test('accepts a schema-valid passing report and extracts the gate view', () => {

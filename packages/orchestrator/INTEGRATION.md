@@ -138,7 +138,7 @@ required one, that boundary fails closed.
   `WAITING_FOR_VERIFICATION` (ORCHESTRATOR) → emits `VERIFY_BUILD` job bound to the
   exact accepted compiled artifact (packageHash/manifestHash/compileArtifactHash).
 - Result: ingested through the reconciler. R2 fetches the report by
-  `reportUri`/`reportHash`, byte-verifies it, validates against R6's 2.1.0 JSON
+  `reportUri`/`reportHash`, byte-verifies it, validates against R6's 2.2.0 JSON
   Schema, cross-checks references against R2 state, and requires `passed === true`
   AND `coverageComplete === true`. VERIFIER identity (independent of clinician/compiler).
 
@@ -163,8 +163,8 @@ required one, that boundary fails closed.
   so a stale attempt fails closed. The notification is only a hint of which job
   to reconcile; all evidence is the authoritative record + R2's stored intent.
 
-See `CONTRACTS.md` for the two replaceable mirrored schemas (R6 report 2.1.0,
-R7 VerifyBuildPayload) to swap for direct imports after the integration merge.
+See `CONTRACTS.md` for the loaded schemas (R6 report 2.2.0 and R7
+VerifyBuildPayload). Both are read from the packages on this branch.
 
 ## 5. Node 22 Docker
 
@@ -195,15 +195,11 @@ The assembled end-to-end scenario is `test/assembled.integration.test.ts`.
 
 ## 7. Known teammate-owned blockers
 
-- **R7 ↔ R6 result field mismatch (documented, R7/R6 to fix — NOT in R2):** R7's
-  runner `JobResult` is expected to carry `report.version` and a top-level
-  `report.packageHash`, while R6's published report uses `schemaVersion` and
-  `references.packageHash`. R2 validates against R6's ACTUAL 2.1.0 schema and does
-  not weaken its checks. Fix required on the R7/R6 side: R7's runner must read the
-  R6 fields by their real names (`schemaVersion`, `references.packageHash`) when
-  copying report fields onto `JOB/META`, OR R2's reconciler reads them from the
-  report itself (which it already does — R2 only needs R7's flat META to carry
-  `reportUri`/`reportHash`/`attempt`/`status`).
+- **R6 report 2.2.0:** the published report requires both `schemaVersion` and
+  `version` (each `2.2.0`) and a top-level `packageHash`, and still echoes
+  `references.packageHash`. R2 validates that schema as published. R2 only needs
+  R7's flat JOB/META to carry `reportUri`/`reportHash`/`attempt`/`status`; the
+  reconciler reads the report fields from the stored document.
 - **R7 flat JOB/META vs recordVersion:** R7's META has `attempt`+`status` but no
   `recordVersion`. R2 adapts (synthesizing `r7-attempt-<n>`) and conditions on
   `attempt`+`status`. R7 must ensure the terminal META carries the fields R2 reads
@@ -211,8 +207,6 @@ The assembled end-to-end scenario is `test/assembled.integration.test.ts`.
   `compileReportUri/Hash/VersionId`, `compileArtifactHash`, `inputHash`,
   `toolVersions`, `leaseOwner`, `startedAt`/`finishedAt`; verify: `reportUri/Hash/VersionId`,
   `verificationPassed`, `coverageComplete`, `reportVersion`).
-- **Shared schemas unmerged:** `packages/schema` (R7) and `packages/verification`
-  (R6) are not on this branch; R2 uses labelled replaceable mirrors (CONTRACTS.md).
 - **Worker/service identities:** R7 must provide the service-identity resolution
   and runner authorization policies (`WorkerPolicies`) that map R3/R4/R5/R6/R7
   service principals to worker roles; R2 fails closed without them.

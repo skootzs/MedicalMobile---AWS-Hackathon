@@ -68,7 +68,7 @@ test('verificationExecutionFromMeta adapts a flat R7 VERIFY_BUILD JobResult', ()
     requestId: 'req-1', status: 'SUCCEEDED', attempt: 1, leaseOwner: 'svc-verifier',
     startedAt: '2026-11-04T13:00:00.000Z', finishedAt: '2026-11-04T13:05:00.000Z',
     reportUri: 's3://cht-nocode-artifacts/previews/reports/r.json', reportHash: HASH('9'), reportVersionId: 'v1',
-    verificationPassed: true, coverageComplete: true, reportVersion: '2.1.0',
+    verificationPassed: true, coverageComplete: true, reportVersion: '2.2.0',
   };
   const exec = verificationExecutionFromMeta(item, verifyJob);
   assert.ok(exec, 'adapter returned an execution');

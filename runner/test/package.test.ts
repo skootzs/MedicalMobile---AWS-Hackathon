@@ -77,7 +77,7 @@ describe('deterministic package', () => {
 describe('canonical input hash', () => {
   it("matches the inputHash R5's compiler produced for its child-cough fixture", () => {
     const fixture = JSON.parse(readFileSync(new URL('./fixtures/child-cough.logic.json', import.meta.url), 'utf8'));
-    assert.equal(sha256(canonicalJson(fixture)), '186214726c73a4b8db5e641a5b28a7fc6c42689078d7fcacdf3839a8f1ee1a67');
+    assert.equal(sha256(canonicalJson(fixture)), '671998aadcb436cfad0acd2fa0b5c0d378a54794cb2162f830913307147c82d8');
   });
 });
 

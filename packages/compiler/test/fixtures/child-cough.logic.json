@@ -89,7 +89,7 @@
         { "and": [ { "lt": ["patient_age_in_months", 12] }, { "gte": ["breaths_per_minute", 50] } ] },
         { "and": [ { "gte": ["patient_age_in_months", 12] }, { "gte": ["breaths_per_minute", 40] } ] }
       ] },
-      "source": { "sourceId": "who_imci_2014", "page": 6, "quote": "2 months up to 12 months 50 breaths per minute or more; 12 Months up to 5 years 40 breaths per minute or more" }
+      "source": { "sourceId": "who_imci_2014", "page": 6, "quote": "2 months up to 12 months 50 breaths per minute or more 12 Months up to 5 years 40 breaths per minute or more" }
     },
     {
       "id": "any_general_danger_sign", "type": "boolean",

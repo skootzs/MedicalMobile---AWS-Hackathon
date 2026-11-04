@@ -1,6 +1,6 @@
 /**
  * TEST ONLY. Builds FICTIONAL VerificationReport documents matching R6's
- * published 2.1.0 schema shape, so R2's ingestion can be exercised without R6.
+ * published schema shape, so R2's ingestion can be exercised without a live R6 run.
  * These are clearly simulated teammate outputs, NOT real R6 verification runs.
  */
 import { VERIFICATION_REPORT_SCHEMA_VERSION } from '../../src/verification-report-contract.ts';
@@ -25,6 +25,8 @@ export function fictionalReport(over: ReportOverrides = {}): Record<string, unkn
   const passed = over.passed ?? true;
   return {
     schemaVersion: over.schemaVersion ?? VERIFICATION_REPORT_SCHEMA_VERSION,
+    version: over.schemaVersion ?? VERIFICATION_REPORT_SCHEMA_VERSION,
+    packageHash: HASH('c'),
     generatedAt: '2026-11-04T00:00:00.000Z',
     passed,
     coverageComplete: over.coverageComplete ?? true,
