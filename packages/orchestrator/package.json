@@ -1,0 +1,8 @@
+{
+  "name": "@medic-hackathon/orchestrator",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/routing.test.ts"
+  }
+}
