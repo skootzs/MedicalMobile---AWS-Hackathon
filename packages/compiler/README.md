@@ -27,8 +27,9 @@ compileLogicModel(input: unknown, options?: CompileOptions): CompileResult
 //   returns { ok: true, artifact: CompiledArtifact } | { ok: false, errors: CompileError[] }
 //   CompileError = { code: CompileErrorCode; path: string /* JSON path, e.g. $.questions[3].type */; message: string }
 
-writeCompiledProject(artifact: CompiledArtifact, outDir: string): string[]
-//   writes the files below into an empty or missing outDir; throws if outDir has other files
+writeCompiledProject(artifact: CompiledArtifact, outDir: string, options?: { template?: string }): string[]
+//   writes the files below into an empty or missing outDir; throws if outDir has other files.
+//   With `template`, copies that CHT project into outDir first (the template itself is never changed).
 ```
 
 `CompiledArtifact` contains `formId`, `xlsForm` (rows as data), `properties`, `files` (`{ path, sha256, bytes }`) and `manifest`. The function is pure: it never touches the filesystem.
@@ -36,12 +37,12 @@ writeCompiledProject(artifact: CompiledArtifact, outDir: string): string[]
 ### CLI
 
 ```sh
-node src/cli.ts <logic-model.json> --out <dir> [--snapshot-hash H] [--watermark TEXT] [--icon KEY]
+node src/cli.ts <logic-model.json> --out <dir> [--template DIR] [--snapshot-hash H] [--watermark TEXT] [--icon KEY]
 ```
 
 | Exit | Meaning | Output |
 |---|---|---|
-| 0 | Compiled | stdout JSON: `ok`, `outDir`, `formId`, `artifactHash`, `inputHash`, `files` |
+| 0 | Compiled | stdout JSON: `ok`, `outDir`, `formId`, `artifactHash`, `inputHash`, `template`, `files` |
 | 1 | Rejected | stderr JSON: `{ ok: false, errors: [...] }`; nothing written |
 | 2 | Usage or file error | stderr message |
 
@@ -64,12 +65,23 @@ Compiles, then runs `cht --local --skip-dependency-check --skip-git-check conver
 <outDir>/forms/app/<pathwayId>.xml               written by cht-conf convert-app-forms, not by the compiler
 ```
 
-`<outDir>` is a minimal cht-conf project: copy `forms/app/*` into the real CHT project (`templates/cht-base` when it exists). The form version in the settings sheet is `v1_<first 12 characters of inputHash>`.
+Without `--template`, `<outDir>` is a minimal cht-conf project holding only the files above. With `--template DIR` (e.g. `templates/cht-base`), every file in `DIR` is copied into `<outDir>` first, then the generated files are added. The template is read only and never changed. `.gitkeep` and `.DS_Store` are not copied. The compile fails with exit 2, writing nothing, if the template contains a symlink or any file the compiler or cht-conf would write (`forms/app/<pathwayId>.{xlsx,properties.json,xml}`, `compile-manifest.json`, `compile-rows.json`). The form version in the settings sheet is `v1_<first 12 characters of inputHash>`.
+
+### Build container layout (Role 7)
+
+Compile stage, `node:22-slim`, offline, read-only root:
+
+```sh
+node src/cli.ts /in/logic.json --out /out --template /template --snapshot-hash "$SNAPSHOT_HASH" --watermark "DEMONSTRATION ONLY"
+```
+
+`/out` must be empty. The compile stage does not run cht-conf, so it needs no Python and no `SHIV_ROOT`. Build stage, `medicmobile/cht-app-ide:v6.6.1`: copy `/in` to `/work/p`, then run `cht --local --skip-dependency-check --skip-git-check convert-app-forms validate-app-forms -- <formId>` in `/work/p` with `SHIV_ROOT=/work/shiv` and `HOME=/tmp`. `formId` is in `compile-manifest.json`.
 
 ### Hashes in the manifest
 
 - `inputHash`: sha256 of the canonical JSON of the input (keys sorted, so key order does not matter).
 - `artifactHash`: sha256 of the sorted lines `path<TAB>sha256` for the two generated form files. Use it to tie an approved snapshot to the files that were deployed.
+- `template`: `{ hash, files }`, with the hash computed the same way over every copied template file; `null` without `--template`.
 - `snapshotHash`: whatever Role 2 passes in. The compiler does not compute it; how the snapshot is canonicalised and hashed is still to be agreed with Role 2.
 
 ## Fields to test against (Role 6)
@@ -94,7 +106,7 @@ Suggested harness cases for the fixture: each of the four rows, both age bands e
 ```sh
 npm install                 # dev dependencies only
 npm run typecheck           # tsc, no emit
-npm test                    # 72 unit tests: XPath generation, validation, xlsx writer
+npm test                    # 81 unit tests: XPath generation, validation, xlsx writer
 CHT_BIN=/path/to/cht SHIV_ROOT=/tmp/shiv npm run test:integration
 ```
 
@@ -119,6 +131,6 @@ Any unknown field; another schema version or language; `select_multiple`, text, 
 3. `hitPolicy: "unique"` is compiled as "first match in row order". It does not check that rows cannot overlap; that proof is Role 4's checker.
 4. English only; one decision table; no tasks (`tasks.js`), targets or contact forms.
 5. No check against the deployed baseline yet: renamed field ids (`ID_CHANGED_FROM_BASELINE`) are not detected.
-6. The compiler does not merge into `templates/cht-base`, which is still empty. The icon key must exist in that project's `resources.json`.
+6. `--template` copies `templates/cht-base` as is; its files are still empty placeholders until Role 7 seeds it from cht-core `config/default`. The icon key must exist in that project's `resources.json`.
 7. Tested on macOS arm64 with a local cht-conf install, not in the pinned `medicmobile/cht-app-ide:v6.6.1` image (amd64 only; Docker was not available).
 8. cht-conf warns "Group has no label" for the standard `inputs/contact` and `inputs/contact/parent` groups. This is the normal CHT pattern; the warnings are expected.

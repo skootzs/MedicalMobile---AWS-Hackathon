@@ -13,4 +13,4 @@ export type { CompileError, CompileErrorCode } from './errors.ts';
 export type { LogicModel, Condition } from './logic-model.ts';
 export type { XlsForm, XlsFormSheet, XlsFormRow } from './xlsform-adapter.ts';
 export type { FormProperties } from './form-properties.ts';
-export { writeCompiledProject, MANIFEST_FILE, ROWS_FILE } from './project.ts';
+export { writeCompiledProject, templateHash, MANIFEST_FILE, ROWS_FILE, type WriteOptions, type TemplateInfo } from './project.ts';

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { compileLogicModel } from './compile.ts';
-import { writeCompiledProject } from './project.ts';
+import { MANIFEST_FILE, writeCompiledProject } from './project.ts';
 
-const USAGE = `Usage: node src/cli.ts <logic-model.json> --out <dir> [--snapshot-hash <hash>] [--watermark <text>] [--icon <key>]
+const USAGE = `Usage: node src/cli.ts <logic-model.json> --out <dir> [--template <dir>] [--snapshot-hash <hash>] [--watermark <text>] [--icon <key>]
 
 Exit codes: 0 compiled, 1 the model was rejected (errors as JSON on stderr), 2 usage or file error.`;
 
@@ -15,6 +16,7 @@ function main(): number {
       allowPositionals: true,
       options: {
         out: { type: 'string' },
+        template: { type: 'string' },
         'snapshot-hash': { type: 'string' },
         watermark: { type: 'string' },
         icon: { type: 'string' },
@@ -49,14 +51,16 @@ function main(): number {
     return 1;
   }
 
+  let manifest;
   try {
-    writeCompiledProject(result.artifact, values.out);
+    writeCompiledProject(result.artifact, values.out, { template: values.template });
+    manifest = JSON.parse(readFileSync(join(values.out, MANIFEST_FILE), 'utf8'));
   } catch (err) {
     console.error((err as Error).message);
     return 2;
   }
-  const { formId, artifactHash, inputHash, files } = result.artifact.manifest;
-  console.log(JSON.stringify({ ok: true, outDir: values.out, formId, artifactHash, inputHash, files }, null, 2));
+  const { formId, artifactHash, inputHash, files, template } = manifest;
+  console.log(JSON.stringify({ ok: true, outDir: values.out, formId, artifactHash, inputHash, template, files }, null, 2));
   return 0;
 }
 
