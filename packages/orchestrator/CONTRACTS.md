@@ -13,7 +13,7 @@ once that branch merges.
 | Boundary | Local file | Authoritative source | Replace on merge |
 |---|---|---|---|
 | R7 job payloads/results | `src/r7-handoff-contract.ts` (VerifyBuildPayload only) | `packages/schema/src/handoffs.ts` @ `r7-infra` 6f7e8b1, CONTRACT_VERSION `1.0.0` | import R7's `verifyBuildPayloadSchema` / `validateVerifyBuildPayload` |
-| R6 VerificationReport | `src/verification-report-contract.ts` | `packages/verification/src/verification-report.schema.json` @ `verification` ffdd3bd, schemaVersion `2.1.0` | import R6's schema JSON |
+| R6 VerificationReport | `src/verification-report-contract.ts` | `packages/verification/src/verification-report.schema.json` @ `integrate/compiler` 99001e8, schemaVersion `2.2.0` | import R6's schema JSON |
 
 Both are small, clearly-labelled mirrors validated with Ajv. R2 does not create a
 competing permanent schema.
@@ -81,15 +81,19 @@ release-approver users seeded into the Cognito groups (`scripts/seed-users.sh`).
   The outgoing payload is validated against R7's `VerifyBuildPayload` schema.
 - R2 ingests the verification result (`src/verification-results.ts`): it fetches
   the immutable report by `reportUri`/`reportHash`, **byte-verifies** it against
-  `reportHash`, **schema-validates** the whole document against R6's 2.1.0 schema,
+  `reportHash`, **schema-validates** the whole document against R6's v2.2.0 schema
+  (required top-level `schemaVersion` and `version`, both `"2.2.0"`, plus a
+  nullable top-level `packageHash` promoted from `references.packageHash`),
   cross-checks the report's echoed `references` (logicModelHash, clinicalApprovalId,
   compilationJobId, packageHash) and `compileArtifactHash` against R2's authoritative
-  identities, and requires `passed === true` AND `coverageComplete === true`
+  identities, asserts `version === schemaVersion` and top-level `packageHash ===
+  references.packageHash`, requires a non-null authoritative `packageHash` for a
+  VERIFIED build, and requires `passed === true` AND `coverageComplete === true`
   before emitting `VERIFIED`. Anything else emits `FAIL`; integrity failures are
   rejected. A stale R7 verify-attempt cannot advance (conditioned in the Dynamo
   transaction).
 - R6 must provide: a `VERIFIER`-role identity (independent of the clinician and
-  the compiler); a VerificationReport conforming to schemaVersion `2.1.0`; the
+  the compiler); a VerificationReport conforming to schemaVersion `2.2.0`; the
   report stored as an immutable S3 object with a versionId; `goldenCasesHash`
   non-null when golden cases apply (R2 surfaces it but does not substitute it).
 

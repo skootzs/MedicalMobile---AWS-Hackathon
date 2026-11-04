@@ -138,8 +138,10 @@ required one, that boundary fails closed.
   `WAITING_FOR_VERIFICATION` (ORCHESTRATOR) → emits `VERIFY_BUILD` job bound to the
   exact accepted compiled artifact (packageHash/manifestHash/compileArtifactHash).
 - Result: ingested through the reconciler. R2 fetches the report by
-  `reportUri`/`reportHash`, byte-verifies it, validates against R6's 2.1.0 JSON
-  Schema, cross-checks references against R2 state, and requires `passed === true`
+  `reportUri`/`reportHash`, byte-verifies it, validates against R6's v2.2.0 JSON
+  Schema (top-level `schemaVersion` + `version` both `"2.2.0"`, nullable top-level
+  `packageHash`), cross-checks references against R2 state, requires a non-null
+  authoritative `packageHash` for a VERIFIED build, and requires `passed === true`
   AND `coverageComplete === true`. VERIFIER identity (independent of clinician/compiler).
 
 ### R7 — job delivery, status & the reconciler (the interface R7 must call)
@@ -163,7 +165,7 @@ required one, that boundary fails closed.
   so a stale attempt fails closed. The notification is only a hint of which job
   to reconcile; all evidence is the authoritative record + R2's stored intent.
 
-See `CONTRACTS.md` for the two replaceable mirrored schemas (R6 report 2.1.0,
+See `CONTRACTS.md` for the two replaceable mirrored schemas (R6 report v2.2.0,
 R7 VerifyBuildPayload) to swap for direct imports after the integration merge.
 
 ## 5. Node 22 Docker
@@ -195,15 +197,14 @@ The assembled end-to-end scenario is `test/assembled.integration.test.ts`.
 
 ## 7. Known teammate-owned blockers
 
-- **R7 ↔ R6 result field mismatch (documented, R7/R6 to fix — NOT in R2):** R7's
-  runner `JobResult` is expected to carry `report.version` and a top-level
-  `report.packageHash`, while R6's published report uses `schemaVersion` and
-  `references.packageHash`. R2 validates against R6's ACTUAL 2.1.0 schema and does
-  not weaken its checks. Fix required on the R7/R6 side: R7's runner must read the
-  R6 fields by their real names (`schemaVersion`, `references.packageHash`) when
-  copying report fields onto `JOB/META`, OR R2's reconciler reads them from the
-  report itself (which it already does — R2 only needs R7's flat META to carry
-  `reportUri`/`reportHash`/`attempt`/`status`).
+- **R7 ↔ R6 version/packageHash field disagreement — RESOLVED by R6 v2.2.0.** The
+  official v2.2.0 VerificationReport builder now supplies BOTH a top-level
+  `version` (plain-string alias of `schemaVersion`, which R7's verify stage reads)
+  and a top-level `packageHash` (promoted from `references.packageHash`). R2
+  validates against the v2.2.0 schema and enforces `version === schemaVersion`
+  and top-level `packageHash === references.packageHash`. No R7/R6 field-name fix
+  is outstanding. R2 reads report evidence from the report itself; R7's flat
+  `JOB/META` only needs `reportUri`/`reportHash`/`attempt`/`status`.
 - **R7 flat JOB/META vs recordVersion:** R7's META has `attempt`+`status` but no
   `recordVersion`. R2 adapts (synthesizing `r7-attempt-<n>`) and conditions on
   `attempt`+`status`. R7 must ensure the terminal META carries the fields R2 reads

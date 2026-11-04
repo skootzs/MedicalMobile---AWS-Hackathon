@@ -12,7 +12,7 @@
  *   - R7 compile/verify JOB/META written FLAT exactly as R7's runner writes it,
  *     so R2's real flat-META adapter + reconciler are exercised.
  *   - R5 artifact verification via the existing FictionalArtifacts verifier.
- *   - R6 VerificationReport: a FICTIONAL but schema-valid 2.1.0 document that R2
+ *   - R6 VerificationReport: a FICTIONAL but schema-valid v2.2.0 document that R2
  *     byte-verifies, schema-validates and cross-checks. No evidence is faked in R2.
  *
  * Gated on R2_DYNAMODB_LOCAL_ENDPOINT.
@@ -184,7 +184,7 @@ test('ASSEMBLED: request -> release through bootstrap(), with restart recovery a
     references: { logicModelHash: verifyJob.logicModelHash, clinicalApprovalId: verifyJob.clinicalApprovalId, compilationJobId: verifyJob.compileJobId, packageHash: verifyJob.packageHash } });
   const reportBytes = Buffer.from(JSON.stringify(reportDoc));
   const reportRef = await f.objects.putIfAbsent(`previews/reports/${sha(reportBytes)}.json`, reportBytes);
-  await publishVerifyMeta(f, verifyJobId, id, { reportUri: reportRef.uri, reportHash: reportRef.sha256, reportVersionId: reportRef.versionId, passed: true, coverageComplete: true, reportVersion: '2.1.0' });
+  await publishVerifyMeta(f, verifyJobId, id, { reportUri: reportRef.uri, reportHash: reportRef.sha256, reportVersionId: reportRef.versionId, passed: true, coverageComplete: true, reportVersion: '2.2.0' });
   { const s = f.makeServer(); try {
     const r = await s.services.reconciler.reconcile({ requestId: id, jobId: verifyJobId, jobType: 'VERIFY_BUILD', attempt: 1 }, 'svc-verifier');
     assert.equal(r.status, 'RECONCILED', r.reason);
@@ -317,7 +317,7 @@ test('ASSEMBLED fail-closed: a failing/incomplete R6 report blocks release', int
     references: { logicModelHash: verifyJob.logicModelHash, clinicalApprovalId: verifyJob.clinicalApprovalId, compilationJobId: verifyJob.compileJobId, packageHash: verifyJob.packageHash } });
   const reportBytes = Buffer.from(JSON.stringify(reportDoc));
   const reportRef = await f.objects.putIfAbsent(`previews/reports/${sha(reportBytes)}.json`, reportBytes);
-  await publishVerifyMeta(f, verifyJobId, id, { reportUri: reportRef.uri, reportHash: reportRef.sha256, reportVersionId: reportRef.versionId, passed: false, coverageComplete: false, reportVersion: '2.1.0' });
+  await publishVerifyMeta(f, verifyJobId, id, { reportUri: reportRef.uri, reportHash: reportRef.sha256, reportVersionId: reportRef.versionId, passed: false, coverageComplete: false, reportVersion: '2.2.0' });
   { const s = f.makeServer(); try {
     const r = await s.services.reconciler.reconcile({ requestId: id, jobId: verifyJobId, jobType: 'VERIFY_BUILD', attempt: 1 }, 'svc-verifier');
     assert.equal(r.status, 'RECONCILED', r.reason); // accepted as a FAILED result...

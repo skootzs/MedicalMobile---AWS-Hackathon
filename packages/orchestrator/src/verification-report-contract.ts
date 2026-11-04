@@ -2,14 +2,22 @@
  * R6 VerificationReport contract boundary (REPLACEABLE).
  *
  * R6 owns the authoritative schema at
- *   packages/verification/src/verification-report.schema.json  (on the
- *   `verification` branch, commit ffdd3bd) — schemaVersion "2.1.0".
- * That package is not merged into this branch yet, so this file keeps a small,
- * clearly-labelled MIRROR of R6's published schema plus an Ajv (draft 2020-12)
- * validator. When the integration branch merges, replace the embedded schema
- * with a direct import of R6's file and delete the copy — do NOT let this
- * become a competing permanent schema. The embedded JSON below is copied
- * verbatim from R6's published file; R2 does not reinterpret it.
+ *   packages/verification/src/verification-report.schema.json  (official team
+ *   integration branch `integrate/compiler`, commit 99001e8) — schemaVersion
+ *   "2.2.0".
+ * That package is not merged into this standalone R2 branch yet, so this file
+ * keeps a small, clearly-labelled MIRROR of R6's published schema plus an Ajv
+ * (draft 2020-12) validator. When the integration branch merges, replace the
+ * embedded schema with a direct import of R6's file and delete the copy — the
+ * official R6 schema remains the single source of truth; this must not become a
+ * competing permanent schema. The embedded JSON below is copied verbatim from
+ * R6's published v2.2.0 file; R2 does not reinterpret it.
+ *
+ * v2.2.0 adds (vs 2.1.0): a required top-level `version` const "2.2.0" (a plain
+ * string alias of `schemaVersion`, which R7's verify stage reads) and a required
+ * top-level `packageHash` (nullable) that the builder promotes from
+ * `references.packageHash`. R2 structurally enforces `version === schemaVersion`
+ * and top-level `packageHash === references.packageHash`.
  *
  * R2 uses this only to (a) validate the entire fetched report against R6's
  * structure/version and (b) read the report's top-level gate fields and
@@ -19,10 +27,10 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ValidateFunction } from 'ajv';
 
-/** The schemaVersion R6 currently publishes (verified on the verification branch). */
-export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.1.0' as const;
+/** The schemaVersion R6 publishes (official integrate/compiler @ 99001e8). */
+export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.2.0' as const;
 
-/** Verbatim mirror of R6's verification-report.schema.json (2.1.0). Replace on merge. */
+/** Verbatim mirror of R6's verification-report.schema.json (2.2.0). Replace on merge. */
 export const verificationReportSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://github.com/cht-nocode/verification/verification-report.schema.json',
@@ -30,12 +38,17 @@ export const verificationReportSchema = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'schemaVersion', 'generatedAt', 'passed', 'coverageComplete', 'toolVersions', 'run', 'references',
+    'schemaVersion', 'version', 'packageHash', 'generatedAt', 'passed', 'coverageComplete', 'toolVersions', 'run', 'references',
     'compileArtifactHash', 'testedDirHash', 'patientSetHash', 'goldenCasesHash', 'integrityChecks',
     'coverage', 'cases', 'disagreements',
   ],
   properties: {
     schemaVersion: { const: VERIFICATION_REPORT_SCHEMA_VERSION },
+    // Plain-string alias of schemaVersion (R7's verify stage reads a top-level
+    // `version`). The R6 builder enforces version === schemaVersion.
+    version: { const: VERIFICATION_REPORT_SCHEMA_VERSION },
+    // Promoted from references.packageHash by the R6 builder; nullable.
+    packageHash: { type: ['string', 'null'], minLength: 1 },
     generatedAt: { type: 'string', format: 'date-time' },
     passed: { type: 'boolean' },
     coverageComplete: { type: 'boolean' },
@@ -128,6 +141,10 @@ export const verificationReportSchema = {
 /** The subset of the report R2 reads once the whole document is schema-valid. */
 export interface VerificationReportView {
   schemaVersion: string;
+  /** Plain-string alias of schemaVersion; v2.2.0 top-level field. */
+  version: string;
+  /** Top-level packageHash (v2.2.0); promoted from references.packageHash. */
+  packageHash: string | null;
   passed: boolean;
   coverageComplete: boolean;
   compileArtifactHash: string;
@@ -155,15 +172,29 @@ export interface ReportValidation {
   errors: string[];
 }
 
-/** Validate a parsed report against R6's 2.1.0 schema and extract the view. */
+/** Validate a parsed report against R6's v2.2.0 schema and extract the view. */
 export function validateVerificationReport(value: unknown): ReportValidation {
   if (!compiled(value)) {
     return { ok: false, report: null, errors: (compiled.errors ?? []).map(e => `${e.instancePath} ${e.message}`.trim()) };
   }
   const v = value as Record<string, unknown>;
   const refs = v.references as Record<string, unknown>;
+  // Structural cross-checks the schema alone cannot express (both consts are
+  // "2.2.0" so Ajv already pins them, but assert the aliasing invariant R6's
+  // builder guarantees, and that the promoted top-level packageHash agrees with
+  // references.packageHash). These are integrity checks, not clinical outcomes.
+  const topPackageHash = (v.packageHash as string | null) ?? null;
+  const refPackageHash = (refs.packageHash as string | null) ?? null;
+  if (v.version !== v.schemaVersion) {
+    return { ok: false, report: null, errors: ['/version must equal /schemaVersion'] };
+  }
+  if (topPackageHash !== refPackageHash) {
+    return { ok: false, report: null, errors: ['/packageHash must equal /references/packageHash'] };
+  }
   const report: VerificationReportView = {
     schemaVersion: v.schemaVersion as string,
+    version: v.version as string,
+    packageHash: topPackageHash,
     passed: v.passed as boolean,
     coverageComplete: v.coverageComplete as boolean,
     compileArtifactHash: v.compileArtifactHash as string,
@@ -175,7 +206,7 @@ export function validateVerificationReport(value: unknown): ReportValidation {
       revision: (refs.revision as string | null) ?? null,
       clinicalApprovalId: (refs.clinicalApprovalId as string | null) ?? null,
       compilationJobId: (refs.compilationJobId as string | null) ?? null,
-      packageHash: (refs.packageHash as string | null) ?? null,
+      packageHash: refPackageHash,
     },
   };
   return { ok: true, report, errors: [] };
