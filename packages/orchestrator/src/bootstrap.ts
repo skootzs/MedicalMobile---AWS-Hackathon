@@ -21,9 +21,20 @@ import { ApprovalService } from './approvals.ts';
 import { RequestService } from './requests.ts';
 import { ReviewService } from './reviews.ts';
 import { RoutingService } from './routing-service.ts';
+import { DraftingHandoffService } from './jobs.ts';
+import { DraftingCallbackService } from './callbacks.ts';
+import { CheckerResultService } from './checkers.ts';
+import { CompilationHandoffService } from './compilations.ts';
+import { CompilationResultService } from './compilation-results.ts';
+import { VerifyBuildHandoffService } from './verify-builds.ts';
+import { VerificationResultService } from './verification-results.ts';
+import { JobCompletionReconciler } from './reconciler.ts';
+import { DurableLogicModelReferences } from './storage/durable-objects.ts';
+import { r7CompilationExecutionSource, r7VerificationExecutionSource, r7CompilationCondition, r7VerificationCondition } from './r7-job-record.ts';
 import { buildServer } from './server.ts';
 import { provisionalSnapshotValidator } from './snapshots.ts';
 import { DynamoOrchestratorStore } from './storage/dynamodb.ts';
+import type { DynamoStoreOptions } from './storage/dynamodb.ts';
 import type { DurableObjects } from './storage/durable-objects.ts';
 import { LocalObjectStore } from './storage/local-objects.ts';
 import { S3ObjectStore } from './storage/s3-objects.ts';
@@ -33,6 +44,9 @@ import { resolveCognitoActor, createCognitoAuthentication, cognitoCanAccessReque
 import type { TokenVerifier } from './cognito-auth.ts';
 import type { AuthenticationBoundary } from './auth.ts';
 import type { Actor } from './workflow.ts';
+import type { CheckerTarget } from './checker-contracts.ts';
+import type { CompilationArtifactVerifier } from './compilation-result-contracts.ts';
+import type { LogicValidationBoundary } from './callback-contracts.ts';
 import type { OrchestratorConfig, AwsConfig } from './config.ts';
 
 /**
@@ -63,12 +77,61 @@ export interface BootstrapOptions {
    * production this is omitted and the verifier fetches the pool's JWKS.
    */
   cognitoVerifier?: TokenVerifier;
+  /**
+   * Machine-to-machine trust policies for the R3/R4/R5/R6 ingestion services.
+   * These are teammate-owned boundaries; the services FAIL CLOSED when a
+   * required one is absent (e.g. no R4 validation => drafting callback blocked,
+   * no artifact verifier => compile result blocked). They are injected rather
+   * than defaulted so the runtime never fabricates a trusted worker or a
+   * passing validation.
+   */
+  workers?: WorkerPolicies;
   now?: () => string;
+}
+
+/** Teammate-owned trust boundaries the M2M ingestion services require. */
+export interface WorkerPolicies {
+  /**
+   * Resolves a verified R3/R4/R5/R6 SERVICE principal to a worker-role actor
+   * (DRAFTER/CHECKER/COMPILER/VERIFIER). This is DISTINCT from the human Cognito
+   * resolver: R7's runner and the AI workers authenticate with their own service
+   * identities, never a browser Cognito session, and no Cognito group grants a
+   * worker role. When absent, M2M ingestion uses the human resolver, which maps
+   * no worker role, so every worker result fails closed (UNAUTHORIZED / WRONG_ROLE).
+   */
+  resolveServiceActor?: StoreDependencies['resolveActor'];
+  /** Access policy for service principals at the M2M boundary (defaults to deny). */
+  canServiceAccessRequest?(principal: unknown, requestId: string): boolean | Promise<boolean>;
+  /** Maps a verified R7 runner identity for COMPILE_LOGIC results. */
+  authorizeCompilationRunner?(actor: Readonly<Actor>, jobId: string): boolean | Promise<boolean>;
+  /** Maps a verified R7 runner identity for VERIFY_BUILD results. */
+  authorizeVerificationRunner?(actor: Readonly<Actor>, jobId: string): boolean | Promise<boolean>;
+  /** R4 validation boundary for the drafting (LOGIC_PROPOSED) callback. */
+  draftingValidation?: LogicValidationBoundary;
+  /** R5 compiled-artifact verifier for COMPILE_LOGIC results. */
+  compilationArtifacts?: CompilationArtifactVerifier;
+  /** R4 checker target identity for checker-result ingestion. */
+  checkerTarget?: CheckerTarget;
+}
+
+/** The wired R2 services, exposed so the R7 queue consumer / orchestration can drive them. */
+export interface OrchestratorServices {
+  draftingHandoff: DraftingHandoffService;
+  draftingCallback: DraftingCallbackService | null;
+  checkerResults: CheckerResultService | null;
+  compilationHandoff: CompilationHandoffService;
+  compilationResults: CompilationResultService;
+  verifyBuildHandoff: VerifyBuildHandoffService;
+  verificationResults: VerificationResultService;
+  /** The entry point R7's job-events consumer / poller invokes per terminal job. */
+  reconciler: JobCompletionReconciler;
 }
 
 export interface BootstrappedServer {
   app: FastifyInstance;
   config: OrchestratorConfig;
+  /** The wired machine-to-machine services (handoffs, ingestion, reconciler). */
+  services: OrchestratorServices;
   /** Closes the Fastify app and destroys any client this bootstrap created. */
   close(): Promise<void>;
 }
@@ -171,11 +234,68 @@ export function bootstrap(options: BootstrapOptions): BootstrappedServer {
   const reviews = new ReviewService({ store, candidates: store, resolveActor: identity.resolveActor, canAccessRequest: canAccessReview });
   const routing = new RoutingService({ store, resolveActor: identity.resolveActor, canAccessRequest: identity.canAccessRequestContext });
 
+  // ---------- Machine-to-machine ingestion services ----------
+  const canAccess = identity.canAccessRequestContext;
+  const workers = options.workers ?? {};
+  // Handoffs are ORCHESTRATOR-driven and use the human (Cognito) resolver.
+  // Result/callback ingestion is SERVICE-driven: it resolves worker identities
+  // through a distinct service-actor resolver (never the human Cognito path).
+  // Absent a service resolver, worker ingestion resolves no worker role and
+  // fails closed.
+  const serviceResolver: StoreDependencies['resolveActor'] = workers.resolveServiceActor ?? identity.resolveActor;
+  const canServiceAccess = workers.canServiceAccessRequest ?? (() => false);
+
+  // Handoff services (emit job intents, no runner/worker execution).
+  const draftingHandoff = new DraftingHandoffService({ store, resolveActor: identity.resolveActor, canAccessRequest: canAccess });
+  const compilationHandoff = new CompilationHandoffService({ store, resolveActor: identity.resolveActor, canAccessRequest: canAccess,
+    snapshotReferences: new DurableLogicModelReferences(objects) });
+  const verifyBuildHandoff = new VerifyBuildHandoffService({ store, resolveActor: identity.resolveActor, canAccessRequest: canAccess });
+
+  // Callback/result services. These read R7's authoritative JOB/META and require
+  // teammate-owned trust policies; they fail closed when a required boundary is
+  // absent. The store instances for compile/verify result ingestion carry the
+  // R7 execution-condition so the DynamoDB transaction gates on the real attempt,
+  // and use the SERVICE resolver so the store re-resolves the worker identity.
+  const storeBase: Omit<DynamoStoreOptions, 'executionCondition' | 'verificationCondition' | 'testBeforeTransaction'> = {
+    client: document, tableName: config.ddbTable, objects, layout: r7Layout, resolveActor: serviceResolver, validateSnapshot: provisionalSnapshotValidator, ...(options.now ? { now: options.now } : {}),
+  };
+  // A store that re-resolves the SERVICE identity inside apply() (worker roles),
+  // used by all M2M ingestion so the atomic commit authorizes the worker, not a
+  // human session. Compile/verify add the R7 execution condition on top.
+  const serviceStore = new DynamoOrchestratorStore({ ...storeBase });
+  const compileStore = new DynamoOrchestratorStore({ ...storeBase, executionCondition: r7CompilationCondition(config.ddbTable) });
+  const verifyStore = new DynamoOrchestratorStore({ ...storeBase, verificationCondition: r7VerificationCondition(config.ddbTable) });
+
+  const compileSrc = r7CompilationExecutionSource(document, config.ddbTable, compileStore);
+  const verifySrc = r7VerificationExecutionSource(document, config.ddbTable, verifyStore);
+
+  const draftingCallback = workers.draftingValidation
+    ? new DraftingCallbackService({ store: serviceStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, validation: workers.draftingValidation })
+    : null;
+  const checkerResults = workers.checkerTarget
+    ? new CheckerResultService({ store: serviceStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, checker: workers.checkerTarget })
+    : null;
+  const compilationResults = new CompilationResultService({
+    store: compileStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, executions: compileSrc,
+    authorizeRunner: (actor, job) => workers.authorizeCompilationRunner?.(actor, job.jobId) ?? false, artifacts: workers.compilationArtifacts,
+  });
+  const verificationResults = new VerificationResultService({
+    store: verifyStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, executions: verifySrc,
+    authorizeRunner: (actor, job) => workers.authorizeVerificationRunner?.(actor, job.jobId) ?? false, objects,
+  });
+  const reconciler = new JobCompletionReconciler({ store, compilation: compilationResults, verification: verificationResults });
+
+  const services: OrchestratorServices = {
+    draftingHandoff, draftingCallback, checkerResults,
+    compilationHandoff, compilationResults, verifyBuildHandoff, verificationResults, reconciler,
+  };
+
   const app = buildServer({ store, approvals, requests, reviews, routing, authentication: identity.authentication, health: { mode: config.mode } });
 
   return {
     app,
     config,
+    services,
     async close() {
       try { await app.close(); } finally { createdClient?.destroy(); createdS3?.destroy(); }
     },
