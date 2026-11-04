@@ -38,12 +38,15 @@ async function verifyPayload(overrides: Record<string, unknown> = {}) {
 const TESTED_DIR_HASH = sha256('tested');
 
 const report = (p: Record<string, unknown>, passed: boolean) => ({
-  schemaVersion: '2.2.0', version: '2.2.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z', passed, coverageComplete: true,
+  schemaVersion: '2.3.0', version: '2.3.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z',
+  asOf: '2026-11-04T00:00:00.000Z',
+  evaluator: { used: false, reason: null, source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-11-04T00:00:00.000Z' },
+  passed, coverageComplete: true,
   toolVersions: { node: 'v20', chtConf: '6.6.1', chtConfTestHarness: '5.0.4', chromiumRevision: '1', python: 'Python 3.11.2' },
   run: { command: ['node', 'run.js'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-02-15' },
-  references: { snapshotId: null, logicModelHash: INPUT_HASH, revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash },
+  references: { snapshotId: null, logicModelHash: INPUT_HASH, revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash, expectedCompileArtifactHash: null },
   compileArtifactHash: p.compileArtifactHash as string, testedDirHash: TESTED_DIR_HASH, patientSetHash: sha256('patients'), goldenCasesHash: null, integrityChecks: [],
-  coverage: { method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null, totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], uncoveredBranchIds: [], uncoveredBranches: [] },
+  coverage: { method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null, totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [] },
   cases: [], disagreements: [],
 });
 
@@ -458,7 +461,7 @@ describe('VERIFY_BUILD', () => {
     assert.equal(job.verificationPassed, true);
     assert.equal(job.coverageComplete, true);
     assert.equal(job.testedDirHash, TESTED_DIR_HASH);
-    assert.equal(job.reportVersion, '2.2.0');
+    assert.equal(job.reportVersion, '2.3.0');
     assert.equal(job.runnerActorId, 'worker-a-verify');
     assert.match(job.reportVersionId, /report\.json$/);
     assert.ok(h.artifacts.objects.has(String(job.reportUri).replace('s3://test-bucket/', '')));

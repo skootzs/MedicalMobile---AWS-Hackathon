@@ -138,7 +138,7 @@ required one, that boundary fails closed.
   `WAITING_FOR_VERIFICATION` (ORCHESTRATOR) → emits `VERIFY_BUILD` job bound to the
   exact accepted compiled artifact (packageHash/manifestHash/compileArtifactHash).
 - Result: ingested through the reconciler. R2 fetches the report by
-  `reportUri`/`reportHash`, byte-verifies it, validates against R6's 2.2.0 JSON
+  `reportUri`/`reportHash`, byte-verifies it, validates against R6's 2.3.0 JSON
   Schema, cross-checks references against R2 state, and requires `passed === true`
   AND `coverageComplete === true`. VERIFIER identity (independent of clinician/compiler).
 
@@ -163,7 +163,7 @@ required one, that boundary fails closed.
   so a stale attempt fails closed. The notification is only a hint of which job
   to reconcile; all evidence is the authoritative record + R2's stored intent.
 
-See `CONTRACTS.md` for the loaded schemas (R6 report 2.2.0 and R7
+See `CONTRACTS.md` for the loaded schemas (R6 report 2.3.0 and R7
 VerifyBuildPayload). Both are read from the packages on this branch.
 
 ## 5. Node 22 Docker
@@ -195,8 +195,8 @@ The assembled end-to-end scenario is `test/assembled.integration.test.ts`.
 
 ## 7. Known teammate-owned blockers
 
-- **R6 report 2.2.0:** the published report requires both `schemaVersion` and
-  `version` (each `2.2.0`) and a top-level `packageHash` equal to
+- **R6 report 2.3.0:** the published report requires both `schemaVersion` and
+  `version` (each `2.3.0`) and a top-level `packageHash` equal to
   `references.packageHash`. R2 validates that schema and those two equalities.
   The runner reads `version`. The reconciler accepts the events Pipe body
   `{jobId, status, attempt}` and loads `requestId` from JOB/META.

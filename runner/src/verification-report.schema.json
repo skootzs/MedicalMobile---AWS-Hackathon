@@ -10,6 +10,8 @@
     "version",
     "packageHash",
     "generatedAt",
+    "asOf",
+    "evaluator",
     "passed",
     "coverageComplete",
     "toolVersions",
@@ -25,10 +27,27 @@
     "disagreements"
   ],
   "properties": {
-    "schemaVersion": { "const": "2.2.0" },
-    "version": { "const": "2.2.0" },
+    "schemaVersion": { "const": "2.3.0" },
+    "version": { "const": "2.3.0" },
     "packageHash": { "type": ["string", "null"], "minLength": 1 },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "asOf": { "type": "string", "minLength": 1 },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["used", "reason", "source", "root", "evaluatorHash", "pythonVersion", "jsonschemaVersion", "logicModelSource", "asOf"],
+      "properties": {
+        "used": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] },
+        "source": { "enum": ["env", "repo", "vendored-zip-unpinned", null] },
+        "root": { "type": ["string", "null"] },
+        "evaluatorHash": { "type": ["string", "null"] },
+        "pythonVersion": { "type": ["string", "null"] },
+        "jsonschemaVersion": { "type": ["string", "null"] },
+        "logicModelSource": { "enum": ["LOGIC_MODEL_FILE", "/in/logic.json", "CHT_CONFIG_DIR", null] },
+        "asOf": { "type": "string", "minLength": 1 }
+      }
+    },
     "passed": { "type": "boolean" },
     "coverageComplete": { "type": "boolean" },
     "toolVersions": {
@@ -61,14 +80,15 @@
     "references": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["snapshotId", "logicModelHash", "revision", "clinicalApprovalId", "compilationJobId", "packageHash"],
+      "required": ["snapshotId", "logicModelHash", "revision", "clinicalApprovalId", "compilationJobId", "packageHash", "expectedCompileArtifactHash"],
       "properties": {
         "snapshotId": { "type": ["string", "null"], "minLength": 1 },
         "logicModelHash": { "type": ["string", "null"], "minLength": 1 },
         "revision": { "type": ["string", "null"], "minLength": 1 },
         "clinicalApprovalId": { "type": ["string", "null"], "minLength": 1 },
         "compilationJobId": { "type": ["string", "null"], "minLength": 1 },
-        "packageHash": { "type": ["string", "null"], "minLength": 1 }
+        "packageHash": { "type": ["string", "null"], "minLength": 1 },
+        "expectedCompileArtifactHash": { "type": ["string", "null"], "minLength": 1 }
       }
     },
     "compileArtifactHash": { "$ref": "#/$defs/sha256" },
@@ -89,6 +109,7 @@
         "totalBranches",
         "coveredBranches",
         "coveredBranchIds",
+        "coveredViaBlockedSubmission",
         "uncoveredBranchIds",
         "uncoveredBranches"
       ],
@@ -99,6 +120,11 @@
         "totalBranches": { "type": "integer", "minimum": 0 },
         "coveredBranches": { "type": "integer", "minimum": 0 },
         "coveredBranchIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "coveredViaBlockedSubmission": {
           "type": "array",
           "items": { "type": "string" },
           "uniqueItems": true
@@ -176,6 +202,11 @@
         "golden": { "$ref": "#/$defs/expectedResult" },
         "evaluator": { "$ref": "#/$defs/expectedResult" },
         "status": { "enum": ["pass", "fail", "disagree", "error"] },
+        "matchedBy": { "enum": ["form-blocked-submission"] },
+        "blockedSubmission": { "type": "boolean" },
+        "expectedSource": { "enum": ["evaluator", "golden", "both"] },
+        "matchedRows": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "comparedFields": { "type": "array", "items": { "type": "string" } },
         "failureDetail": { "type": ["string", "null"] },
         "harnessOutput": { "type": ["string", "null"] }
       }

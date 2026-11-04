@@ -4,7 +4,7 @@ import { validateVerificationReport, VERIFICATION_REPORT_SCHEMA_VERSION } from '
 import { fictionalReport } from './helpers/verification-report-fixtures.ts';
 
 test('R6 schema version matches the published verification-report schema', () => {
-  assert.equal(VERIFICATION_REPORT_SCHEMA_VERSION, '2.2.0');
+  assert.equal(VERIFICATION_REPORT_SCHEMA_VERSION, '2.3.0');
 });
 
 test('accepts a schema-valid passing report and extracts the gate view', () => {

@@ -16,6 +16,7 @@ export interface ReportOverrides {
   references?: Partial<{
     snapshotId: string | null; logicModelHash: string | null; revision: string | null;
     clinicalApprovalId: string | null; compilationJobId: string | null; packageHash: string | null;
+    expectedCompileArtifactHash: string | null;
   }>;
   schemaVersion?: string;
 }
@@ -25,13 +26,18 @@ export function fictionalReport(over: ReportOverrides = {}): Record<string, unkn
   const passed = over.passed ?? true;
   const references = {
     snapshotId: 'snap-1', logicModelHash: HASH('b'), revision: '1', clinicalApprovalId: 'clin-1',
-    compilationJobId: 'compile-x', packageHash: HASH('c'), ...over.references,
+    compilationJobId: 'compile-x', packageHash: HASH('c'), expectedCompileArtifactHash: null, ...over.references,
   };
   return {
     schemaVersion: over.schemaVersion ?? VERIFICATION_REPORT_SCHEMA_VERSION,
     version: over.schemaVersion ?? VERIFICATION_REPORT_SCHEMA_VERSION,
     packageHash: references.packageHash,
     generatedAt: '2026-11-04T00:00:00.000Z',
+    asOf: '2026-11-04T00:00:00.000Z',
+    evaluator: {
+      used: false, reason: null, source: null, root: null, evaluatorHash: null,
+      pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-11-04T00:00:00.000Z',
+    },
     passed,
     coverageComplete: over.coverageComplete ?? true,
     toolVersions: { node: 'v24.22.1', chtConf: '6.6.1', chtConfTestHarness: '1.0.0', chromiumRevision: '901912', python: 'Python 3.12.16' },
@@ -46,6 +52,7 @@ export function fictionalReport(over: ReportOverrides = {}): Record<string, unkn
       method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null,
       totalBranches: 2, coveredBranches: passed ? 2 : 1,
       coveredBranchIds: passed ? ['b1', 'b2'] : ['b1'],
+      coveredViaBlockedSubmission: [],
       uncoveredBranchIds: passed ? [] : ['b2'],
       uncoveredBranches: passed ? [] : [{ id: 'b2', reason: 'no case produced this branch' }],
     },

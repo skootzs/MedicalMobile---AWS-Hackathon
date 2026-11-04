@@ -156,9 +156,9 @@ const BUILD_IMAGE_MODULES = '/build-image/node_modules';
 
 /**
  * Resolve the harness module path, trying in order:
- *   1. normal resolution (honours NODE_PATH, since we use require());
- *   2. HARNESS_MODULE_PATH (a node_modules dir, or the module dir itself);
- *   3. /build-image/node_modules (R7's baked-in location).
+ *   1. HARNESS_MODULE_PATH (a node_modules dir, or the module dir itself);
+ *   2. /build-image/node_modules (R7's baked-in location; it wins over NODE_PATH);
+ *   3. NODE_PATH directories, then normal resolution.
  * Returns the resolved path, or null if none works. Pure/loggable; does not
  * load the module.
  */

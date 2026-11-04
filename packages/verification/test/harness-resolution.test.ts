@@ -8,14 +8,14 @@ import { resolveHarnessModulePath } from '../src/run.js';
 
 const MOD = 'cht-conf-test-harness';
 
-test('I1: uses default/NODE_PATH resolution first', () => {
+test('I1: uses normal resolution after the baked image path misses', () => {
   const resolver = (req: string, paths?: string[]) => {
     assert.equal(req, MOD);
-    assert.equal(paths, undefined);
+    if (paths !== undefined) throw new Error('not the baked copy');
     return '/default/node_modules/cht-conf-test-harness';
   };
   const r = resolveHarnessModulePath(resolver, {});
-  assert.deepEqual(r, { path: '/default/node_modules/cht-conf-test-harness', via: 'default/NODE_PATH' });
+  assert.deepEqual(r, { path: '/default/node_modules/cht-conf-test-harness', via: 'normal' });
 });
 
 test('I1: falls back to HARNESS_MODULE_PATH when default fails', () => {

@@ -63,7 +63,7 @@ async function verify(extra: Record<string, unknown>) {
   const report = JSON.parse((await h.artifacts.get(job.reportUri)).toString('utf8'));
   const check = (name: string) => (report.integrityChecks as { name: string; ok: boolean; detail: string }[]).find((item) => item.name === name);
 
-  assert.equal(job.reportVersion, '2.2.0');
+  assert.equal(job.reportVersion, '2.3.0');
   assert.equal(check('logicModelHash')?.ok, true, check('logicModelHash')?.detail);
   assert.equal(check('compileArtifactHash')?.ok, true, check('compileArtifactHash')?.detail);
   assert.equal(check('toolVersionsKnown')?.ok, true, check('toolVersionsKnown')?.detail);

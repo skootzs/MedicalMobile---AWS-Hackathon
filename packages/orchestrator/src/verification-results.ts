@@ -2,7 +2,7 @@
  * VERIFY_BUILD result ingestion. Mirrors CompilationResultService but the
  * authoritative evidence is R6's VerificationReport: R2 fetches the immutable
  * report object by the R7 attempt's reportUri/reportHash, verifies the bytes
- * against reportHash, validates the whole document against R6's published 2.2.0
+ * against reportHash, validates the whole document against R6's published 2.3.0
  * schema, cross-checks the report's echoed references against R2's authoritative
  * identities, and requires passed === true AND coverageComplete === true before
  * emitting the existing VERIFIED transition. A failed/errored/incomplete report,

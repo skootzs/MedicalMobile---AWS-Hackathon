@@ -211,7 +211,7 @@ test('G1: report.version equals schemaVersion and packageHash mirrors references
     cases: [],
   });
   assert.equal(rep.version, rep.schemaVersion);
-  assert.equal(rep.version, '2.2.0');
+  assert.equal(rep.version, '2.3.0');
   assert.equal(rep.packageHash, 'pkg-xyz');
 });
 
