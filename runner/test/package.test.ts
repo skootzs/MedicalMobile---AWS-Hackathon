@@ -108,7 +108,7 @@ describe('container flags', () => {
   });
 
   it('only verify adds SYS_ADMIN, and /project is read-only', () => {
-    const args = verifyArgs({ image: 'b', projectDir: '/p', verifierDir: '/v', outDir: '/o' }, 'n');
+    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', inputHash: 'i', hasGoldenCases: false }, 'n');
     hasAll(args, shared);
     hasAll(args, ['--cap-add', 'SYS_ADMIN']);
     assert.ok(args.includes('/p:/project:ro'));
