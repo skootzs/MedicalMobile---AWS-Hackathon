@@ -70,8 +70,9 @@ function parseCommand(raw: unknown): ApprovalCommand | null {
     return v as unknown as ApprovalCommand;
   } catch { return null; }
 }
-/** References for a rejected release command are never asserted to be passing evidence. */
-function commandEvent(c: ApprovalCommand, evidence?: VerificationEvidence): WorkflowCommand {
+/** Internal shared event mapping for application submission and read-only guard probes.
+ * References for a rejected release command are never asserted to be passing evidence. */
+export function commandEvent(c: ApprovalCommand, evidence?: VerificationEvidence): WorkflowCommand {
   const common = { eventId: c.eventId, expectedVersion: c.expectedVersion, request: requestIdentity(c),
     decision: c.decision, ...(c.note === undefined ? {} : { note: c.note }) };
   return c.type === 'CLINICAL_DECISION'
@@ -85,8 +86,9 @@ function findEvidence(records: readonly EvidenceRecord[], kind: EvidenceRecord['
     r.requestId === request.requestId && same(r.event.request, request));
   return found.length === 1 ? found[0] : null;
 }
-/** Validate reference bindings, not roles/state transitions (those stay in workflow.ts). */
-function evidenceFailure(c: ApprovalCommand, s: WorkflowState | null, preview: Snapshot | null, model: Snapshot | null, records: readonly EvidenceRecord[]): string | undefined {
+/** Internal shared evidence check for submissions and read-only review context.
+ * Validate reference bindings, not roles/state transitions (those stay in workflow.ts). */
+export function evidenceFailure(c: ApprovalCommand, s: WorkflowState | null, preview: Snapshot | null, model: Snapshot | null, records: readonly EvidenceRecord[]): string | undefined {
   if (!s) return 'REQUEST_NOT_FOUND';
   if (s.version !== c.expectedVersion) return 'VERSION_CONFLICT';
   const request = currentRequest(s);

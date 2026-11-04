@@ -2,6 +2,8 @@ import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ApprovalService } from './approvals.ts';
 import type { RequestService } from './requests.ts';
+import type { ReviewService } from './reviews.ts';
+import { registerReviewRoutes } from './routes/review.ts';
 import { registerRequestRoutes } from './routes/requests.ts';
 import { denyAllAuthentication } from './auth.ts';
 import type { AuthenticationBoundary, VerifiedPrincipal } from './auth.ts';
@@ -15,6 +17,7 @@ export interface LocalApiDependencies {
   approvals: Pick<ApprovalService, 'execute'>;
   /** Optional so existing approval-only local integration stays unchanged. */
   requests?: RequestService;
+  reviews?: ReviewService;
   /** No default mock: omitted authentication always denies access. */
   authentication?: AuthenticationBoundary;
 }
@@ -44,6 +47,8 @@ export function createLocalApi(deps: LocalApiDependencies): LocalApi {
   app.addHook('preHandler', async (request, reply) => {
     const principal = principals.get(request);
     if (!principal) return apiError(reply, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required.');
+    // Queue has no path resource: ReviewService authorizes category and each item.
+    if (deps.reviews && request.method === 'GET' && request.routeOptions.url === '/api/reviews/queue') return;
     // Creation has no existing resource: RequestService authorizes the verified PO.
     if (deps.requests && request.method === 'POST' && request.routeOptions.url === '/api/requests') return;
     const requestId = (request.params as { requestId?: string } | undefined)?.requestId;
@@ -64,6 +69,7 @@ export function createLocalApi(deps: LocalApiDependencies): LocalApi {
     return principal;
   };
   registerApprovalRoutes(app, deps.approvals, principalFor);
+  if (deps.reviews) registerReviewRoutes(app, deps.reviews, principalFor);
   if (deps.requests) registerRequestRoutes(app, deps.requests, principalFor);
   return { inject: app.inject.bind(app), close: () => app.close() };
 }

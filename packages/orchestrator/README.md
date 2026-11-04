@@ -1050,3 +1050,199 @@ reviewer queues. First agree R1's display needs and R4's checker/verification bi
 return exact snapshot/evidence references to authorized independent reviewers, then
 connect the existing decision endpoints. Keep queue reads separate from job dispatch
 and enforce request visibility without leaking inaccessible work.
+
+## Authorized reviewer queues and review context (local milestone)
+
+`ReviewService` in `src/reviews.ts` provides a read-only view of pending human
+reviews. It never calls store.apply(), records a decision, creates an assignment,
+appends an audit event, reserves a task or dispatches a job. Add it as the optional
+`reviews` dependency of createLocalApi(); other local integrations retain their
+existing routes. No listener, dependencies, root configuration or real auth adapter
+was added.
+
+| Category query | Verified role | Current pending state |
+| --- | --- | --- |
+| SERVICE_DESIGNER | SERVICE_DESIGNER | NEEDS_SD_REVIEW |
+| CLINICAL | CLINICIAN | WAITING_FOR_CLINICAL_APPROVAL |
+| RELEASE | RELEASE_APPROVER | WAITING_FOR_RELEASE_APPROVAL |
+
+`GET /api/reviews/queue?category=CLINICAL` returns only accessible, currently
+eligible items. Category is a view selector, never a client claim of authority.
+NOT_READY and pre-routing requests never become SD tasks. Completed, rejected,
+returned and revised reviews leave the active queue. Blocked pending reviews are
+excluded from the active queue; an otherwise authorized reviewer can request their
+context to inspect why eligibility is blocked.
+
+`GET /api/requests/:requestId/review-context?category=CLINICAL&expectedVersion=7`
+returns the exact current review snapshot and evidence references. expectedVersion
+is optional; when supplied it is a positive integer encoded as a query string.
+A version mismatch or nonpending review returns 409. Unauthenticated calls return
+401; wrong-category roles return 403; inaccessible and nonexistent requests share a
+generic 404; invalid query parameters return 400; infrastructure failures return a
+sanitized 503. Extra query properties, including roles/actor IDs/trusted flags, are
+rejected. Responses retain Cache-Control: no-store. There is no public server URL.
+
+### Authorization, discovery and evidence
+
+The required injected canAccessRequest policy checks trusted request visibility and
+may apply assignment restrictions if the team later defines them. There is no
+permissive default and no invented assignment data. Use the same trusted membership
+policy as AuthenticationBoundary.canAccessRequest. Request-level actors resolve from
+the same server identity source as the application service and store. The queue
+first resolves the reviewer in the internal `review-queue` scope, then rechecks
+visibility and role separately for every candidate. No raw candidate IDs or hidden
+counts are returned. Identity/role and resource visibility are checked again during
+context construction; queue items are checked again before the assembled list is
+returned. The individual HTTP context route also passes the existing auth hooks.
+All fictional session mappings remain under test/helpers/review-fixtures.ts only.
+
+The separate ReviewCandidateSource read port in storage/requests.ts exposes only
+listReviewCandidates(status). The in-memory implementation reads current states and
+returns a detached, sorted ID list. A candidate is not authorized work: ReviewService
+loads current state, verified snapshots and authoritative evidence only after access
+checks. Stale or duplicate index entries cannot create duplicate or obsolete queue
+items. A future database adapter can replace discovery without changing decision
+logic or existing store write contracts.
+
+Clinical/release contexts share the approval service's existing evidenceFailure()
+and commandEvent() mappings. These two pure internal helpers are exported for reuse;
+their behavior is unchanged. Eligibility also probes the existing pure workflow
+transition with the verified actor and a noncolliding diagnostic event ID. The
+proposed transition/audit are discarded. No approval guard is independently rewritten,
+and no probe receipt or audit record is persisted.
+
+A context contains category, requestId, workflowVersion, workflow status, current
+request identity, eligibility with reason codes, unresolved preliminary-screening
+findings, and clinicalApprovalRequired: true. Evidence is category-specific:
+
+- SD: full current preview snapshot, relevant screening and routing clarification
+  reasons. Stored screening/PO evidence and the exact current SD routing result must
+  match. An SD context does not authorize clinical approval.
+- Clinical: full current LogicModel snapshot and applicable checker reference/outcome.
+  Missing, failed, stale or incompatible snapshots/checks block eligibility. The
+  workflow's owner/contributor restrictions block self-approval.
+- Release: current LogicModel snapshot, checker reference, clinical approval event/
+  model reference, compiled artifact identity/hash, verification reference/hash/outcome.
+  Clinical, compiled and verified records must match authoritative evidence. The
+  original clinician or another contributor cannot act as independent release approver.
+
+Unused category fields are null. Owner/contributor IDs, actor identities, roles,
+workflow event history, credentials and raw audit records are not returned. Full
+hashed snapshot content is preserved, including sources and ambiguity arrays.
+Mismatched cross-request snapshots are not exposed. Checker and verification reports
+currently provide references plus passed booleans, not full report findings; no
+missing report details are fabricated. R4/R6 must define richer report contracts.
+
+An accessible pending context returns 200 even when eligibility is false; reasons
+explain the blocker and decisionReferences is null. A self-reviewer may inspect a
+visible blocked context but cannot submit an approval or enter the eligible queue.
+For an eligible clinical/release context, decisionReferences contains precisely the
+existing decision POST fields, excluding eventId, decision, note and path requestId.
+R1 can submit `{...decisionReferences, eventId, decision, note?}` to the existing
+clinical-decisions or release-decisions route. Neither eligibility nor queue
+membership is an approval or a server-issued authorization token. ApprovalService
+reloads authoritative evidence and the store rechecks roles, independence, version
+and workflow guards on submission. Identical accepted retries remain idempotent.
+
+These are best-effort read-time views, not a distributed consistent snapshot or
+reservation. Concurrent changes detected while constructing context return 409;
+queue assembly drops changed/hidden items. Changes after the response can still
+occur. The decision endpoint's expected version and evidence checks remain essential.
+Candidate enumeration is currently unpaginated and intended only for the small
+local dataset. R7 must supply scoped indexes/pagination and real transaction semantics
+before production scale. No durable read-access audit/security logging is added.
+
+### Fictional responses for R1
+
+For a verified fictional clinician, GET /api/reviews/queue?category=CLINICAL:
+
+```json
+{
+  "category": "CLINICAL",
+  "items": [{
+    "requestId": "fictional-001",
+    "category": "CLINICAL",
+    "workflowVersion": 7,
+    "status": "WAITING_FOR_CLINICAL_APPROVAL",
+    "request": {
+      "requestId": "fictional-001",
+      "revision": 1,
+      "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952"
+    }
+  }]
+}
+```
+
+Selected fields from GET /api/requests/fictional-001/review-context?category=CLINICAL:
+
+```json
+{
+  "category": "CLINICAL",
+  "workflowVersion": 7,
+  "eligibility": {"eligible": true, "reasons": []},
+  "checker": {
+    "logicRevision": 1,
+    "logicHash": "b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1",
+    "reportId": "checks-6",
+    "passed": true
+  },
+  "decisionReferences": {
+    "expectedVersion": 7,
+    "requestRevision": 1,
+    "requestSnapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952",
+    "logicRevision": 1,
+    "logicHash": "b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1",
+    "checkerReportId": "checks-6"
+  }
+}
+```
+
+The full context also includes the LogicModel snapshot and common fields described
+above. A release context in this fixture has workflowVersion 12 and includes
+clinicalApprovalEventId `event-7-CLINICAL_DECISION`, compilationId `compile-8`,
+verificationId `verify-10` and the exact artifact/report hashes from the test fixture.
+Fixed artifact/report hashes are fictional references, not evidence of compilation.
+An authorized self-review context instead includes:
+
+```json
+{
+  "eligibility": {"eligible": false, "reasons": ["SELF_APPROVAL"]},
+  "decisionReferences": null
+}
+```
+
+R1 should render category-specific snapshots and findings, display eligibility
+reasons, disable unsupported actions, and refresh after 409 or a successful decision.
+Retain the exact references and workflow version when creating a decision; use a
+fresh eventId per intent and preserve it for retry. Queue rows deliberately omit
+private ownership/history. SD currently has a read screen only; a separate authorized
+clarification-write service is still needed before adding an SD action button.
+
+### Pending Role 4 and Role 7 Integration
+
+All contracts remain provisional and package-local. R4 must confirm category/state/
+error vocabulary, snapshot/checker/clinical/verification reference shapes, expression
+and ambiguity validation and richer blocking-finding records. Existing snapshot
+validation remains provisional, not full clinical correctness validation. Request,
+LogicModel and artifact identities remain distinct.
+
+R7 must confirm verified session/service identity, global reviewer-role scope,
+tenant/request membership, assignment ownership (if any), and durable indexed reads.
+Any future assignment policy must also be enforced on decision submission; this
+milestone does not implement assignment storage or claim production authorization.
+Coordinate durable store transactions, revision integrity and operational read-access
+logging. The local in-memory store and mock identities provide no real authentication,
+distributed transactions or durable persistence.
+
+Verification: 568 passing tests (468 preserved + 100 new reviewer service/HTTP tests),
+strict TypeScript with zero errors. Tests use Fastify inject() and fictional data.
+Actual Node 22 runtime verification remains pending; this environment uses Node 24
+with Node 22 typings. No dependencies or shared configuration were changed.
+
+Next milestone: an explicit routing application service that loads current screening
+and PO confirmation, computes the existing routing result, and commits APPLY_ROUTING
+through store.apply() with version/idempotency checks. Add a small mocked downstream
+handoff port bound to the accepted request revision and LogicModel references;
+coordinate the R3 drafting/R4 checker/R5 compiler/R6 verification contracts before
+real adapters. Routing must not silently dispatch jobs, compile or bypass approval.
+A durable outbox/worker handoff can follow with R7 once persistence is selected.

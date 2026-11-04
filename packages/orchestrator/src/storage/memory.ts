@@ -6,7 +6,7 @@ import { evidenceFromEvent } from './artifacts.ts';
 import type { EvidenceRecord } from './artifacts.ts';
 import type { AuditRecord, EventReceipt } from './audit.ts';
 import { StorageError } from './requests.ts';
-import type { ApplyCommand, ApplyResult, OrchestratorStore, SnapshotKey, StoreDependencies } from './requests.ts';
+import type { ApplyCommand, ApplyResult, OrchestratorStore, ReviewCandidateSource, SnapshotKey, StoreDependencies } from './requests.ts';
 import { snapshotKey, snapshotSlot, verifySnapshot } from './snapshots.ts';
 
 interface Attempt { fingerprint: string; result: ApplyResult }
@@ -35,7 +35,7 @@ const identity = (state: WorkflowState) => ({ requestId: state.brief.requestId, 
  * staged in replacement Maps, then committed by one pointer assignment. No awaits
  * occur in that section. This is NOT distributed/durable database atomicity.
  */
-export class InMemoryOrchestratorStore implements OrchestratorStore {
+export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource {
   #data: MemoryData = { workflows: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
   #options: InMemoryOptions;
   constructor(options: InMemoryOptions) {
@@ -71,6 +71,10 @@ export class InMemoryOrchestratorStore implements OrchestratorStore {
       requiredSlots.add(snapshotSlot(logicKey));
     }
     return requiredSlots;
+  }
+  async listReviewCandidates(status: WorkflowState['status']): Promise<readonly string[]> {
+    // Discovery only; the review service must re-read, authorize and check evidence.
+    return [...this.#data.workflows].filter(([, state]) => state.status === status).map(([id]) => id).sort();
   }
   async getWorkflow(requestId: string): Promise<WorkflowState | null> {
     const state = this.#data.workflows.get(requestId);

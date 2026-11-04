@@ -51,3 +51,9 @@ export class StorageError extends Error {
   readonly code: string;
   constructor(code: string, message = code) { super(message); this.name = 'StorageError'; this.code = code; }
 }
+
+/** Read-only internal discovery port. Candidate IDs are not authorized queue items.
+ * A durable adapter should use a status index and add scoped pagination later. */
+export interface ReviewCandidateSource {
+  listReviewCandidates(status: WorkflowState['status']): Promise<readonly string[]>;
+}
