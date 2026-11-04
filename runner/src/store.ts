@@ -188,6 +188,9 @@ export class JobStore {
       values[`:f${index}`] = value;
       sets.push(`#f${index} = :f${index}`);
     });
+    // The lease fields go away below, and R2 needs to know which actor ran the job.
+    values[':actor'] = lease.workerId;
+    sets.push('runnerActorId = :actor');
     return this.#transact([
       {
         Update: {
@@ -209,10 +212,10 @@ export class JobStore {
 
   // For payloads that fail validation before any lease exists. Only a PENDING job can
   // be failed this way, so a garbled message can't kill a job another worker is running.
-  async failUnleased(jobId: string, requestId: string | undefined, result: Omit<JobResult, 'attempt'> & { attempt: number }): Promise<boolean> {
+  async failUnleased(jobId: string, requestId: string | undefined, runnerActorId: string, result: Omit<JobResult, 'attempt'> & { attempt: number }): Promise<boolean> {
     const names: Record<string, string> = { '#status': 'status' };
-    const values: Record<string, unknown> = { ':pending': 'PENDING' };
-    const sets: string[] = [];
+    const values: Record<string, unknown> = { ':pending': 'PENDING', ':actor': runnerActorId };
+    const sets: string[] = ['runnerActorId = :actor'];
     Object.entries(result).forEach(([field, value], index) => {
       if (value === undefined || field === 'jobId') return;
       names[`#f${index}`] = field;

@@ -46,6 +46,7 @@ describe('COMPILE_LOGIC happy path', () => {
     assert.equal(job.toolVersions.compilerCommit, '7f488e6');
     assert.equal(job.toolVersions.compileImageDigest, 'compile:1@sha256:test');
     assert.equal(job.leaseOwner, undefined);
+    assert.equal(job.runnerActorId, 'worker-a-compile');
     assert.equal(sha256((await h.artifacts.get(job.packageUri))), job.packageHash);
     assert.deepEqual((await h.audits(payload.requestId)).sort(), ['job_started', 'job_succeeded']);
     assert.equal(h.queue.deleted.length, 1);
@@ -181,7 +182,9 @@ describe('fails closed', () => {
     const payload = h.payload();
     await h.seedJob(payload);
     assert.equal(await h.run({ ...payload, surprise: true }), 'FAILED');
-    assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
+    const job = await h.job(payload.jobId);
+    assert.equal(job.errorCode, 'INVALID_PAYLOAD');
+    assert.equal(job.runnerActorId, 'worker-a-compile');
     assert.equal(h.queue.deleted.length, 1);
   });
 
@@ -396,6 +399,7 @@ describe('VERIFY_BUILD', () => {
     assert.equal(job.coverageComplete, true);
     assert.equal(job.testedDirHash, 'tested');
     assert.equal(job.reportVersion, '2.0.0');
+    assert.equal(job.runnerActorId, 'worker-a-verify');
     assert.ok(h.artifacts.objects.has(String(job.reportUri).replace('s3://test-bucket/', '')));
   });
 

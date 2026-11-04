@@ -60,6 +60,11 @@ class JobFailure extends Error {
   }
 }
 
+// R2 requires the verifier to be a different actor from the compiler.
+export function runnerActorId(workerId: string, jobType: unknown): string {
+  return `${workerId}-${jobType === 'VERIFY_BUILD' ? 'verify' : 'compile'}`;
+}
+
 function parseBucketKey(uri: string): { bucket: string; key: string } | undefined {
   const match = /^s3:\/\/([^/]+)\/(.+)$/.exec(uri);
   return match ? { bucket: match[1]!, key: match[2]! } : undefined;
@@ -170,7 +175,7 @@ export class Worker {
       }
       const requestId = (raw as { requestId?: unknown }).requestId;
       const at = new Date(this.#now()).toISOString();
-      const recorded = await store.failUnleased(jobId, typeof requestId === 'string' ? requestId : undefined, {
+      const recorded = await store.failUnleased(jobId, typeof requestId === 'string' ? requestId : undefined, runnerActorId(config.workerId, (raw as { jobType?: unknown }).jobType), {
         contractVersion: CONTRACT_VERSION,
         jobId,
         jobType: 'COMPILE_LOGIC',
@@ -200,12 +205,13 @@ export class Worker {
       return 'LEFT_ON_QUEUE';
     }
 
+    const actor = runnerActorId(config.workerId, payload.jobType);
     const taken = await store.take({
       jobId: payload.jobId,
       requestId: payload.requestId,
       messageId: message.messageId,
       receiveCount: message.receiveCount,
-      workerId: config.workerId,
+      workerId: actor,
       leaseSeconds: config.leaseSeconds,
     });
     if (taken.kind === 'TERMINAL' || taken.kind === 'DUPLICATE_DELIVERY') {
@@ -224,7 +230,7 @@ export class Worker {
       return 'SKIPPED';
     }
 
-    return this.#run(payload, message, { jobId: payload.jobId, requestId: payload.requestId, workerId: config.workerId, attempt: taken.attempt });
+    return this.#run(payload, message, { jobId: payload.jobId, requestId: payload.requestId, workerId: actor, attempt: taken.attempt });
   }
 
   async #run(payload: JobPayload | VerifyBuildPayload, message: QueueMessage, lease: LeaseRef): Promise<Outcome> {
