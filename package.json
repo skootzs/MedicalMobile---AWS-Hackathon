@@ -1,7 +1,6 @@
 {
   "name": "cht-nocode",
   "private": true,
-  "workspaces": ["packages/*"],
   "engines": { "node": ">=22.18" },
   "scripts": {
     "lint": "npm run lint --workspaces --if-present",
