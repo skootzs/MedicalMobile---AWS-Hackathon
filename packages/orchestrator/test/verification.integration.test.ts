@@ -36,6 +36,8 @@ import { durableApi } from './helpers/dynamodb-api-fixture.ts';
 import { content, next, command as eventCommand } from './helpers/approval-fixtures.ts';
 import { resolveReviewActor } from './helpers/review-fixtures.ts';
 import { fictionalReport } from './helpers/verification-report-fixtures.ts';
+import { validateVerifyBuildPayload } from '../src/r7-handoff-contract.ts';
+import { toVerifyBuildPayload } from '../src/verify-build-contracts.ts';
 import type { DynamoStoreOptions, DynamoOrchestratorStore } from '../src/storage/dynamodb.ts';
 import type { WorkflowState, WorkflowStatus } from '../src/workflow.ts';
 import type { ReportOverrides } from './helpers/verification-report-fixtures.ts';
@@ -171,9 +173,31 @@ test('VERIFY: handoff records a VERIFY_BUILD job + outbox bound to the exact art
   assert.equal(job.manifestHash, f.artifact.manifest.sha256);
   assert.equal(job.compileArtifactHash, f.artifact.generatedFilesHash);
   assert.equal((await f.db.getWorkflow(f.id))?.status, 'VERIFYING');
+  // checkReportHash is a real digest (not compileArtifactHash) and snapshotUri is
+  // the real immutable S3 object URI threaded from the compile job's reference.
+  assert.match(job.checkReportHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(job.checkReportHash, job.compileArtifactHash);
+  assert.match(job.snapshotUri, new RegExp(`/snapshots/${job.logicModelHash}\\.json$`));
+  assert.ok(!job.snapshotUri.startsWith('s3://r2/')); // the fabricated URI is gone
   // The JOB/META + OUTBOX were committed atomically.
   const outbox = await f.db.getVerifyBuildOutbox(f.id, job.jobId);
   assert.equal(outbox?.jobType, 'VERIFY_BUILD');
+
+  // R7 compatibility, read from the AUTHORITATIVE DynamoDB items:
+  // (B) JOB/META must start in PENDING with the GSI1 attributes.
+  const meta = (await f.client.document.send(new GetCommand({ TableName: f.table, Key: { pk: `JOB#${job.jobId}`, sk: 'META' }, ConsistentRead: true }))).Item!;
+  assert.equal(meta.status, 'PENDING');
+  assert.equal(meta.gsi1pk, `REQ#${f.id}`);
+  assert.ok(typeof meta.gsi1sk === 'string' && meta.gsi1sk.startsWith('JOB#'));
+  // (A) OUTBOX.payload must be EXACTLY the validated R7 wire payload R7 forwards.
+  const outboxItem = (await f.client.document.send(new GetCommand({ TableName: f.table, Key: { pk: `JOB#${job.jobId}`, sk: 'OUTBOX' }, ConsistentRead: true }))).Item!;
+  assert.equal(outboxItem.status, 'PENDING');
+  assert.ok(outboxItem.payload, 'OUTBOX carries a payload');
+  assert.equal(validateVerifyBuildPayload(outboxItem.payload).ok, true, JSON.stringify(outboxItem.payload));
+  assert.deepEqual(outboxItem.payload, toVerifyBuildPayload(job));
+  // The payload must NOT leak R2's internal intent fields (e.g. idempotencyKey, status).
+  assert.ok(!('idempotencyKey' in (outboxItem.payload as Record<string, unknown>)));
+  assert.ok(!('status' in (outboxItem.payload as Record<string, unknown>)));
 });
 
 test('VERIFY: a passing report advances to WAITING_FOR_RELEASE_APPROVAL', integration, async t => {

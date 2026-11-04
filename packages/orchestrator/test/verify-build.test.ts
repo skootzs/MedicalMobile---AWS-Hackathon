@@ -10,9 +10,10 @@ const input = () => ({
   requestId: 'req-1', revision: 1,
   requestPreview: { requestId: 'req-1', revision: 1, snapshotHash: HASH('a') },
   logicModelRevision: 1, logicModelHash: HASH('b'), clinicalApprovalId: 'clin-1',
-  compileJobId: 'compile-x', packageHash: HASH('c'), packageUri: 's3://r2/builds/compile-x/project.tgz',
+  compileJobId: 'compile-x', packageHash: HASH('c'), packageUri: 's3://bucket/builds/compile-x/project.tgz',
   packageVersionId: 'v1', manifestHash: HASH('d'), compileArtifactHash: HASH('e'),
-  snapshotUri: 's3://r2/snapshots/' + HASH('b') + '.json', checkerReportId: 'check-1',
+  snapshotUri: 's3://bucket/snapshots/' + HASH('b') + '.json', checkerReportId: 'check-1',
+  checkReportHash: HASH('7'),
   sourceWorkflowVersion: 5, handoffEventId: 'ev-verify', createdBy: 'orch-1', createdAt: '2026-11-04T00:00:00.000Z',
 });
 
@@ -29,6 +30,14 @@ test('createVerifyBuildIntent is deterministic and binds the exact artifact', ()
   assert.notEqual(a.jobId, c.jobId);
 });
 
+test('checkReportHash and snapshotUri are evidence, not part of the job identity', () => {
+  // jobId/idempotency must stay stable so existing stored jobs remain idempotent.
+  const a = createVerifyBuildIntent(input());
+  const b = createVerifyBuildIntent({ ...input(), checkReportHash: HASH('9'), snapshotUri: 's3://other/snapshots/x.json' });
+  assert.equal(a.jobId, b.jobId);
+  assert.equal(a.idempotencyKey, b.idempotencyKey);
+});
+
 test('validVerifyBuildIntent accepts a well-formed intent and rejects tampering', () => {
   const job = createVerifyBuildIntent(input());
   assert.equal(validVerifyBuildIntent(job), true);
@@ -37,29 +46,56 @@ test('validVerifyBuildIntent accepts a well-formed intent and rejects tampering'
   assert.equal(validVerifyBuildIntent({ ...job, extra: 1 } as never), false);
 });
 
-test('outbox is a thin pointer to the job', () => {
+test('outbox carries the exact validated R7 wire payload R7 forwards', () => {
   const job = createVerifyBuildIntent(input());
-  assert.deepEqual(verifyBuildOutbox(job), {
+  const outbox = verifyBuildOutbox(job);
+  assert.deepEqual(outbox, {
     pk: `JOB#${job.jobId}`, sk: 'OUTBOX', jobId: job.jobId, jobType: 'VERIFY_BUILD',
     requestId: 'req-1', idempotencyKey: job.idempotencyKey, createdAt: job.createdAt, status: 'PENDING',
+    payload: toVerifyBuildPayload(job),
   });
+  // The payload embedded in the outbox must itself be schema-valid for R7.
+  assert.equal(validateVerifyBuildPayload(outbox.payload).ok, true);
 });
 
 test('toVerifyBuildPayload reconciles raw-hex -> R7 sha256: prefix only at the boundary', () => {
   const job = createVerifyBuildIntent(input());
   const payload = toVerifyBuildPayload(job);
   assert.equal(payload.contractVersion, R7_CONTRACT_VERSION);
+  assert.equal(R7_CONTRACT_VERSION, '1.0.0'); // R2 deliberately emits 1.0.0
   assert.equal(payload.logicModelHash, toR7Hash(job.logicModelHash));
   assert.equal(payload.packageHash, `sha256:${job.packageHash}`);
   assert.equal(payload.manifestHash, `sha256:${job.manifestHash}`);
+  // checkReportHash is the canonical R4 checker-report digest, NOT compileArtifactHash.
+  assert.equal(payload.checkReportHash, toR7Hash(job.checkReportHash));
+  assert.notEqual(payload.checkReportHash, payload.compileArtifactHash);
+  // snapshotUri is the real immutable S3 object URI threaded through the intent.
+  assert.equal(payload.snapshotUri, job.snapshotUri);
   // The internal intent keeps raw hex; only the payload is prefixed.
   assert.match(job.logicModelHash, /^[a-f0-9]{64}$/);
+});
+
+test('the emitted payload omits golden-case fields (R2 owns no golden reference)', () => {
+  const payload = toVerifyBuildPayload(createVerifyBuildIntent(input()));
+  assert.ok(!('goldenCasesUri' in payload));
+  assert.ok(!('goldenCasesHash' in payload));
 });
 
 test('the emitted payload satisfies R7 VerifyBuildPayload schema', () => {
   const job = createVerifyBuildIntent(input());
   const result = validateVerifyBuildPayload(toVerifyBuildPayload(job));
   assert.equal(result.ok, true, JSON.stringify(result.errors));
+});
+
+test('R7 1.1.0 schema still accepts contractVersion 1.0.0 and the optional golden pair', () => {
+  const payload = toVerifyBuildPayload(createVerifyBuildIntent(input())) as Record<string, unknown>;
+  // 1.0.0 (what R2 emits) and 1.1.0 are both accepted.
+  assert.equal(validateVerifyBuildPayload({ ...payload, contractVersion: '1.0.0' }).ok, true);
+  assert.equal(validateVerifyBuildPayload({ ...payload, contractVersion: '1.1.0' }).ok, true);
+  // Golden cases are optional but must be supplied together (dependency rule).
+  assert.equal(validateVerifyBuildPayload({ ...payload, goldenCasesUri: 's3://x', goldenCasesHash: HASH('8') }).ok, true);
+  assert.equal(validateVerifyBuildPayload({ ...payload, goldenCasesUri: 's3://x' }).ok, false);
+  assert.equal(validateVerifyBuildPayload({ ...payload, goldenCasesHash: HASH('8') }).ok, false);
 });
 
 test('R7 schema rejects a payload missing verify-specific fields or with wrong version', () => {

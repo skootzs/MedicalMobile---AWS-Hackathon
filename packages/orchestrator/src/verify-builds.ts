@@ -20,6 +20,7 @@ import { checkerId, checkerSame, checkerVersionNumber } from './checker-contract
 import { createVerifyBuildIntent, validVerifyBuildIntent, toVerifyBuildPayload } from './verify-build-contracts.ts';
 import type { VerifyBuildJobIntent } from './verify-build-contracts.ts';
 import { validateVerifyBuildPayload } from './r7-handoff-contract.ts';
+import { checkerReportHash } from './checker-contracts.ts';
 
 export interface VerifyBuildCommand extends RevisionIdentity {
   eventId: string;
@@ -62,7 +63,8 @@ export class VerifyBuildHandoffService {
   #deps: VerifyBuildHandoffDependencies;
   constructor(deps: VerifyBuildHandoffDependencies) {
     if (typeof deps.resolveActor !== 'function' || typeof deps.canAccessRequest !== 'function' ||
-        typeof deps.store?.getVerifyBuildJob !== 'function' || typeof deps.store?.getCompilationResult !== 'function') throw Error('Trusted identity, access and verify/compilation storage are required.');
+        typeof deps.store?.getVerifyBuildJob !== 'function' || typeof deps.store?.getCompilationResult !== 'function' ||
+        typeof deps.store?.getCompilationJob !== 'function' || typeof deps.store?.getCheckerReport !== 'function') throw Error('Trusted identity, access, verify/compilation storage, compilation job and checker-report evidence are required.');
     this.#deps = deps;
   }
   async #retry(c: VerifyBuildCommand, receipt: EventReceipt): Promise<VerifyBuildJobIntent> {
@@ -102,10 +104,22 @@ export class VerifyBuildHandoffService {
           else {
             // Bind the EXACT compiled artifact: packageHash/manifestHash/compileArtifactHash + object URI live in the accepted result.
             const result = await this.#deps.store.getCompilationResult(c.requestId, c.compileJobId);
+            // The real immutable snapshot URI lives on the accepted COMPILE_LOGIC
+            // job (its verified logic-model reference), never fabricated here.
+            const compileJob = await this.#deps.store.getCompilationJob(c.requestId, c.compileJobId);
+            // R7's checkReportHash is the digest of the canonical R4 checker report.
+            const checkerResult = await this.#deps.store.getCheckerReport(c.requestId, s.checks.reportId);
+            const reportBindsLogic = !!checkerResult && checkerResult.report.reportId === s.checks.reportId &&
+              checkerSame(checkerResult.report.logic, { logicRevision: c.logicModelRevision, logicHash: c.logicModelHash }) &&
+              checkerResult.report.requestId === c.requestId;
             if (!result || result.outcome !== 'COMPILED' || !result.artifact) failure = 'COMPILATION_RESULT_REQUIRED';
             else if (result.artifact.packagedObject.sha256 !== s.artifact.artifactHash) failure = 'ARTIFACT_MISMATCH';
+            else if (!compileJob || compileJob.logicModelHash !== s.logic.logicHash) failure = 'COMPILATION_JOB_REQUIRED';
+            else if (!reportBindsLogic) failure = 'CHECKER_REPORT_EVIDENCE_REQUIRED';
             else {
-              const snapshotUri = `s3://r2/snapshots/${s.logic.logicHash}.json`;
+              // Real S3 snapshot object URI (s3://<artifact-bucket>/snapshots/<logicModelHash>.json),
+              // verified when the COMPILE_LOGIC job was created (referenceMatches).
+              const snapshotUri = compileJob.snapshotReference.uri;
               job = createVerifyBuildIntent({
                 requestId: c.requestId, revision: c.revision, requestPreview: identity(c),
                 logicModelRevision: c.logicModelRevision, logicModelHash: s.logic.logicHash,
@@ -113,7 +127,8 @@ export class VerifyBuildHandoffService {
                 packageHash: result.artifact.packagedObject.sha256, packageUri: result.artifact.packagedObject.uri,
                 packageVersionId: result.artifact.packagedObject.versionId, manifestHash: result.artifact.manifest.sha256,
                 compileArtifactHash: result.artifact.generatedFilesHash, snapshotUri,
-                checkerReportId: s.checks.reportId, sourceWorkflowVersion: s.version,
+                checkerReportId: s.checks.reportId, checkReportHash: checkerReportHash(checkerResult!.report),
+                sourceWorkflowVersion: s.version,
                 handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))(),
               });
               // Fail closed if the outgoing payload would not satisfy R7's published schema.

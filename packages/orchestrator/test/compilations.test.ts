@@ -200,6 +200,7 @@ test('snapshot upload does not authorize execution if atomic transaction fails',
   const expected = createCompilationIntent({ requestId: f.command.requestId, revision: f.command.revision, requestPreview: snapshot.requestPreview,
     logicModelRevision: snapshot.revision, logicModelHash: snapshot.snapshotHash, logicModelUri: ref.uri, snapshotReference: ref,
     clinicalApprovalId: f.command.clinicalApprovalId, checkerReportId: f.current.checks!.reportId, checkerInvocationId: f.current.checks!.invocationId!,
+    checkReportHash: 'f'.repeat(64),
     handoffEventId: f.command.eventId, sourceWorkflowVersion: f.command.expectedVersion, createdBy: 'fictional-backend', createdAt: '2026-11-04T12:00:00.000Z' });
   fail = true; assert.equal((await f.compile.start(f.command, 'backend')).status, 'STORAGE_FAILURE'); fail = false;
   assert.equal(await f.db.getCompilationJob(f.command.requestId, expected.jobId), null);

@@ -1,23 +1,26 @@
 /**
  * R6 VerificationReport contract boundary (REPLACEABLE).
  *
- * R6 owns the authoritative schema at
- *   packages/verification/src/verification-report.schema.json  (official team
- *   integration branch `integrate/compiler`, commit 99001e8) — schemaVersion
- *   "2.2.0".
- * That package is not merged into this standalone R2 branch yet, so this file
- * keeps a small, clearly-labelled MIRROR of R6's published schema plus an Ajv
- * (draft 2020-12) validator. When the integration branch merges, replace the
- * embedded schema with a direct import of R6's file and delete the copy — the
- * official R6 schema remains the single source of truth; this must not become a
- * competing permanent schema. The embedded JSON below is copied verbatim from
- * R6's published v2.2.0 file; R2 does not reinterpret it.
+ * R6 owns the authoritative schema, published as the package export
+ *   `@cht-nocode/verification/schema`
+ *   (= packages/verification/src/verification-report.schema.json), latest on the
+ *   `verification` branch commit 1bb8b1b — schemaVersion "2.3.0".
+ * That package is not merged into this standalone R2 branch yet (it does not
+ * resolve from node_modules here), so this file keeps a small, clearly-labelled
+ * MIRROR of R6's published schema plus an Ajv (draft 2020-12) validator. When the
+ * integration branch merges, REPLACE the embedded schema with a direct import of
+ * `@cht-nocode/verification/schema` and delete the copy — the official R6 schema
+ * remains the single source of truth; this must not become a competing permanent
+ * schema. The embedded JSON below is copied verbatim from R6's published v2.3.0
+ * file; R2 does not reinterpret it, and a test validates parity against the
+ * actual schema at commit 1bb8b1b.
  *
- * v2.2.0 adds (vs 2.1.0): a required top-level `version` const "2.2.0" (a plain
- * string alias of `schemaVersion`, which R7's verify stage reads) and a required
- * top-level `packageHash` (nullable) that the builder promotes from
- * `references.packageHash`. R2 structurally enforces `version === schemaVersion`
- * and top-level `packageHash === references.packageHash`.
+ * v2.3.0 adds (vs 2.2.0): required top-level `asOf` and `evaluator` provenance,
+ * `references.expectedCompileArtifactHash`, and `coverage.coveredViaBlockedSubmission`
+ * (plus optional per-case fields). v2.2.0's top-level `version` (alias of
+ * `schemaVersion`) and `packageHash` (promoted from `references.packageHash`)
+ * remain. R2 structurally enforces `version === schemaVersion` and top-level
+ * `packageHash === references.packageHash`.
  *
  * R2 uses this only to (a) validate the entire fetched report against R6's
  * structure/version and (b) read the report's top-level gate fields and
@@ -27,10 +30,10 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ValidateFunction } from 'ajv';
 
-/** The schemaVersion R6 publishes (official integrate/compiler @ 99001e8). */
-export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.2.0' as const;
+/** The schemaVersion R6 publishes (official verification branch @ 1bb8b1b). */
+export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.3.0' as const;
 
-/** Verbatim mirror of R6's verification-report.schema.json (2.2.0). Replace on merge. */
+/** Verbatim mirror of R6's verification-report.schema.json (2.3.0). Replace on merge. */
 export const verificationReportSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://github.com/cht-nocode/verification/verification-report.schema.json',
@@ -38,7 +41,7 @@ export const verificationReportSchema = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'schemaVersion', 'version', 'packageHash', 'generatedAt', 'passed', 'coverageComplete', 'toolVersions', 'run', 'references',
+    'schemaVersion', 'version', 'packageHash', 'generatedAt', 'asOf', 'evaluator', 'passed', 'coverageComplete', 'toolVersions', 'run', 'references',
     'compileArtifactHash', 'testedDirHash', 'patientSetHash', 'goldenCasesHash', 'integrityChecks',
     'coverage', 'cases', 'disagreements',
   ],
@@ -50,6 +53,23 @@ export const verificationReportSchema = {
     // Promoted from references.packageHash by the R6 builder; nullable.
     packageHash: { type: ['string', 'null'], minLength: 1 },
     generatedAt: { type: 'string', format: 'date-time' },
+    // v2.3.0: run-as-of marker and evaluator provenance metadata.
+    asOf: { type: 'string', minLength: 1 },
+    evaluator: {
+      type: 'object', additionalProperties: false,
+      required: ['used', 'reason', 'source', 'root', 'evaluatorHash', 'pythonVersion', 'jsonschemaVersion', 'logicModelSource', 'asOf'],
+      properties: {
+        used: { type: 'boolean' },
+        reason: { type: ['string', 'null'] },
+        source: { enum: ['env', 'repo', 'vendored-zip-unpinned', null] },
+        root: { type: ['string', 'null'] },
+        evaluatorHash: { type: ['string', 'null'] },
+        pythonVersion: { type: ['string', 'null'] },
+        jsonschemaVersion: { type: ['string', 'null'] },
+        logicModelSource: { enum: ['LOGIC_MODEL_FILE', '/in/logic.json', 'CHT_CONFIG_DIR', null] },
+        asOf: { type: 'string', minLength: 1 },
+      },
+    },
     passed: { type: 'boolean' },
     coverageComplete: { type: 'boolean' },
     toolVersions: {
@@ -70,7 +90,7 @@ export const verificationReportSchema = {
     },
     references: {
       type: 'object', additionalProperties: false,
-      required: ['snapshotId', 'logicModelHash', 'revision', 'clinicalApprovalId', 'compilationJobId', 'packageHash'],
+      required: ['snapshotId', 'logicModelHash', 'revision', 'clinicalApprovalId', 'compilationJobId', 'packageHash', 'expectedCompileArtifactHash'],
       properties: {
         snapshotId: { type: ['string', 'null'], minLength: 1 },
         logicModelHash: { type: ['string', 'null'], minLength: 1 },
@@ -78,6 +98,7 @@ export const verificationReportSchema = {
         clinicalApprovalId: { type: ['string', 'null'], minLength: 1 },
         compilationJobId: { type: ['string', 'null'], minLength: 1 },
         packageHash: { type: ['string', 'null'], minLength: 1 },
+        expectedCompileArtifactHash: { type: ['string', 'null'], minLength: 1 },
       },
     },
     compileArtifactHash: { $ref: '#/$defs/sha256' },
@@ -87,7 +108,7 @@ export const verificationReportSchema = {
     integrityChecks: { type: 'array', items: { $ref: '#/$defs/integrityCheck' } },
     coverage: {
       type: 'object', additionalProperties: false,
-      required: ['method', 'branchSource', 'sampleWarning', 'totalBranches', 'coveredBranches', 'coveredBranchIds', 'uncoveredBranchIds', 'uncoveredBranches'],
+      required: ['method', 'branchSource', 'sampleWarning', 'totalBranches', 'coveredBranches', 'coveredBranchIds', 'coveredViaBlockedSubmission', 'uncoveredBranchIds', 'uncoveredBranches'],
       properties: {
         method: { const: 'observed-outcome' },
         branchSource: { enum: ['manifest', 'sample'] },
@@ -95,6 +116,7 @@ export const verificationReportSchema = {
         totalBranches: { type: 'integer', minimum: 0 },
         coveredBranches: { type: 'integer', minimum: 0 },
         coveredBranchIds: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+        coveredViaBlockedSubmission: { type: 'array', items: { type: 'string' }, uniqueItems: true },
         uncoveredBranchIds: { type: 'array', items: { type: 'string' }, uniqueItems: true },
         uncoveredBranches: {
           type: 'array',
@@ -124,6 +146,12 @@ export const verificationReportSchema = {
         kind: { enum: ['branch', 'boundary', 'exceptional'] }, actual: {},
         golden: { $ref: '#/$defs/expectedResult' }, evaluator: { $ref: '#/$defs/expectedResult' },
         status: { enum: ['pass', 'fail', 'disagree', 'error'] },
+        // v2.3.0 optional case annotations.
+        matchedBy: { enum: ['form-blocked-submission'] },
+        blockedSubmission: { type: 'boolean' },
+        expectedSource: { enum: ['evaluator', 'golden', 'both'] },
+        matchedRows: { type: 'array', items: { type: 'integer', minimum: 0 } },
+        comparedFields: { type: 'array', items: { type: 'string' } },
         failureDetail: { type: ['string', 'null'] }, harnessOutput: { type: ['string', 'null'] },
       },
     },
@@ -138,6 +166,19 @@ export const verificationReportSchema = {
   },
 } as const;
 
+/** Evaluator provenance echoed by R6 (v2.3.0). R2 records it, never fabricates it. */
+export interface VerificationEvaluatorView {
+  used: boolean;
+  reason: string | null;
+  source: 'env' | 'repo' | 'vendored-zip-unpinned' | null;
+  root: string | null;
+  evaluatorHash: string | null;
+  pythonVersion: string | null;
+  jsonschemaVersion: string | null;
+  logicModelSource: 'LOGIC_MODEL_FILE' | '/in/logic.json' | 'CHT_CONFIG_DIR' | null;
+  asOf: string;
+}
+
 /** The subset of the report R2 reads once the whole document is schema-valid. */
 export interface VerificationReportView {
   schemaVersion: string;
@@ -145,6 +186,10 @@ export interface VerificationReportView {
   version: string;
   /** Top-level packageHash (v2.2.0); promoted from references.packageHash. */
   packageHash: string | null;
+  /** Run-as-of marker (v2.3.0). */
+  asOf: string;
+  /** Evaluator provenance metadata (v2.3.0). */
+  evaluator: VerificationEvaluatorView;
   passed: boolean;
   coverageComplete: boolean;
   compileArtifactHash: string;
@@ -157,6 +202,8 @@ export interface VerificationReportView {
     clinicalApprovalId: string | null;
     compilationJobId: string | null;
     packageHash: string | null;
+    /** v2.3.0: the compile-artifact hash R6 expected to verify. */
+    expectedCompileArtifactHash: string | null;
   };
 }
 
@@ -172,15 +219,16 @@ export interface ReportValidation {
   errors: string[];
 }
 
-/** Validate a parsed report against R6's v2.2.0 schema and extract the view. */
+/** Validate a parsed report against R6's v2.3.0 schema and extract the view. */
 export function validateVerificationReport(value: unknown): ReportValidation {
   if (!compiled(value)) {
     return { ok: false, report: null, errors: (compiled.errors ?? []).map(e => `${e.instancePath} ${e.message}`.trim()) };
   }
   const v = value as Record<string, unknown>;
   const refs = v.references as Record<string, unknown>;
+  const evaluator = v.evaluator as Record<string, unknown>;
   // Structural cross-checks the schema alone cannot express (both consts are
-  // "2.2.0" so Ajv already pins them, but assert the aliasing invariant R6's
+  // "2.3.0" so Ajv already pins them, but assert the aliasing invariant R6's
   // builder guarantees, and that the promoted top-level packageHash agrees with
   // references.packageHash). These are integrity checks, not clinical outcomes.
   const topPackageHash = (v.packageHash as string | null) ?? null;
@@ -195,6 +243,18 @@ export function validateVerificationReport(value: unknown): ReportValidation {
     schemaVersion: v.schemaVersion as string,
     version: v.version as string,
     packageHash: topPackageHash,
+    asOf: v.asOf as string,
+    evaluator: {
+      used: evaluator.used as boolean,
+      reason: (evaluator.reason as string | null) ?? null,
+      source: (evaluator.source as VerificationEvaluatorView['source']) ?? null,
+      root: (evaluator.root as string | null) ?? null,
+      evaluatorHash: (evaluator.evaluatorHash as string | null) ?? null,
+      pythonVersion: (evaluator.pythonVersion as string | null) ?? null,
+      jsonschemaVersion: (evaluator.jsonschemaVersion as string | null) ?? null,
+      logicModelSource: (evaluator.logicModelSource as VerificationEvaluatorView['logicModelSource']) ?? null,
+      asOf: evaluator.asOf as string,
+    },
     passed: v.passed as boolean,
     coverageComplete: v.coverageComplete as boolean,
     compileArtifactHash: v.compileArtifactHash as string,
@@ -207,6 +267,7 @@ export function validateVerificationReport(value: unknown): ReportValidation {
       clinicalApprovalId: (refs.clinicalApprovalId as string | null) ?? null,
       compilationJobId: (refs.compilationJobId as string | null) ?? null,
       packageHash: refPackageHash,
+      expectedCompileArtifactHash: (refs.expectedCompileArtifactHash as string | null) ?? null,
     },
   };
   return { ok: true, report, errors: [] };

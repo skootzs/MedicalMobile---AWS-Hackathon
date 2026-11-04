@@ -25,7 +25,7 @@ test('attemptRecordVersion is a stable surrogate for R7 missing recordVersion', 
 const compileJob: CompilationJobIntent = {
   jobId: 'compile-x', jobType: 'COMPILE_LOGIC', mode: 'approved', requestId: 'req-1', revision: 1,
   requestPreview: preview, logicModelRevision: 1, logicModelHash: HASH('b'), logicModelUri: 's3://r2/snapshots/x.json',
-  snapshotReference: {} as never, clinicalApprovalId: 'clin-1', checkerReportId: 'check-1', checkerInvocationId: 'inv-1',
+  snapshotReference: {} as never, clinicalApprovalId: 'clin-1', checkerReportId: 'check-1', checkerInvocationId: 'inv-1', checkReportHash: HASH('6'),
   sourceWorkflowVersion: 5, workflowVersion: 6, idempotencyKey: 'k', handoffEventId: 'ev', createdBy: 'orch', createdAt: '2026-11-04T00:00:00.000Z', status: 'PENDING',
 };
 
@@ -59,7 +59,7 @@ const verifyJob: VerifyBuildJobIntent = {
   jobId: 'verify-x', jobType: 'VERIFY_BUILD', requestId: 'req-1', revision: 1, requestPreview: preview,
   logicModelRevision: 1, logicModelHash: HASH('b'), clinicalApprovalId: 'clin-1', compileJobId: 'compile-x',
   packageHash: HASH('3'), packageUri: 's3://b/x.tgz', packageVersionId: 'v1', manifestHash: HASH('4'),
-  compileArtifactHash: HASH('2'), snapshotUri: 's3://b/x.json', checkerReportId: 'check-1',
+  compileArtifactHash: HASH('2'), snapshotUri: 's3://b/x.json', checkerReportId: 'check-1', checkReportHash: HASH('6'),
   sourceWorkflowVersion: 7, workflowVersion: 8, idempotencyKey: 'k', handoffEventId: 'ev', createdBy: 'orch', createdAt: '2026-11-04T00:00:00.000Z', status: 'PENDING',
 };
 

@@ -2,7 +2,7 @@
  * VERIFY_BUILD result ingestion. Mirrors CompilationResultService but the
  * authoritative evidence is R6's VerificationReport: R2 fetches the immutable
  * report object by the R7 attempt's reportUri/reportHash, verifies the bytes
- * against reportHash, validates the whole document against R6's published v2.2.0
+ * against reportHash, validates the whole document against R6's published v2.3.0
  * schema, cross-checks the report's echoed references against R2's authoritative
  * identities, and requires passed === true AND coverageComplete === true before
  * emitting the existing VERIFIED transition. A failed/errored/incomplete report,
@@ -85,7 +85,7 @@ export class VerificationResultService {
         (refs.clinicalApprovalId !== null && refs.clinicalApprovalId !== job.clinicalApprovalId) ||
         (refs.compilationJobId !== null && refs.compilationJobId !== job.compileJobId) ||
         (refs.packageHash !== null && refs.packageHash !== job.packageHash)) return { failure: 'REPORT_REFERENCE_MISMATCH' };
-    // v2.2.0: the top-level packageHash is promoted from references.packageHash;
+    // v2.2.0+: the top-level packageHash is promoted from references.packageHash;
     // the contract validator already asserts they agree, so a top-level check
     // binds the same authoritative artifact.
     if (report.packageHash !== null && report.packageHash !== job.packageHash) return { failure: 'REPORT_REFERENCE_MISMATCH' };

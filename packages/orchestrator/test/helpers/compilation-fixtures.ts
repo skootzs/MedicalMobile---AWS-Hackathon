@@ -44,5 +44,5 @@ export async function compilationFixture(options: Partial<InMemoryOptions> = {},
 }
 export function wrapCompilationStore(db: CompilationStore, overrides: Partial<CompilationStore>): CompilationStore {
   return { ...wrapStore(db, {}), getCompilationJob: (id, job) => db.getCompilationJob(id, job), listCompilationJobs: id => db.listCompilationJobs(id),
-    getCompilationOutbox: (id, job) => db.getCompilationOutbox(id, job), ...overrides };
+    getCompilationOutbox: (id, job) => db.getCompilationOutbox(id, job), getCheckerReport: (id, report) => db.getCheckerReport(id, report), ...overrides };
 }

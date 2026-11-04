@@ -11,6 +11,8 @@ import { DeleteTableCommand } from '@aws-sdk/client-dynamodb';
 import { GetCommand,QueryCommand,UpdateCommand,ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { CompilationHandoffService } from '../src/compilations.ts';
 import { CompilationResultService } from '../src/compilation-results.ts';
+import { toCompilePayload } from '../src/compilation-contracts.ts';
+import { validateCompilationPayload } from '../src/r7-handoff-contract.ts';
 import { DurableLogicModelReferences } from '../src/storage/durable-objects.ts';
 import { FictionalArtifacts } from './helpers/compilation-result-fixtures.ts';
 import type { CompilationExecution } from '../src/compilation-result-contracts.ts';
@@ -117,7 +119,13 @@ test('LOCAL: job intent/outbox/state/receipt commit together, canceled creation 
   assert.equal((await f.newStore().apply(step.cmd,step.who)).outcome,'ACCEPTED');const jobs=await f.db.listJobs(id);assert.equal(jobs.length,1);
   const rows=await f.client.document.send(new QueryCommand({TableName:f.table,KeyConditionExpression:'pk = :p',ExpressionAttributeValues:{':p':`JOB#${jobs[0].jobId}`},ConsistentRead:true}));
   assert.deepEqual(rows.Items?.map(i=>i.sk).sort(),['META','OUTBOX']);
-  assert.equal(rows.Items?.find(i=>i.sk==='OUTBOX')?.payload.jobId,jobs[0].jobId);
+  // DRAFT_LOGIC precedes any LogicModel, so it carries no R7 JobPayload; its
+  // outbox keeps the internal intent (payload is reserved for COMPILE/VERIFY).
+  assert.equal(rows.Items?.find(i=>i.sk==='OUTBOX')?.intent.jobId,jobs[0].jobId);
+  assert.equal(rows.Items?.find(i=>i.sk==='OUTBOX')?.payload,undefined);
+  // (B) every job's META starts in R7's PENDING status.
+  assert.equal(rows.Items?.find(i=>i.sk==='META')?.status,'PENDING');
+  assert.equal(rows.Items?.find(i=>i.sk==='OUTBOX')?.status,'PENDING');
   assert.equal(rows.Items?.find(i=>i.sk==='META')?.gsi1pk,`REQ#${id}`);
   assert.match(rows.Items?.find(i=>i.sk==='META')?.gsi1sk,/^JOB#\d{4}-/);
 });
@@ -162,6 +170,29 @@ async function compiling(t:TestContext) {
   const command={requestId:id,jobId:job.jobId,eventId:'fictional-durable-compiled',expectedVersion:job.workflowVersion,attempt:execution.attempt,executionRecordVersion:execution.recordVersion};
   return {...f,id,job,execution,publish,condition,store,artifacts,deps,command};
 }
+
+test('LOCAL: COMPILE_LOGIC JOB/META starts PENDING and OUTBOX carries a valid R7 payload',integration,async t=>{
+  const f=await compiling(t);
+  const rows=await f.client.document.send(new QueryCommand({TableName:f.table,KeyConditionExpression:'pk = :p',ExpressionAttributeValues:{':p':`JOB#${f.job.jobId}`},ConsistentRead:true}));
+  const meta=rows.Items?.find(i=>i.sk==='META')!,outbox=rows.Items?.find(i=>i.sk==='OUTBOX')!;
+  // NOTE: the simulated R7 writer in `compiling` later overwrites META.status to
+  // the execution status; so assert PENDING on the OUTBOX (never touched by R7)
+  // and that the original committed status was PENDING via a fresh job here.
+  assert.equal(outbox.status,'PENDING');
+  assert.equal(meta.gsi1pk,`REQ#${f.id}`);
+  assert.match(meta.gsi1sk,/^JOB#\d{4}-/);
+  // (A) OUTBOX.payload must be EXACTLY R7's validated COMPILE_LOGIC JobPayload.
+  assert.ok(outbox.payload,'compile OUTBOX carries a payload');
+  assert.equal(validateCompilationPayload(outbox.payload).ok,true,JSON.stringify(outbox.payload));
+  assert.deepEqual(outbox.payload,toCompilePayload(f.job));
+  // snapshotUri must be the real immutable object URI, checkReportHash a real digest.
+  assert.equal(outbox.payload.snapshotUri,f.job.logicModelUri);
+  assert.equal(outbox.payload.checkReportHash,`sha256:${f.job.checkReportHash}`);
+  assert.match(f.job.checkReportHash,/^[a-f0-9]{64}$/);
+  // The payload must not leak internal intent fields.
+  assert.ok(!('idempotencyKey' in (outbox.payload as Record<string,unknown>)));
+  assert.ok(!('snapshotReference' in (outbox.payload as Record<string,unknown>)));
+});
 
 test('LOCAL: compilation, result evidence and pending release approval recover; R7 source remains authoritative',integration,async t=>{
   const f=await compiling(t),r=await new CompilationResultService(f.deps).ingest(f.command,'compiler');assert.equal(r.status,'ACCEPTED',r.reason);

@@ -3,6 +3,9 @@ import { canonicalizeJson } from './snapshots.ts';
 import { checkerId, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
 import { createCompilationIntent, referenceMatches } from './compilation-contracts.ts';
 import type { CompilationJobIntent, LogicModelReferenceProvider } from './compilation-contracts.ts';
+import { checkerReportHash } from './checker-contracts.ts';
+import { validateCompilationPayload } from './r7-handoff-contract.ts';
+import { toCompilePayload } from './compilation-contracts.ts';
 import { compilationEvidenceFailure } from './compilation-eligibility.ts';
 import type { CompilationStore } from './storage/compilations.ts';
 import type { ApplyResult, StoreDependencies } from './storage/requests.ts';
@@ -51,7 +54,8 @@ export class CompilationHandoffService {
   #deps: CompilationHandoffDependencies;
   constructor(deps: CompilationHandoffDependencies) {
     if (typeof deps.resolveActor !== 'function' || typeof deps.canAccessRequest !== 'function' || typeof deps.store?.getCompilationJob !== 'function' ||
-        typeof deps.snapshotReferences?.getVerifiedReference !== 'function') throw Error('Trusted identity, access, compilation storage and immutable snapshot provider are required.');
+        typeof deps.store?.getCheckerReport !== 'function' ||
+        typeof deps.snapshotReferences?.getVerifiedReference !== 'function') throw Error('Trusted identity, access, compilation storage, checker-report evidence and immutable snapshot provider are required.');
     this.#deps = deps;
   }
   async #retry(c: CompilationCommand, receipt: EventReceipt): Promise<CompilationJobIntent> {
@@ -98,11 +102,24 @@ export class CompilationHandoffService {
               const supplied = await this.#deps.snapshotReferences.getVerifiedReference(model);
               // Copy immediately: provider data cannot mutate the command while identity is rechecked.
               const ref = supplied ? JSON.parse(canonicalizeJson(supplied)) : null;
+              // R7's checkReportHash must be the digest of the canonical R4 checker
+              // report JSON. Load the accepted checker result bound to this request's
+              // reportId/logic and derive the hash; fail closed if it is unavailable
+              // or does not match the exact logic under compilation.
+              const checkerResult = await this.#deps.store.getCheckerReport(c.requestId, s.checks!.reportId);
+              const reportBindsLogic = !!checkerResult && checkerResult.report.reportId === s.checks!.reportId &&
+                checkerSame(checkerResult.report.logic, { logicRevision: c.logicModelRevision, logicHash: c.logicModelHash }) &&
+                checkerResult.report.requestId === c.requestId;
               if (!referenceMatches(ref, model)) failure = 'VERIFIED_SNAPSHOT_REFERENCE_REQUIRED';
-              else job = createCompilationIntent({ requestId: c.requestId, revision: c.revision, requestPreview: identity(c), logicModelRevision: c.logicModelRevision,
-                logicModelHash: model.snapshotHash, logicModelUri: ref.uri, snapshotReference: ref, clinicalApprovalId: s.clinicalApproval!.eventId,
-                checkerReportId: s.checks!.reportId, checkerInvocationId: s.checks!.invocationId!, sourceWorkflowVersion: s.version,
-                handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))() });
+              else if (!reportBindsLogic) failure = 'CHECKER_REPORT_EVIDENCE_REQUIRED';
+              else {
+                job = createCompilationIntent({ requestId: c.requestId, revision: c.revision, requestPreview: identity(c), logicModelRevision: c.logicModelRevision,
+                  logicModelHash: model.snapshotHash, logicModelUri: ref.uri, snapshotReference: ref, clinicalApprovalId: s.clinicalApproval!.eventId,
+                  checkerReportId: s.checks!.reportId, checkerInvocationId: s.checks!.invocationId!, checkReportHash: checkerReportHash(checkerResult!.report),
+                  sourceWorkflowVersion: s.version, handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))() });
+                // Fail closed if the outgoing COMPILE_LOGIC payload would not satisfy R7's schema.
+                if (!validateCompilationPayload(toCompilePayload(job)).ok) { job = null; failure = 'R7_PAYLOAD_INVALID'; }
+              }
             }
           }
         }

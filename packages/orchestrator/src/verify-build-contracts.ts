@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { canonicalizeJson } from './snapshots.ts';
 import type { RevisionIdentity } from './routing.ts';
 import { checkerId, checkerSame, checkerVersionNumber } from './checker-contracts.ts';
+import { R7_WIRE_CONTRACT_VERSION, toR7Hash } from './r7-wire.ts';
 
 const hash = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
 
@@ -35,9 +36,15 @@ export interface VerifyBuildJobIntent {
   manifestHash: string;
   /** R5 generated-files digest (XLSX/properties), from the accepted result. */
   compileArtifactHash: string;
-  /** Immutable snapshot-envelope object the build was derived from. */
+  /** Immutable snapshot-envelope object the build was derived from. The REAL
+   * S3 URI (s3://<artifact-bucket>/snapshots/<logicModelHash>.json), sourced
+   * from the compilation job's verified logic-model reference — never fabricated. */
   snapshotUri: string;
   checkerReportId: string;
+  /** SHA-256 (raw hex) of the canonical R4 checker report JSON R7 records as
+   * checkReportHash. Sourced from the accepted AcceptedCheckerResult.report in
+   * the handoff service; NOT compileArtifactHash or checkerReportId. */
+  checkReportHash: string;
   sourceWorkflowVersion: number;
   workflowVersion: number;
   idempotencyKey: string;
@@ -56,11 +63,15 @@ export interface VerifyBuildOutbox {
   idempotencyKey: string;
   createdAt: string;
   status: 'PENDING';
+  /** The exact validated R7 wire payload R7's Pipe forwards from the outbox. */
+  payload: Record<string, unknown>;
 }
 
 type VerifyBuildIntentInput = Omit<VerifyBuildJobIntent, 'jobId' | 'idempotencyKey' | 'jobType' | 'workflowVersion' | 'status'>;
 
-/** jobId/idempotencyKey bind the exact artifact (compile job + package + manifest). */
+/** jobId/idempotencyKey bind the exact artifact (compile job + package + manifest).
+ * checkReportHash and snapshotUri are evidence about that same artifact, not part
+ * of the identity digest, so adding them keeps jobId/idempotency stable. */
 export function createVerifyBuildIntent(input: VerifyBuildIntentInput): VerifyBuildJobIntent {
   const digest = createHash('sha256').update(canonicalizeJson({
     namespace: 'verify-build-v1', request: input.requestPreview,
@@ -75,7 +86,8 @@ export function createVerifyBuildIntent(input: VerifyBuildIntentInput): VerifyBu
 
 export function verifyBuildOutbox(job: VerifyBuildJobIntent): VerifyBuildOutbox {
   return { pk: `JOB#${job.jobId}`, sk: 'OUTBOX', jobId: job.jobId, jobType: job.jobType,
-    requestId: job.requestId, idempotencyKey: job.idempotencyKey, createdAt: job.createdAt, status: 'PENDING' };
+    requestId: job.requestId, idempotencyKey: job.idempotencyKey, createdAt: job.createdAt, status: 'PENDING',
+    payload: toVerifyBuildPayload(job) };
 }
 
 /** Reconstruct the intent from its inputs and confirm no field was tampered with. */
@@ -83,41 +95,43 @@ export function validVerifyBuildIntent(job: VerifyBuildJobIntent): boolean {
   try {
     const fields = ['jobId', 'jobType', 'requestId', 'revision', 'requestPreview', 'logicModelRevision', 'logicModelHash',
       'clinicalApprovalId', 'compileJobId', 'packageHash', 'packageUri', 'packageVersionId', 'manifestHash', 'compileArtifactHash',
-      'snapshotUri', 'checkerReportId', 'sourceWorkflowVersion', 'workflowVersion', 'idempotencyKey', 'handoffEventId', 'createdBy', 'createdAt', 'status'];
+      'snapshotUri', 'checkerReportId', 'checkReportHash', 'sourceWorkflowVersion', 'workflowVersion', 'idempotencyKey', 'handoffEventId', 'createdBy', 'createdAt', 'status'];
     if (Object.keys(job).length !== fields.length || Object.keys(job).some(k => !fields.includes(k))) return false;
     const { jobId, jobType, workflowVersion, status, idempotencyKey, ...input } = job;
     return checkerSame(job, createVerifyBuildIntent(input)) && jobType === 'VERIFY_BUILD' && status === 'PENDING' &&
       [jobId, input.requestId, input.clinicalApprovalId, input.compileJobId, input.checkerReportId, input.handoffEventId, input.createdBy].every(checkerId) &&
       checkerVersionNumber(input.sourceWorkflowVersion) && checkerVersionNumber(workflowVersion) && checkerVersionNumber(input.revision) &&
       checkerVersionNumber(input.logicModelRevision) && hash(input.logicModelHash) && hash(input.packageHash) && hash(input.manifestHash) &&
-      hash(input.compileArtifactHash) && checkerId(input.packageVersionId) && typeof input.packageUri === 'string' && !!input.packageUri &&
+      hash(input.compileArtifactHash) && hash(input.checkReportHash) && checkerId(input.packageVersionId) && typeof input.packageUri === 'string' && !!input.packageUri &&
       typeof input.snapshotUri === 'string' && !!input.snapshotUri && checkerVersionNumber(input.requestPreview.revision) &&
       input.requestPreview.requestId === input.requestId && hash(input.requestPreview.snapshotHash) &&
       typeof input.createdAt === 'string' && new Date(input.createdAt).toISOString() === input.createdAt;
   } catch { return false; }
 }
 
-/** R7 wire contract version (packages/schema/src/handoffs.ts CONTRACT_VERSION). */
-export const R7_CONTRACT_VERSION = '1.0.0' as const;
-/** R2 raw hex -> R7's prefixed logicModelHash form, reconciled ONLY at this boundary. */
-export const toR7Hash = (rawHex: string): string => `sha256:${rawHex}`;
+/** @deprecated use R7_WIRE_CONTRACT_VERSION from r7-wire.ts. Re-exported for callers. */
+export { R7_WIRE_CONTRACT_VERSION as R7_CONTRACT_VERSION, toR7Hash } from './r7-wire.ts';
 
 /**
  * Project the internal intent to R7's VerifyBuildPayload (packages/schema
- * handoffs.ts). This is the ONLY place R2's raw-hex logicModelHash is converted
- * to R7's `sha256:` prefix. Shape validated against R7's published schema in
+ * handoffs.ts). This is the ONLY place R2's raw-hex hashes are converted to
+ * R7's `sha256:` wire form. Shape validated against R7's published schema in
  * the integration boundary (see r7-handoff-contract.ts).
+ *
+ * checkReportHash is the digest of the canonical R4 checker report JSON (carried
+ * on the intent as job.checkReportHash) — NOT compileArtifactHash. snapshotUri
+ * is the real immutable S3 snapshot object URI.
  */
 export function toVerifyBuildPayload(job: VerifyBuildJobIntent): Record<string, unknown> {
   return {
-    contractVersion: R7_CONTRACT_VERSION,
+    contractVersion: R7_WIRE_CONTRACT_VERSION,
     jobId: job.jobId,
     jobType: 'VERIFY_BUILD',
     requestId: job.requestId,
     revision: job.revision,
     logicModelHash: toR7Hash(job.logicModelHash),
     snapshotUri: job.snapshotUri,
-    checkReportHash: toR7Hash(job.compileArtifactHash),
+    checkReportHash: toR7Hash(job.checkReportHash),
     clinicalApprovalId: job.clinicalApprovalId,
     compileJobId: job.compileJobId,
     packageUri: job.packageUri,
@@ -126,5 +140,7 @@ export function toVerifyBuildPayload(job: VerifyBuildJobIntent): Record<string, 
     manifestHash: toR7Hash(job.manifestHash),
     createdBy: job.createdBy,
     createdAt: job.createdAt,
+    // goldenCasesUri/goldenCasesHash deliberately OMITTED: R2 owns no
+    // authoritative golden-case object reference. Set both or neither.
   };
 }

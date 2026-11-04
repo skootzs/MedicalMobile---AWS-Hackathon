@@ -99,6 +99,18 @@ export function validCheckerResult(value: unknown): value is AcceptedCheckerResu
   } catch { return false; }
 }
 
+/**
+ * SHA-256 (raw hex) of the canonical R4 checker report JSON. This is the exact
+ * value R7 records as `checkReportHash` on the job payload. It is computed over
+ * the authoritative CheckerReport body (R4's evidence), canonicalized with the
+ * same JCS R2 uses everywhere — NOT over compileArtifactHash, the reportId, or
+ * any other substitute. Callers derive this only from an accepted, validated
+ * AcceptedCheckerResult.report, and fail closed if that evidence is unavailable.
+ */
+export function checkerReportHash(report: CheckerReport): string {
+  return createHash('sha256').update(canonicalizeJson(report)).digest('hex');
+}
+
 /** One shared formal-evidence binding check for review reads and approval writes. */
 export function checkerEvidenceMatches(result: unknown, binding: { request: RevisionIdentity; logic: LogicIdentity; reportId: string; eventId: string; invocationId: string | undefined; passed: boolean; actorId: string }): result is AcceptedCheckerResult {
   return validCheckerResult(result) && result.eventId === binding.eventId && result.invocation.checkerActorId === binding.actorId && result.invocation.invocationId === binding.invocationId &&

@@ -5,6 +5,11 @@ import type { Snapshot } from '../snapshots.ts';
 import type { WorkflowState, WorkflowStatus } from '../workflow.ts';
 import type { CompilationExecution } from '../compilation-result-contracts.ts';
 import type { VerificationExecution } from '../verification-result-contracts.ts';
+import { toCompilePayload } from '../compilation-contracts.ts';
+import type { CompilationJobIntent } from '../compilation-contracts.ts';
+import { toVerifyBuildPayload } from '../verify-build-contracts.ts';
+import type { VerifyBuildJobIntent } from '../verify-build-contracts.ts';
+import { validateCompilationPayload, validateVerifyBuildPayload } from '../r7-handoff-contract.ts';
 import { InMemoryOrchestratorStore } from './memory.ts';
 import type { InMemoryOptions, RepositoryImage } from './memory.ts';
 import { StorageError } from './requests.ts';
@@ -160,10 +165,29 @@ export class DynamoOrchestratorStore implements CheckerStore, DraftingResultStor
     for (const name of ['jobs','compilationJobs','verifyBuildJobs']) for (const [,value] of added(name)) {
       const j = value as {jobId:string;jobType:string;idempotencyKey:string};
       const jobCreatedAt=(value as {createdAt?:string}).createdAt??lastAudit!.recordedAt;
-      const payload={...(value as object),createdAt:jobCreatedAt};
-      put({...payload,pk:`JOB#${j.jobId}`,sk:'META',status:'requested',...this.#index(this.#o.layout.jobsByRequestIndex,requestId,jobCreatedAt)});
-      // R7's Pipe sends OUTBOX.payload. No second publisher or direct SQS send.
-      put({pk:`JOB#${j.jobId}`,sk:'OUTBOX',requestId,jobId:j.jobId,jobType:j.jobType,idempotencyKey:j.idempotencyKey,payload});
+      const meta={...(value as object),createdAt:jobCreatedAt};
+      // META starts in R7's PENDING status (handoffs.ts JobStatus), carries the
+      // GSI1 (gsi1pk/gsi1sk) attributes, and holds the full authoritative intent.
+      put({...meta,pk:`JOB#${j.jobId}`,sk:'META',status:'PENDING',...this.#index(this.#o.layout.jobsByRequestIndex,requestId,jobCreatedAt)});
+      // R7's Pipe forwards OUTBOX.payload verbatim to the jobs queue, so it must
+      // contain EXACTLY R7's validated wire JobPayload — not R2's internal intent.
+      // COMPILE_LOGIC/VERIFY_BUILD carry a schema-valid R7 payload; DRAFT_LOGIC
+      // (name 'jobs') precedes any LogicModel and has no R7 JobPayload, so it
+      // stays intent-only for R2/R3-internal delivery.
+      const outbox:Record<string,unknown>={pk:`JOB#${j.jobId}`,sk:'OUTBOX',requestId,jobId:j.jobId,jobType:j.jobType,idempotencyKey:j.idempotencyKey,status:'PENDING'};
+      if (name==='compilationJobs') {
+        const payload=toCompilePayload({...(value as CompilationJobIntent),createdAt:jobCreatedAt});
+        if (!validateCompilationPayload(payload).ok) throw new StorageError('R7_COMPILE_PAYLOAD_INVALID');
+        outbox.payload=payload;
+      } else if (name==='verifyBuildJobs') {
+        const payload=toVerifyBuildPayload({...(value as VerifyBuildJobIntent),createdAt:jobCreatedAt});
+        if (!validateVerifyBuildPayload(payload).ok) throw new StorageError('R7_VERIFY_PAYLOAD_INVALID');
+        outbox.payload=payload;
+      } else {
+        // DRAFT_LOGIC: no R7 JobPayload; preserve the internal intent for delivery.
+        outbox.intent={...(value as object),createdAt:jobCreatedAt};
+      }
+      put(outbox);
     }
     for (const name of ['draftingResults','compilationResults','verificationResults']) for (const [,value] of added(name)) {
       const r = value as {jobId:string;eventId:string}; put({pk:`JOB#${r.jobId}`,sk:`RECEIPT#R2#${r.eventId}`,requestId,objectRef:await this.#recordRef(value)});
