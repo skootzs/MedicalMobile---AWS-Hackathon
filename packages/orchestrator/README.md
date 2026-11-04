@@ -14,7 +14,8 @@ No shared configuration was changed.
 
 ## Static TypeScript checking
 
-After the team-approved dependency installation, run from this package:
+Run from this package with its declared dependencies installed (see the package-only
+installation notes in the snapshot section below):
 
 ```sh
 npm run typecheck
@@ -36,13 +37,15 @@ in an isolated directory under `/private/tmp`, with no repository `node_modules`
 or lockfile created. The compiler's `.bin` directory was temporarily added to
 `PATH`, and `npm run typecheck -- --typeRoots <tool-directory>/node_modules/@types`
 selected those exact Node types. No machine-specific paths are saved in the config.
-That temporary tool installation is not a reproducible team dependency installation;
-plain `npm run typecheck` needs the declared development dependencies available.
+That temporary tool installation was not a reproducible team dependency installation.
+The snapshot milestone below now installs the declared dependencies locally, allowing
+plain `npm run typecheck` to run without temporary PATH/typeRoots overrides.
 
 The repository has an empty root `package.json`, an empty `pnpm-workspace.yaml`,
 and no lockfile. pnpm currently fails on the empty root manifest. Agree on the
 package manager/version, shared lockfile owner, and workspace installation process
-before installing dependencies in the repository. Do not create a package-local
+before a normal workspace installation. The isolated package-only installation below
+does not change the shared files. Do not create a package-local
 npm lockfile as a substitute for an agreed team workspace lockfile.
 
 ## Ownership and input contract
@@ -286,3 +289,119 @@ helpers with fixtures. Then add a storage interface with conditional state updat
 and a local fake, before exposing clinician/release approval APIs that resolve
 actors and evidence on the server. Same-input job retry policy, production retention,
 actual download access and link invalidation remain later integration work.
+
+## Provisional snapshot hashing
+
+`src/snapshots.ts` provides `createSnapshot(draft, validator)`, `canonicalizeJson`,
+and separate `requestPreviewIdentity` / `logicModelIdentity` projections. It uses
+pinned `canonicalize@3.0.0` (Apache-2.0), an implementation listed by RFC 8785,
+and Node's built-in SHA-256. There is no handwritten key/number canonicalizer.
+
+A snapshot is a copied, recursively frozen JSON object:
+
+```json
+{
+  "kind": "LOGIC_MODEL",
+  "requestId": "fictional-001",
+  "revision": 1,
+  "schemaVersion": "1.0",
+  "hashPolicyVersion": "jcs-sha256-v1",
+  "requestPreview": {
+    "requestId": "fictional-001",
+    "revision": 2,
+    "snapshotHash": "<64 lowercase hex digits from the preview snapshot>"
+  },
+  "content": { "schemaVersion": "1.0", "...": "entire LogicModel" },
+  "snapshotHash": "<computed SHA-256, not a caller-provided value>"
+}
+```
+
+The angle-bracket values are explanatory placeholders, not executable fixtures.
+A `REQUEST_PREVIEW` snapshot has the same base metadata but no `requestPreview`
+reference. `revision` is the revision of that snapshot kind: a model revision is
+not the same counter as the request preview revision. The model must reference a
+preview for the same request. This code validates the reference's structure; the
+future backend must establish that the referenced preview exists and is current.
+
+Hash policy `jcs-sha256-v1` hashes UTF-8 RFC 8785 canonical JSON of the **entire
+snapshot envelope except its own `snapshotHash` field**. It includes kind, request
+ID, revision, schema version, hash-policy identifier, full content, and the model's
+preview reference. Metadata changes therefore change the hash even when clinical
+content stays the same. Object key ordering does not change it. Array order is
+preserved, including question order and first-match decision-table rows.
+
+All supplied JSON content is included: sources, citations, source hashes/URLs,
+condition trees, outcomes, ambiguities, and optional visualization/extension data.
+No content fields are selected away. A computed hash is an integrity fingerprint,
+not proof of validation correctness, clinician approval, or release authorization.
+Artifact identity remains separate; no compiled-artifact hashing is implemented.
+The workflow and router are unchanged and continue to use their existing identity
+contracts through the projections. Store the complete snapshot, not just its hash
+or the reduced workflow fields.
+
+The strict JSON-domain layer rejects undefined, functions, symbols, bigint,
+non-finite numbers, lone Unicode surrogates in keys/values, sparse/decorated arrays,
+cycles, non-plain objects, hidden properties, accessors, and proxies. It does not
+invoke `toJSON` or normalize strings. It copies and freezes input before validation,
+so changing the caller's original content cannot silently change a hashed snapshot.
+Validators must be synchronous, return no transformed content, and throw to reject.
+
+RFC 8785 uses ECMAScript IEEE-754 number serialization: `-0` and `0` canonicalize
+to the same number, and equivalent representable numeric values have the same
+hash. Unicode normalization is not performed: composed and decomposed spellings
+remain distinct. Numbers requiring exact precision beyond IEEE-754 should use an
+R4-agreed representation, such as validated decimal strings. Hashing cannot recover
+precision already lost before the function received a JavaScript number.
+
+Input is already-parsed JSON data, not JSON source text. A JavaScript object cannot
+represent duplicate keys; a future raw JSON ingestion boundary must reject duplicate
+keys and numeric tokens that violate R4's precision policy **before** normal parsing
+would discard information. This milestone does not implement that parser.
+
+`SnapshotError` reports `INVALID_JSON`, `INVALID_METADATA`, or `SCHEMA_REJECTED`.
+Unknown metadata, caller-provided hashes/policy identifiers, and a missing validator
+are rejected. Unknown JSON content extensions are retained and hashed by the
+provisional adapter; their admissibility belongs to the final R4 schema.
+
+### Pending Role 4 Integration
+
+Reference reviewed: [R5 LogicModel v1 proposal on compiler branch](https://github.com/skootzs/MedicalMobile---AWS-Hackathon/blob/compiler/packages/compiler/docs/logic-model-v1-proposal.md),
+Git blob `d6d5721f83053b9f3582090d33b2507cfa3cf3ff`. It explicitly identifies itself
+as a draft, with R4 as schema owner. No compiler or schema files were changed.
+
+`provisionalSnapshotValidator` checks only basic preview fields, or the proposal's
+model version/title/pathway/language, required arrays, and one decision table.
+It does **not** check reference integrity, AST constructs, question ordering,
+completeness, ambiguity resolutions, clinical semantics, or compiler compatibility.
+It must not be described as complete LogicModel validation. A caller must explicitly
+supply this adapter or an R4 replacement to `createSnapshot`; there is no implicit
+validation-success default. The full frozen content goes to the adapter, and schema
+integration can change without rewriting the workflow state machine.
+
+R4/team agreement is still needed on:
+
+- Official versioned schemas for previews, models, sources/citations, and ambiguities,
+  including required/unknown fields and runtime validation behavior.
+- Exact hash envelope and coverage, especially metadata and the originating preview.
+  A change in hash rules requires a new hash-policy identifier and compatibility plan.
+- JCS/UTF-8/SHA-256 agreement, numeric precision/ranges, Unicode policy, and strict
+  raw JSON parsing responsibilities.
+- Model versus preview revision numbering and rules for schema upgrades and migrations.
+- Cross-module golden snapshots with expected canonical bytes and hashes, plus R4
+  checks proving the model supplied to reviewers is what the compiler consumes.
+
+### Local dependency installation for this milestone
+
+The snapshot dependency and existing pinned dev tools are installed only in this
+package's ignored `node_modules`. The install explicitly used `--workspaces=false`,
+`--package-lock=false`, and `--ignore-scripts`; no root/shared configuration or
+repository lockfile was changed. `npm run typecheck` and `npm test` now work directly
+from this package. The earlier temporary typecheck tool directory is not required.
+This local installation does not decide the team's package manager or lockfile
+ownership. Normal workspace installation and reproducible locked CI remain pending.
+Do not run a default root install against the empty root manifest.
+
+Next: finalize R4's contract, then define a snapshot repository with immutable writes,
+hash verification on load, and atomic workflow/event/audit updates. Test it with a
+local fake before adding authenticated approval APIs. No database, API, AWS adapter,
+Strands Box, or real review job has been added here.
