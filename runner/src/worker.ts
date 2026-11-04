@@ -30,9 +30,14 @@ export interface Queue {
   setVisibility(message: QueueMessage, seconds: number): Promise<void>;
 }
 
+export interface StoredArtifact {
+  uri: string;
+  versionId?: string;
+}
+
 export interface Artifacts {
   get(uri: string): Promise<Buffer>;
-  put(key: string, body: string | Buffer): Promise<string>;
+  put(key: string, body: string | Buffer): Promise<StoredArtifact>;
 }
 
 export interface WorkerDeps {
@@ -64,6 +69,14 @@ class JobFailure extends Error {
 // R2 requires the verifier to be a different actor from the compiler.
 export function runnerActorId(workerId: string, jobType: unknown): string {
   return `${workerId}-${jobType === 'VERIFY_BUILD' ? 'verify' : 'compile'}`;
+}
+
+// R2's vocabulary for where a COMPILE_LOGIC job stopped.
+const AFTER_CONVERT = { compilerExitCode: 0, chtConfStatus: 'PASSED' } as const;
+const CONVERT_FAILED_FIELDS = { compilerExitCode: 0, chtConfStatus: 'FAILED' } as const;
+
+function versionField<K extends string>(field: K, stored: StoredArtifact): Partial<Record<K, string>> {
+  return stored.versionId ? { [field]: stored.versionId } as Record<K, string> : {};
 }
 
 function parseBucketKey(uri: string): { bucket: string; key: string } | undefined {
@@ -120,28 +133,29 @@ export function validatePayload(raw: unknown): { payload: JobPayload | VerifyBui
 // Exit 1 with parseable compiler errors is a model rejection. Exit 1 with anything else
 // is node itself failing (e.g. a bad /compiler mount), which a retry or fix can resolve.
 export function classifyCompile(result: StageResult): JobFailure | undefined {
-  if (result.timedOut) return new JobFailure('TIMEOUT', 'Compile stage timed out', true);
+  if (result.timedOut) return new JobFailure('TIMEOUT', 'Compile stage timed out', true, { failureKind: 'TIMED_OUT' });
   if (result.exitCode === 0) return undefined;
   if (result.exitCode === 1) {
     try {
       const parsed = JSON.parse(result.stderr) as { ok?: boolean; errors?: { code: string; path: string; message: string }[] };
       if (parsed.ok === false && Array.isArray(parsed.errors)) {
-        return new JobFailure('MODEL_REJECTED', `Compiler rejected the model with ${parsed.errors.length} error(s)`, false, { compileErrors: parsed.errors });
+        return new JobFailure('MODEL_REJECTED', `Compiler rejected the model with ${parsed.errors.length} error(s)`, false, { compileErrors: parsed.errors, compilerExitCode: 1, chtConfStatus: 'NOT_RUN', failureKind: 'COMPILER_REJECTED' });
       }
     } catch { /* falls through to the infrastructure failure below */ }
   }
-  return new JobFailure('COMPILE_INFRA_ERROR', `Compile stage exited ${result.exitCode}: ${result.stderr.slice(0, 500)}`, true);
+  return new JobFailure('COMPILE_INFRA_ERROR', `Compile stage exited ${result.exitCode}: ${result.stderr.slice(0, 500)}`, true,
+    result.exitCode === 2 ? { compilerExitCode: 2, failureKind: 'COMPILER_USAGE_OR_FILE_ERROR' } : {});
 }
 
 // run-convert.sh writes convert.log before cht runs, so its absence means the container
 // or script never got that far. Docker reserves 125-127 and signals use 128+.
 export function classifyConvert(result: StageResult, hasConvertLog: boolean): JobFailure | undefined {
-  if (result.timedOut) return new JobFailure('TIMEOUT', 'Convert stage timed out', true);
+  if (result.timedOut) return new JobFailure('TIMEOUT', 'Convert stage timed out', true, { ...CONVERT_FAILED_FIELDS, failureKind: 'TIMED_OUT' });
   if (result.exitCode === 0) return undefined;
   if (result.exitCode >= 125 || !hasConvertLog) {
-    return new JobFailure('COMPILE_INFRA_ERROR', `Convert stage exited ${result.exitCode}: ${result.stderr.slice(0, 500)}`, true);
+    return new JobFailure('COMPILE_INFRA_ERROR', `Convert stage exited ${result.exitCode}: ${result.stderr.slice(0, 500)}`, true, { ...CONVERT_FAILED_FIELDS, failureKind: 'RUNNER_FAILED' });
   }
-  return new JobFailure('CONVERT_FAILED', `cht-conf rejected the generated project (exit ${result.exitCode})`, false);
+  return new JobFailure('CONVERT_FAILED', `cht-conf rejected the generated project (exit ${result.exitCode})`, false, { ...CONVERT_FAILED_FIELDS, failureKind: 'CHT_CONVERSION_FAILED' });
 }
 
 interface VerificationReport {
@@ -305,8 +319,11 @@ export class Worker {
         await queue.setVisibility(message, config.retryVisibilitySeconds);
         return 'RETRYING';
       }
+      const compileDefaults = payload.jobType === 'COMPILE_LOGIC'
+        ? { compilerExitCode: null, chtConfStatus: 'NOT_RUN', failureKind: 'RUNNER_FAILED' } as const
+        : {};
       return await this.#commit(message, lease, {
-        ...base, ...failure.fields, status: 'FAILED', retryable: failure.retryable, toolVersions, startedAt,
+        ...base, ...compileDefaults, ...failure.fields, status: 'FAILED', retryable: failure.retryable, toolVersions, startedAt,
         finishedAt: new Date(this.#now()).toISOString(), errorCode: failure.code, errorMessage: failure.message,
       });
     } finally {
@@ -410,7 +427,9 @@ export class Worker {
     setTools({
       compileImageDigest: await stages.imageDigest(config.compileImage),
       buildImageDigest: await stages.imageDigest(config.buildImage),
+      compiler: config.compilerCommit,
       compilerCommit: config.compilerCommit,
+      chtConf: config.chtConfVersion,
     });
 
     const outDir = this.#writable(join(dir, 'out'));
@@ -438,47 +457,56 @@ export class Worker {
     const convertLog = hasConvertLog ? readFileSync(convertLogPath) : Buffer.from(convert.stderr);
     const compileLog = `${compile.stdout}${compile.stderr}`;
     const prefix = this.#prefix(payload, lease.attempt);
-    const logUri = await artifacts.put(`${prefix}/convert.log`, convertLog);
+    const { uri: logUri } = await artifacts.put(`${prefix}/convert.log`, convertLog);
     await artifacts.put(`${prefix}/compile.log`, compileLog);
     const convertFailure = classifyConvert(convert, hasConvertLog);
     if (convertFailure) {
-      throw new JobFailure(convertFailure.code, convertFailure.message, convertFailure.retryable, { logUri });
+      throw new JobFailure(convertFailure.code, convertFailure.message, convertFailure.retryable, { ...convertFailure.fields, logUri });
     }
 
     let manifest: { snapshotHash?: unknown; inputHash?: unknown; artifactHash?: unknown; formId?: unknown; template?: { hash?: unknown } | null };
     try {
       manifest = JSON.parse(readFileSync(join(workDir, 'compile-manifest.json'), 'utf8')) as typeof manifest;
     } catch (err) {
-      throw new JobFailure('COMPILE_INFRA_ERROR', `compile-manifest.json unreadable: ${String(err).slice(0, 200)}`, true, { logUri });
+      throw new JobFailure('COMPILE_INFRA_ERROR', `compile-manifest.json unreadable: ${String(err).slice(0, 200)}`, true, { ...AFTER_CONVERT, failureKind: 'RUNNER_FAILED', logUri });
     }
     if (manifest.inputHash !== expectedInputHash || manifest.snapshotHash !== payload.logicModelHash) {
-      throw new JobFailure('INPUT_HASH_MISMATCH', 'compile-manifest.json inputHash or snapshotHash does not match this job', false, { logUri });
+      throw new JobFailure('INPUT_HASH_MISMATCH', 'compile-manifest.json inputHash or snapshotHash does not match this job', false, { ...AFTER_CONVERT, failureKind: 'RUNNER_FAILED', logUri });
     }
 
     const built = buildManifest(workDir, { 'compile.log': compileLog, 'convert.log': convertLog });
     const tgz = deterministicTgz(workDir);
-    const packageUri = await artifacts.put(`${prefix}/project.tgz`, tgz);
-    const manifestUri = await artifacts.put(`${prefix}/manifest.json`, built.bytes);
+    const storedPackage = await artifacts.put(`${prefix}/project.tgz`, tgz);
+    const storedManifest = await artifacts.put(`${prefix}/manifest.json`, built.bytes);
+    // The compile report R2 binds to is compile-manifest.json.
+    const compileReportBytes = readFileSync(join(workDir, 'compile-manifest.json'));
+    const storedCompileReport = await artifacts.put(`${prefix}/compile-manifest.json`, compileReportBytes);
     for (const file of built.manifest.files) {
       const isForm = posix.dirname(file.path) === 'forms/app' && /\.(xlsx|xml)$/.test(file.path);
-      if (isForm || file.path === 'compile-manifest.json' || file.path === 'compile-rows.json') {
+      if (isForm || file.path === 'compile-rows.json') {
         await artifacts.put(`${prefix}/${file.path}`, readFileSync(join(workDir, file.path)));
       }
     }
     const diffPath = join(workDir, 'compile-diff.json');
     const compileDiffUri = baselineDir && existsSync(diffPath)
-      ? await artifacts.put(`${prefix}/compile-diff.json`, readFileSync(diffPath))
+      ? (await artifacts.put(`${prefix}/compile-diff.json`, readFileSync(diffPath))).uri
       : undefined;
 
     return {
+      ...AFTER_CONVERT,
       snapshotHash: String(manifest.snapshotHash),
       inputHash: String(manifest.inputHash),
       compileArtifactHash: String(manifest.artifactHash),
       templateHash: String(manifest.template?.hash),
       manifestHash: built.manifestHash,
-      manifestUri,
+      manifestUri: storedManifest.uri,
+      ...versionField('manifestVersionId', storedManifest),
       packageHash: sha256(tgz),
-      packageUri,
+      packageUri: storedPackage.uri,
+      ...versionField('packageVersionId', storedPackage),
+      compileReportUri: storedCompileReport.uri,
+      compileReportHash: sha256(compileReportBytes),
+      ...versionField('compileReportVersionId', storedCompileReport),
       logUri,
       ...(compileDiffUri ? { compileDiffUri } : {}),
     };
@@ -504,7 +532,7 @@ export class Worker {
     execFileSync('tar', ['-xzf', tgzPath, '-C', projectDir, '--no-same-owner']);
     execFileSync('chmod', ['-R', 'a+rX', projectDir]);
 
-    setTools({ buildImageDigest: await stages.imageDigest(config.buildImage), verifierCommit: config.verifierCommit });
+    setTools({ buildImageDigest: await stages.imageDigest(config.buildImage), verifierCommit: config.verifierCommit, chtConf: config.chtConfVersion });
 
     const outDir = this.#writable(join(dir, 'out'));
     const run = await stages.verify({ image: config.buildImage, projectDir, verifierDir: config.verifierDir, outDir }, signal, config.buildTimeoutSeconds * 1000);
@@ -512,7 +540,7 @@ export class Worker {
 
     const prefix = this.#prefix(payload, lease.attempt);
     const logPath = join(outDir, 'verification.log');
-    const logUri = await artifacts.put(`${prefix}/verification.log`, existsSync(logPath) ? readFileSync(logPath) : `${run.stdout}${run.stderr}`);
+    const { uri: logUri } = await artifacts.put(`${prefix}/verification.log`, existsSync(logPath) ? readFileSync(logPath) : `${run.stdout}${run.stderr}`);
 
     const reportPath = join(outDir, 'report.json');
     const reportBytes = existsSync(reportPath) ? readFileSync(reportPath) : undefined;
@@ -526,13 +554,14 @@ export class Worker {
       : undefined;
     if (mismatch) throw new JobFailure('VERIFY_ERROR', mismatch, false, { logUri });
 
-    const reportUri = await artifacts.put(`${prefix}/report.json`, reportBytes);
+    const storedReport = await artifacts.put(`${prefix}/report.json`, reportBytes);
     return {
       packageHash: payload.packageHash,
       packageUri: payload.packageUri,
       manifestHash: payload.manifestHash,
       compileArtifactHash: payload.compileArtifactHash,
-      reportUri,
+      reportUri: storedReport.uri,
+      ...versionField('reportVersionId', storedReport),
       reportHash: sha256(reportBytes),
       verificationPassed: report.passed,
       coverageComplete: report.coverageComplete,

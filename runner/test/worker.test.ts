@@ -48,6 +48,15 @@ describe('COMPILE_LOGIC happy path', () => {
     assert.equal(job.toolVersions.compileImageDigest, 'compile:1@sha256:test');
     assert.equal(job.leaseOwner, undefined);
     assert.equal(job.runnerActorId, 'worker-a-compile');
+    assert.equal(job.toolVersions.compiler, '7f488e6');
+    assert.equal(job.toolVersions.chtConf, '6.6.1');
+    assert.equal(job.compilerExitCode, 0);
+    assert.equal(job.chtConfStatus, 'PASSED');
+    assert.match(job.packageVersionId, /project\.tgz$/);
+    assert.match(job.manifestVersionId, /manifest\.json$/);
+    assert.match(job.compileReportUri, /compile-manifest\.json$/);
+    assert.match(job.compileReportVersionId, /compile-manifest\.json$/);
+    assert.equal(sha256(await h.artifacts.get(job.compileReportUri)), job.compileReportHash);
     assert.equal(sha256((await h.artifacts.get(job.packageUri))), job.packageHash);
     assert.deepEqual((await h.audits(payload.requestId)).sort(), ['job_started', 'job_succeeded']);
     assert.equal(h.queue.deleted.length, 1);
@@ -267,8 +276,29 @@ describe('exit codes and retries', () => {
     assert.equal(job.errorCode, 'MODEL_REJECTED');
     assert.equal(job.retryable, false);
     assert.deepEqual(job.compileErrors, errors);
+    assert.equal(job.compilerExitCode, 1);
+    assert.equal(job.chtConfStatus, 'NOT_RUN');
+    assert.equal(job.failureKind, 'COMPILER_REJECTED');
     assert.equal(h.queue.deleted.length, 1);
     assert.deepEqual(h.stages.calls, ['compile']);
+  });
+
+  it('records R2 failure details when the last delivery ends each kind of failure', async () => {
+    const cases: [string, Partial<typeof OK>, string, number | null, string, string][] = [
+      ['compile', { exitCode: 2 }, 'COMPILE_INFRA_ERROR', 2, 'NOT_RUN', 'COMPILER_USAGE_OR_FILE_ERROR'],
+      ['compile', { exitCode: 137 }, 'COMPILE_INFRA_ERROR', null, 'NOT_RUN', 'RUNNER_FAILED'],
+      ['compile', { timedOut: true }, 'TIMEOUT', null, 'NOT_RUN', 'TIMED_OUT'],
+      ['convert', { exitCode: 1 }, 'CONVERT_FAILED', 0, 'FAILED', 'CHT_CONVERSION_FAILED'],
+    ];
+    for (const [stage, result, code, exit, cht, kind] of cases) {
+      const payload = h.payload();
+      await h.seedJob(payload);
+      h.stages.compileResult = stage === 'compile' ? { ...OK, ...result } : OK;
+      h.stages.convertResult = stage === 'convert' ? { ...OK, ...result } : OK;
+      assert.equal(await h.run(payload, 3), 'FAILED');
+      const job = await h.job(payload.jobId);
+      assert.deepEqual([job.errorCode, job.compilerExitCode, job.chtConfStatus, job.failureKind], [code, exit, cht, kind]);
+    }
   });
 
   it('exit 1 without the compiler error JSON is infrastructure, not a model rejection', async () => {
@@ -418,6 +448,7 @@ describe('VERIFY_BUILD', () => {
     assert.equal(job.testedDirHash, 'tested');
     assert.equal(job.reportVersion, '2.0.0');
     assert.equal(job.runnerActorId, 'worker-a-verify');
+    assert.match(job.reportVersionId, /report\.json$/);
     assert.ok(h.artifacts.objects.has(String(job.reportUri).replace('s3://test-bucket/', '')));
   });
 
