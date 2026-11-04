@@ -1,0 +1,312 @@
+<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms" xmlns:h="http://www.w3.org/1999/xhtml" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:jr="http://openrosa.org/javarosa" xmlns:orx="http://openrosa.org/xforms" xmlns:odk="http://www.opendatakit.org/xforms">
+  <h:head>
+    <h:title>Child Cough and Fast Breathing (Demo)</h:title>
+    <model odk:xforms-version="1.0.0">
+      <itext>
+        <translation lang="en">
+          <text id="yes_no-0">
+            <value>Yes</value>
+          </text>
+          <text id="yes_no-1">
+            <value>No</value>
+          </text>
+          <text id="/data/inputs/contact/_id:label">
+            <value>Who are you assessing?</value>
+          </text>
+          <text id="/data/intro:label">
+            <value>Cough or difficult breathing</value>
+          </text>
+          <text id="/data/intro/has_cough_or_difficult_breathing:label">
+            <value>Does the child have cough or difficult breathing?</value>
+          </text>
+          <text id="/data/danger_signs:label">
+            <value>General danger signs</value>
+          </text>
+          <text id="/data/danger_signs/not_able_to_drink_or_breastfeed:label">
+            <value>Is the child NOT able to drink or breastfeed?</value>
+          </text>
+          <text id="/data/danger_signs/vomits_everything:label">
+            <value>Does the child vomit everything?</value>
+          </text>
+          <text id="/data/danger_signs/had_convulsions:label">
+            <value>Has the child had convulsions?</value>
+          </text>
+          <text id="/data/danger_signs/lethargic_or_unconscious:label">
+            <value>Is the child lethargic or unconscious?</value>
+          </text>
+          <text id="/data/danger_signs/convulsing_now:label">
+            <value>Is the child convulsing now?</value>
+          </text>
+          <text id="/data/breathing:label">
+            <value>Breathing</value>
+          </text>
+          <text id="/data/breathing/breaths_per_minute:jr:constraintMsg">
+            <value>Enter a value of at least 0.</value>
+          </text>
+          <text id="/data/breathing/breaths_per_minute:label">
+            <value>Count the breaths in one minute. How many breaths per minute?</value>
+          </text>
+          <text id="/data/breathing/breaths_per_minute:hint">
+            <value>The child must be calm while you count.</value>
+          </text>
+          <text id="/data/breathing/chest_indrawing:label">
+            <value>Do you see chest indrawing?</value>
+          </text>
+          <text id="/data/breathing/stridor_in_calm_child:label">
+            <value>Do you hear stridor while the child is calm?</value>
+          </text>
+          <text id="/data/summary:label">
+            <value>Summary</value>
+          </text>
+          <text id="/data/summary/outcome_severe_pneumonia_or_very_severe_disease:label">
+            <value>&lt;span style="color:red"&gt;SEVERE PNEUMONIA OR VERY SEVERE DISEASE&lt;/span&gt;
+Refer URGENTLY to hospital.</value>
+          </text>
+          <text id="/data/summary/outcome_pneumonia:label">
+            <value>**PNEUMONIA**
+Follow up in 3 days.</value>
+          </text>
+          <text id="/data/summary/outcome_cough_or_cold:label">
+            <value>**COUGH OR COLD**
+Follow up in 5 days if not improving.</value>
+          </text>
+          <text id="/data/summary/outcome_not_in_pathway:label">
+            <value>**No cough or difficult breathing**
+This form does not assess other problems.</value>
+          </text>
+          <text id="/data/summary/outcome_out_of_scope:label">
+            <value>**Outside the 2 months to 5 years age range**
+No classification was made.</value>
+          </text>
+          <text id="/data/summary/outcome_age_unknown:label">
+            <value>**No date of birth recorded**
+No classification was made.</value>
+          </text>
+          <text id="/data/summary/outcome_incomplete:label">
+            <value>**Assessment incomplete**
+Not all answers needed for a classification were given.</value>
+          </text>
+        </translation>
+      </itext>
+      <instance>
+        <data id="child_cough" version="v1_186214726c73" prefix="J1!child_cough!" delimiter="#">
+          <inputs>
+            <meta>
+              <location>
+                <lat/>
+                <long/>
+                <error/>
+                <message/>
+              </location>
+            </meta>
+            <source>user</source>
+            <source_id/>
+            <contact>
+              <_id/>
+              <name/>
+              <patient_id/>
+              <date_of_birth/>
+              <parent>
+                <_id/>
+              </parent>
+            </contact>
+          </inputs>
+          <patient_uuid/>
+          <patient_id/>
+          <patient_name/>
+          <patient_age_in_months/>
+          <in_scope/>
+          <intro>
+            <has_cough_or_difficult_breathing/>
+          </intro>
+          <danger_signs>
+            <not_able_to_drink_or_breastfeed/>
+            <vomits_everything/>
+            <had_convulsions/>
+            <lethargic_or_unconscious/>
+            <convulsing_now/>
+          </danger_signs>
+          <breathing>
+            <breaths_per_minute/>
+            <chest_indrawing/>
+            <stridor_in_calm_child/>
+          </breathing>
+          <fast_breathing/>
+          <any_general_danger_sign/>
+          <classification/>
+          <referral_urgent/>
+          <follow_up_days/>
+          <t_follow_up_date/>
+          <summary>
+            <outcome_severe_pneumonia_or_very_severe_disease/>
+            <outcome_pneumonia/>
+            <outcome_cough_or_cold/>
+            <outcome_not_in_pathway/>
+            <outcome_out_of_scope/>
+            <outcome_age_unknown/>
+            <outcome_incomplete/>
+          </summary>
+          <meta tag="hidden">
+            <instanceID/>
+          </meta>
+        </data>
+      </instance>
+      <instance id="contact-summary"/>
+      <instance id="user-contact-summary"/>
+      <instance id="yes_no">
+        <root>
+          <item>
+            <itextId>yes_no-0</itextId>
+            <name>yes</name>
+          </item>
+          <item>
+            <itextId>yes_no-1</itextId>
+            <name>no</name>
+          </item>
+        </root>
+      </instance>
+      <bind nodeset="/data/inputs" relevant="./source = 'user'"/>
+      <bind nodeset="/data/inputs/source" type="string"/>
+      <bind nodeset="/data/inputs/source_id" type="string"/>
+      <bind nodeset="/data/inputs/contact/_id" type="string"/>
+      <bind nodeset="/data/inputs/contact/name" type="string"/>
+      <bind nodeset="/data/inputs/contact/patient_id" type="string"/>
+      <bind nodeset="/data/inputs/contact/date_of_birth" type="string"/>
+      <bind nodeset="/data/inputs/contact/parent/_id" type="string"/>
+      <bind nodeset="/data/patient_uuid" type="string" calculate="../inputs/contact/_id"/>
+      <bind nodeset="/data/patient_id" type="string" calculate="../inputs/contact/patient_id"/>
+      <bind nodeset="/data/patient_name" type="string" calculate="../inputs/contact/name"/>
+      <bind nodeset="/data/patient_age_in_months" type="string" calculate="if(../inputs/contact/date_of_birth = '', '', difference-in-months(../inputs/contact/date_of_birth, today()))"/>
+      <bind nodeset="/data/in_scope" type="string" calculate="if((( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &gt;= 2) and ( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &lt; 60)), 'yes', if((( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &lt; 2) or ( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &gt;= 60)), 'no', 'unknown'))"/>
+      <bind nodeset="/data/intro/has_cough_or_difficult_breathing" type="string" required="true()" relevant=" /data/in_scope  = 'yes'"/>
+      <bind nodeset="/data/danger_signs" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/danger_signs/not_able_to_drink_or_breastfeed" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/danger_signs/vomits_everything" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/danger_signs/had_convulsions" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/danger_signs/lethargic_or_unconscious" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/danger_signs/convulsing_now" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/breathing" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/breathing/breaths_per_minute" type="int" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))" constraint=". &gt;= 0" jr:constraintMsg="jr:itext('/data/breathing/breaths_per_minute:jr:constraintMsg')"/>
+      <bind nodeset="/data/breathing/chest_indrawing" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/breathing/stridor_in_calm_child" type="string" required="true()" relevant="( /data/in_scope  = 'yes' and selected( /data/intro/has_cough_or_difficult_breathing , 'yes'))"/>
+      <bind nodeset="/data/fast_breathing" type="string" calculate="if(((( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &lt; 12) and ( /data/breathing/breaths_per_minute  != '' and  /data/breathing/breaths_per_minute  &gt;= 50)) or (( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &gt;= 12) and ( /data/breathing/breaths_per_minute  != '' and  /data/breathing/breaths_per_minute  &gt;= 40))), 'yes', if(((( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &gt;= 12) or ( /data/breathing/breaths_per_minute  != '' and  /data/breathing/breaths_per_minute  &lt; 50)) and (( /data/patient_age_in_months  != '' and  /data/patient_age_in_months  &lt; 12) or ( /data/breathing/breaths_per_minute  != '' and  /data/breathing/breaths_per_minute  &lt; 40))), 'no', ''))"/>
+      <bind nodeset="/data/any_general_danger_sign" type="string" calculate="if((selected( /data/danger_signs/not_able_to_drink_or_breastfeed , 'yes') or selected( /data/danger_signs/vomits_everything , 'yes') or selected( /data/danger_signs/had_convulsions , 'yes') or selected( /data/danger_signs/lethargic_or_unconscious , 'yes') or selected( /data/danger_signs/convulsing_now , 'yes')), 'yes', if((selected( /data/danger_signs/not_able_to_drink_or_breastfeed , 'no') and selected( /data/danger_signs/vomits_everything , 'no') and selected( /data/danger_signs/had_convulsions , 'no') and selected( /data/danger_signs/lethargic_or_unconscious , 'no') and selected( /data/danger_signs/convulsing_now , 'no')), 'no', ''))"/>
+      <bind nodeset="/data/classification" type="string" calculate="if( /data/in_scope  = 'unknown', 'age_unknown', if( /data/in_scope  = 'no', 'out_of_scope', if(selected( /data/intro/has_cough_or_difficult_breathing , 'no'), 'not_in_pathway', if((selected( /data/intro/has_cough_or_difficult_breathing , 'yes') and ( /data/any_general_danger_sign  = 'yes' or selected( /data/breathing/stridor_in_calm_child , 'yes'))), 'severe_pneumonia_or_very_severe_disease', if((selected( /data/intro/has_cough_or_difficult_breathing , 'yes') and  /data/any_general_danger_sign  = 'no' and selected( /data/breathing/stridor_in_calm_child , 'no') and (selected( /data/breathing/chest_indrawing , 'yes') or  /data/fast_breathing  = 'yes')), 'pneumonia', if((selected( /data/intro/has_cough_or_difficult_breathing , 'yes') and  /data/any_general_danger_sign  = 'no' and selected( /data/breathing/stridor_in_calm_child , 'no') and selected( /data/breathing/chest_indrawing , 'no') and  /data/fast_breathing  = 'no'), 'cough_or_cold', 'incomplete'))))))"/>
+      <bind nodeset="/data/referral_urgent" type="string" calculate="if( /data/classification  = 'severe_pneumonia_or_very_severe_disease', 'yes', 'no')"/>
+      <bind nodeset="/data/follow_up_days" type="string" calculate="if( /data/classification  = 'pneumonia', 3, if( /data/classification  = 'cough_or_cold', 5, ''))"/>
+      <bind nodeset="/data/t_follow_up_date" type="string" calculate="if( /data/follow_up_days  = '', '', date-time(decimal-date-time(today()) +  /data/follow_up_days ))"/>
+      <bind nodeset="/data/summary/outcome_severe_pneumonia_or_very_severe_disease" readonly="true()" type="string" relevant=" /data/classification  = 'severe_pneumonia_or_very_severe_disease'"/>
+      <bind nodeset="/data/summary/outcome_pneumonia" readonly="true()" type="string" relevant=" /data/classification  = 'pneumonia'"/>
+      <bind nodeset="/data/summary/outcome_cough_or_cold" readonly="true()" type="string" relevant=" /data/classification  = 'cough_or_cold'"/>
+      <bind nodeset="/data/summary/outcome_not_in_pathway" readonly="true()" type="string" relevant=" /data/classification  = 'not_in_pathway'"/>
+      <bind nodeset="/data/summary/outcome_out_of_scope" readonly="true()" type="string" relevant=" /data/classification  = 'out_of_scope'"/>
+      <bind nodeset="/data/summary/outcome_age_unknown" readonly="true()" type="string" relevant=" /data/classification  = 'age_unknown'"/>
+      <bind nodeset="/data/summary/outcome_incomplete" readonly="true()" type="string" relevant=" /data/classification  = 'incomplete'"/>
+      <bind nodeset="/data/meta/instanceID" type="string" readonly="true()" jr:preload="uid"/>
+    </model>
+  </h:head>
+  <h:body class="pages">
+    <group appearance="field-list" ref="/data/inputs">
+      <group ref="/data/inputs/contact">
+        <input ref="/data/inputs/contact/_id" appearance="select-contact type-person">
+          <label ref="jr:itext('/data/inputs/contact/_id:label')"/>
+        </input>
+        <group ref="/data/inputs/contact/parent"/>
+      </group>
+    </group>
+    <group appearance="field-list" ref="/data/intro">
+      <label ref="jr:itext('/data/intro:label')"/>
+      <select1 ref="/data/intro/has_cough_or_difficult_breathing">
+        <label ref="jr:itext('/data/intro/has_cough_or_difficult_breathing:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+    </group>
+    <group appearance="field-list" ref="/data/danger_signs">
+      <label ref="jr:itext('/data/danger_signs:label')"/>
+      <select1 ref="/data/danger_signs/not_able_to_drink_or_breastfeed">
+        <label ref="jr:itext('/data/danger_signs/not_able_to_drink_or_breastfeed:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+      <select1 ref="/data/danger_signs/vomits_everything">
+        <label ref="jr:itext('/data/danger_signs/vomits_everything:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+      <select1 ref="/data/danger_signs/had_convulsions">
+        <label ref="jr:itext('/data/danger_signs/had_convulsions:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+      <select1 ref="/data/danger_signs/lethargic_or_unconscious">
+        <label ref="jr:itext('/data/danger_signs/lethargic_or_unconscious:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+      <select1 ref="/data/danger_signs/convulsing_now">
+        <label ref="jr:itext('/data/danger_signs/convulsing_now:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+    </group>
+    <group appearance="field-list" ref="/data/breathing">
+      <label ref="jr:itext('/data/breathing:label')"/>
+      <input ref="/data/breathing/breaths_per_minute">
+        <label ref="jr:itext('/data/breathing/breaths_per_minute:label')"/>
+        <hint ref="jr:itext('/data/breathing/breaths_per_minute:hint')"/>
+      </input>
+      <select1 ref="/data/breathing/chest_indrawing">
+        <label ref="jr:itext('/data/breathing/chest_indrawing:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+      <select1 ref="/data/breathing/stridor_in_calm_child">
+        <label ref="jr:itext('/data/breathing/stridor_in_calm_child:label')"/>
+        <itemset nodeset="instance('yes_no')/root/item">
+          <value ref="name"/>
+          <label ref="jr:itext(itextId)"/>
+        </itemset>
+      </select1>
+    </group>
+    <group appearance="field-list summary" ref="/data/summary">
+      <label ref="jr:itext('/data/summary:label')"/>
+      <input ref="/data/summary/outcome_severe_pneumonia_or_very_severe_disease">
+        <label ref="jr:itext('/data/summary/outcome_severe_pneumonia_or_very_severe_disease:label')"/>
+      </input>
+      <input ref="/data/summary/outcome_pneumonia">
+        <label ref="jr:itext('/data/summary/outcome_pneumonia:label')"/>
+      </input>
+      <input ref="/data/summary/outcome_cough_or_cold">
+        <label ref="jr:itext('/data/summary/outcome_cough_or_cold:label')"/>
+      </input>
+      <input ref="/data/summary/outcome_not_in_pathway">
+        <label ref="jr:itext('/data/summary/outcome_not_in_pathway:label')"/>
+      </input>
+      <input ref="/data/summary/outcome_out_of_scope">
+        <label ref="jr:itext('/data/summary/outcome_out_of_scope:label')"/>
+      </input>
+      <input ref="/data/summary/outcome_age_unknown">
+        <label ref="jr:itext('/data/summary/outcome_age_unknown:label')"/>
+      </input>
+      <input ref="/data/summary/outcome_incomplete">
+        <label ref="jr:itext('/data/summary/outcome_incomplete:label')"/>
+      </input>
+    </group>
+  </h:body>
+</h:html>

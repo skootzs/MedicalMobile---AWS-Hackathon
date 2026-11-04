@@ -1,0 +1,145 @@
+{
+  "manifestVersion": 1,
+  "compiler": {
+    "name": "@cht-nocode/compiler",
+    "version": "0.1.0"
+  },
+  "logicModelSchemaVersion": "1.0",
+  "pathwayId": "child_cough",
+  "formId": "child_cough",
+  "title": "Child Cough and Fast Breathing (Demo)",
+  "snapshotHash": null,
+  "inputHash": "186214726c73a4b8db5e641a5b28a7fc6c42689078d7fcacdf3839a8f1ee1a67",
+  "artifactHash": "d5f520ce1f0c63f7cded5f5fc9ec5eef9899a9843be6e0ad1fb0c3f57156878c",
+  "options": {
+    "watermark": null,
+    "icon": "icon-healthcare"
+  },
+  "files": [
+    {
+      "path": "forms/app/child_cough.xlsx",
+      "sha256": "edbeccd5489178a3a0e2c63cff9e1785efb0d6488ec6aa06f40b24b037aa7cc7",
+      "bytes": 23483
+    },
+    {
+      "path": "forms/app/child_cough.properties.json",
+      "sha256": "eb41a38d6a48b79b6915e4c641c340225bf6ae3cc3a4f4567731b52019e18831",
+      "bytes": 247
+    },
+    {
+      "path": "tasks.js",
+      "sha256": "492d9f0f3bbea971f5995b0c0b2d7c11893f740e7756049e0340c59a5ea35095",
+      "bytes": 1436
+    },
+    {
+      "path": "translations/messages-en.properties",
+      "sha256": "9c4c5a4c9bdc94e82f4a3504c75e58fc0859335aa730eb58d27f53b0a51fb059",
+      "bytes": 84
+    }
+  ],
+  "outputFields": {
+    "classification": "classification",
+    "referralUrgent": "referral_urgent",
+    "followUpDays": "follow_up_days",
+    "followUpDate": "t_follow_up_date",
+    "inScope": "in_scope"
+  },
+  "decisionTable": {
+    "id": "classification",
+    "hitPolicy": "unique",
+    "rows": 4,
+    "otherwise": "incomplete"
+  },
+  "outcomes": [
+    {
+      "id": "severe_pneumonia_or_very_severe_disease",
+      "referral": "urgent",
+      "followUpDays": null
+    },
+    {
+      "id": "pneumonia",
+      "referral": "none",
+      "followUpDays": 3
+    },
+    {
+      "id": "cough_or_cold",
+      "referral": "none",
+      "followUpDays": 5
+    },
+    {
+      "id": "not_in_pathway",
+      "referral": "none",
+      "followUpDays": null
+    },
+    {
+      "id": "out_of_scope",
+      "referral": "none",
+      "followUpDays": null
+    },
+    {
+      "id": "age_unknown",
+      "referral": "none",
+      "followUpDays": null
+    },
+    {
+      "id": "incomplete",
+      "referral": "none",
+      "followUpDays": null
+    }
+  ],
+  "tasks": {
+    "name": "child_cough_follow_up",
+    "title": "Follow up: Child Cough and Fast Breathing (Demo)",
+    "window": {
+      "start": 0,
+      "end": 2
+    },
+    "windowSource": "default",
+    "outcomes": [
+      "pneumonia",
+      "cough_or_cold"
+    ]
+  },
+  "translations": {
+    "task.child_cough.follow_up.title": "Follow up: Child Cough and Fast Breathing (Demo)"
+  },
+  "openAmbiguities": [
+    {
+      "id": "A1",
+      "text": "Is 12 months in the first or second breathing-rate band, and is age measured in completed months?"
+    },
+    {
+      "id": "A2",
+      "text": "What should a CHW do for a child outside the 2 months to 5 years range?"
+    },
+    {
+      "id": "A3",
+      "text": "General danger signs are only asked when cough is present; WHO checks them for every sick child."
+    },
+    {
+      "id": "A4",
+      "text": "The wheeze bronchodilator trial before classification is not modelled."
+    },
+    {
+      "id": "A5",
+      "text": "COUGH OR COLD follow-up applies only if not improving; the model schedules it unconditionally."
+    },
+    {
+      "id": "A6",
+      "text": "No plausible upper bound for breaths per minute is given."
+    },
+    {
+      "id": "A7",
+      "text": "The chart booklet targets facility health workers; CHW suitability of chest indrawing and stridor assessment is undecided."
+    },
+    {
+      "id": "A8",
+      "text": "Age comes from the contact's date of birth; the form stops if it is missing."
+    }
+  ],
+  "template": {
+    "hash": "534501c7471d69daa076eeb3011e0c147a2ebbd074c9cc96f4561ebb6e480931",
+    "files": 9
+  },
+  "baseline": null
+}

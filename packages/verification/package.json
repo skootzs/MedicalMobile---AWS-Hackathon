@@ -1,0 +1,26 @@
+{
+  "name": "@cht-nocode/verification",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Synthetic-patient verification: runs built CHT forms and tasks through cht-conf-test-harness and reports branch coverage against approved logic.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run bundle:data",
+    "bundle:data": "mkdir -p dist/data && cp test/fixtures/patients.json dist/data/patients.json",
+    "build:test": "tsc -p tsconfig.test.json",
+    "pretest": "npm run build && npm run build:test",
+    "test": "node scripts/run-tests.mjs",
+    "pretest:slow": "npm run build && npm run build:test",
+    "test:slow": "node scripts/run-tests.mjs --slow",
+    "start": "node dist/run.js"
+  },
+  "dependencies": {
+    "cht-conf-test-harness": "^5.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.6.0"
+  }
+}

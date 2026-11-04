@@ -1,0 +1,318 @@
+{
+  "survey": {
+    "columns": [
+      "type",
+      "name",
+      "label::en",
+      "hint::en",
+      "required",
+      "relevant",
+      "appearance",
+      "constraint",
+      "constraint_message::en",
+      "calculation",
+      "default"
+    ],
+    "rows": [
+      {
+        "type": "begin group",
+        "name": "inputs",
+        "relevant": "./source = 'user'",
+        "appearance": "field-list"
+      },
+      {
+        "type": "hidden",
+        "name": "source",
+        "default": "user"
+      },
+      {
+        "type": "hidden",
+        "name": "source_id"
+      },
+      {
+        "type": "begin group",
+        "name": "contact"
+      },
+      {
+        "type": "string",
+        "name": "_id",
+        "label::en": "Who are you assessing?",
+        "appearance": "select-contact type-person"
+      },
+      {
+        "type": "hidden",
+        "name": "name"
+      },
+      {
+        "type": "hidden",
+        "name": "patient_id"
+      },
+      {
+        "type": "hidden",
+        "name": "date_of_birth"
+      },
+      {
+        "type": "begin group",
+        "name": "parent"
+      },
+      {
+        "type": "hidden",
+        "name": "_id"
+      },
+      {
+        "type": "end group",
+        "name": "parent"
+      },
+      {
+        "type": "end group",
+        "name": "contact"
+      },
+      {
+        "type": "end group",
+        "name": "inputs"
+      },
+      {
+        "type": "calculate",
+        "name": "patient_uuid",
+        "calculation": "../inputs/contact/_id"
+      },
+      {
+        "type": "calculate",
+        "name": "patient_id",
+        "calculation": "../inputs/contact/patient_id"
+      },
+      {
+        "type": "calculate",
+        "name": "patient_name",
+        "calculation": "../inputs/contact/name"
+      },
+      {
+        "type": "calculate",
+        "name": "patient_age_in_months",
+        "calculation": "if(../inputs/contact/date_of_birth = '', '', difference-in-months(../inputs/contact/date_of_birth, today()))"
+      },
+      {
+        "type": "calculate",
+        "name": "in_scope",
+        "calculation": "if(((${patient_age_in_months} != '' and ${patient_age_in_months} >= 2) and (${patient_age_in_months} != '' and ${patient_age_in_months} < 60)), 'yes', if(((${patient_age_in_months} != '' and ${patient_age_in_months} < 2) or (${patient_age_in_months} != '' and ${patient_age_in_months} >= 60)), 'no', 'unknown'))"
+      },
+      {
+        "type": "begin group",
+        "name": "intro",
+        "label::en": "Cough or difficult breathing",
+        "appearance": "field-list"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "has_cough_or_difficult_breathing",
+        "label::en": "Does the child have cough or difficult breathing?",
+        "required": "yes",
+        "relevant": "${in_scope} = 'yes'"
+      },
+      {
+        "type": "end group",
+        "name": "intro"
+      },
+      {
+        "type": "begin group",
+        "name": "danger_signs",
+        "label::en": "General danger signs",
+        "appearance": "field-list",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "not_able_to_drink_or_breastfeed",
+        "label::en": "Is the child NOT able to drink or breastfeed?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "vomits_everything",
+        "label::en": "Does the child vomit everything?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "had_convulsions",
+        "label::en": "Has the child had convulsions?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "lethargic_or_unconscious",
+        "label::en": "Is the child lethargic or unconscious?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "convulsing_now",
+        "label::en": "Is the child convulsing now?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "end group",
+        "name": "danger_signs"
+      },
+      {
+        "type": "begin group",
+        "name": "breathing",
+        "label::en": "Breathing",
+        "appearance": "field-list",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "integer",
+        "name": "breaths_per_minute",
+        "label::en": "Count the breaths in one minute. How many breaths per minute?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))",
+        "hint::en": "The child must be calm while you count.",
+        "constraint": ". >= 0",
+        "constraint_message::en": "Enter a value of at least 0."
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "chest_indrawing",
+        "label::en": "Do you see chest indrawing?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "select_one yes_no",
+        "name": "stridor_in_calm_child",
+        "label::en": "Do you hear stridor while the child is calm?",
+        "required": "yes",
+        "relevant": "(${in_scope} = 'yes' and selected(${has_cough_or_difficult_breathing}, 'yes'))"
+      },
+      {
+        "type": "end group",
+        "name": "breathing"
+      },
+      {
+        "type": "calculate",
+        "name": "fast_breathing",
+        "calculation": "if((((${patient_age_in_months} != '' and ${patient_age_in_months} < 12) and (${breaths_per_minute} != '' and ${breaths_per_minute} >= 50)) or ((${patient_age_in_months} != '' and ${patient_age_in_months} >= 12) and (${breaths_per_minute} != '' and ${breaths_per_minute} >= 40))), 'yes', if((((${patient_age_in_months} != '' and ${patient_age_in_months} >= 12) or (${breaths_per_minute} != '' and ${breaths_per_minute} < 50)) and ((${patient_age_in_months} != '' and ${patient_age_in_months} < 12) or (${breaths_per_minute} != '' and ${breaths_per_minute} < 40))), 'no', ''))"
+      },
+      {
+        "type": "calculate",
+        "name": "any_general_danger_sign",
+        "calculation": "if((selected(${not_able_to_drink_or_breastfeed}, 'yes') or selected(${vomits_everything}, 'yes') or selected(${had_convulsions}, 'yes') or selected(${lethargic_or_unconscious}, 'yes') or selected(${convulsing_now}, 'yes')), 'yes', if((selected(${not_able_to_drink_or_breastfeed}, 'no') and selected(${vomits_everything}, 'no') and selected(${had_convulsions}, 'no') and selected(${lethargic_or_unconscious}, 'no') and selected(${convulsing_now}, 'no')), 'no', ''))"
+      },
+      {
+        "type": "calculate",
+        "name": "classification",
+        "calculation": "if(${in_scope} = 'unknown', 'age_unknown', if(${in_scope} = 'no', 'out_of_scope', if(selected(${has_cough_or_difficult_breathing}, 'no'), 'not_in_pathway', if((selected(${has_cough_or_difficult_breathing}, 'yes') and (${any_general_danger_sign} = 'yes' or selected(${stridor_in_calm_child}, 'yes'))), 'severe_pneumonia_or_very_severe_disease', if((selected(${has_cough_or_difficult_breathing}, 'yes') and ${any_general_danger_sign} = 'no' and selected(${stridor_in_calm_child}, 'no') and (selected(${chest_indrawing}, 'yes') or ${fast_breathing} = 'yes')), 'pneumonia', if((selected(${has_cough_or_difficult_breathing}, 'yes') and ${any_general_danger_sign} = 'no' and selected(${stridor_in_calm_child}, 'no') and selected(${chest_indrawing}, 'no') and ${fast_breathing} = 'no'), 'cough_or_cold', 'incomplete'))))))"
+      },
+      {
+        "type": "calculate",
+        "name": "referral_urgent",
+        "calculation": "if(${classification} = 'severe_pneumonia_or_very_severe_disease', 'yes', 'no')"
+      },
+      {
+        "type": "calculate",
+        "name": "follow_up_days",
+        "calculation": "if(${classification} = 'pneumonia', 3, if(${classification} = 'cough_or_cold', 5, ''))"
+      },
+      {
+        "type": "calculate",
+        "name": "t_follow_up_date",
+        "calculation": "if(${follow_up_days} = '', '', date-time(decimal-date-time(today()) + ${follow_up_days}))"
+      },
+      {
+        "type": "begin group",
+        "name": "summary",
+        "label::en": "Summary",
+        "appearance": "field-list summary"
+      },
+      {
+        "type": "note",
+        "name": "outcome_severe_pneumonia_or_very_severe_disease",
+        "label::en": "<span style=\"color:red\">SEVERE PNEUMONIA OR VERY SEVERE DISEASE</span>\nRefer URGENTLY to hospital.",
+        "relevant": "${classification} = 'severe_pneumonia_or_very_severe_disease'"
+      },
+      {
+        "type": "note",
+        "name": "outcome_pneumonia",
+        "label::en": "**PNEUMONIA**\nFollow up in 3 days.",
+        "relevant": "${classification} = 'pneumonia'"
+      },
+      {
+        "type": "note",
+        "name": "outcome_cough_or_cold",
+        "label::en": "**COUGH OR COLD**\nFollow up in 5 days if not improving.",
+        "relevant": "${classification} = 'cough_or_cold'"
+      },
+      {
+        "type": "note",
+        "name": "outcome_not_in_pathway",
+        "label::en": "**No cough or difficult breathing**\nThis form does not assess other problems.",
+        "relevant": "${classification} = 'not_in_pathway'"
+      },
+      {
+        "type": "note",
+        "name": "outcome_out_of_scope",
+        "label::en": "**Outside the 2 months to 5 years age range**\nNo classification was made.",
+        "relevant": "${classification} = 'out_of_scope'"
+      },
+      {
+        "type": "note",
+        "name": "outcome_age_unknown",
+        "label::en": "**No date of birth recorded**\nNo classification was made.",
+        "relevant": "${classification} = 'age_unknown'"
+      },
+      {
+        "type": "note",
+        "name": "outcome_incomplete",
+        "label::en": "**Assessment incomplete**\nNot all answers needed for a classification were given.",
+        "relevant": "${classification} = 'incomplete'"
+      },
+      {
+        "type": "end group",
+        "name": "summary"
+      }
+    ]
+  },
+  "choices": {
+    "columns": [
+      "list_name",
+      "name",
+      "label::en"
+    ],
+    "rows": [
+      {
+        "list_name": "yes_no",
+        "name": "yes",
+        "label::en": "Yes"
+      },
+      {
+        "list_name": "yes_no",
+        "name": "no",
+        "label::en": "No"
+      }
+    ]
+  },
+  "settings": {
+    "columns": [
+      "form_title",
+      "form_id",
+      "version",
+      "style",
+      "default_language"
+    ],
+    "rows": [
+      {
+        "form_title": "Child Cough and Fast Breathing (Demo)",
+        "form_id": "child_cough",
+        "version": "v1_186214726c73",
+        "style": "pages",
+        "default_language": "en"
+      }
+    ]
+  }
+}
