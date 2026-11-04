@@ -189,8 +189,15 @@ describe('fails closed', () => {
     const payload = h.payload();
     await h.seedJob(payload);
     await h.store().take({ jobId: payload.jobId, requestId: payload.requestId, messageId: 'x', receiveCount: 1, workerId: 'owner', leaseSeconds: 900 });
-    await h.run({ ...payload, surprise: true });
+    assert.equal(await h.run({ ...payload, surprise: true }), 'LEFT_ON_QUEUE');
     assert.equal((await h.job(payload.jobId)).status, 'RUNNING');
+    assert.deepEqual(h.queue.deleted, []);
+  });
+
+  it('an invalid payload whose failure cannot be recorded is not deleted', async () => {
+    const payload = h.payload();
+    assert.equal(await h.run({ ...payload, surprise: true }), 'LEFT_ON_QUEUE');
+    assert.deepEqual(h.queue.deleted, []);
   });
 
   it('a snapshot outside the artifact bucket is rejected', async () => {

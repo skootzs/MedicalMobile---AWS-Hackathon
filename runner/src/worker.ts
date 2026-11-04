@@ -170,7 +170,7 @@ export class Worker {
       }
       const requestId = (raw as { requestId?: unknown }).requestId;
       const at = new Date(this.#now()).toISOString();
-      await store.failUnleased(jobId, typeof requestId === 'string' ? requestId : undefined, {
+      const recorded = await store.failUnleased(jobId, typeof requestId === 'string' ? requestId : undefined, {
         contractVersion: CONTRACT_VERSION,
         jobId,
         jobType: 'COMPILE_LOGIC',
@@ -184,6 +184,12 @@ export class Worker {
         errorMessage: validated.error,
         retryable: false,
       });
+      // Deleting without a recorded failure would strand the job, so redelivery or the
+      // DLQ keeps it visible instead.
+      if (!recorded) {
+        this.#log('error', 'Invalid message not recorded on its job; leaving it on the queue', { jobId, messageId: message.messageId });
+        return 'LEFT_ON_QUEUE';
+      }
       await queue.delete(message);
       return 'FAILED';
     }
