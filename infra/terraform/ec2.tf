@@ -49,7 +49,20 @@ resource "aws_instance" "app_host" {
     jobs_dlq_url        = aws_sqs_queue.jobs_dlq.url
     user_pool_id        = aws_cognito_user_pool.main.id
     user_pool_client_id = aws_cognito_user_pool_client.main.id
+    job_events_queue    = aws_sqs_queue.job_events.url
+    job_events_dlq      = aws_sqs_queue.job_events_dlq.url
+    cht_secret_name     = aws_secretsmanager_secret.cht_login.name
+    guardrail_id        = aws_bedrock_guardrail.pii.guardrail_id
+    guardrail_version   = aws_bedrock_guardrail_version.pii.version
+    worker_repo_url     = aws_ecr_repository.repos["worker"].repository_url
+    build_repo_url      = aws_ecr_repository.repos["build-image"].repository_url
   }))
+
+  # User data only runs on first boot, and changing it would stop and start a live host.
+  # scripts/kiro/31-deploy-runner.sh updates running hosts instead.
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 
   tags = {
     Name = "cht-nocode-app-host"

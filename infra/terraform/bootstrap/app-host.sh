@@ -46,10 +46,28 @@ JOBS_QUEUE_URL=${jobs_queue_url}
 JOBS_DLQ_URL=${jobs_dlq_url}
 COGNITO_USER_POOL_ID=${user_pool_id}
 COGNITO_CLIENT_ID=${user_pool_client_id}
+JOB_EVENTS_QUEUE_URL=${job_events_queue}
+JOB_EVENTS_DLQ_URL=${job_events_dlq}
+CHT_SECRET_NAME=${cht_secret_name}
+BEDROCK_GUARDRAIL_ID=${guardrail_id}
+BEDROCK_GUARDRAIL_VERSION=${guardrail_version}
 MODE=aws
 EOF
 chmod 0640 /etc/cht-nocode/env
 
-# TODO(R7): install/enable the compile-worker systemd unit once runner/ ships a
-# packaged build (section 7). Placeholder directory so the unit file has a home.
-mkdir -p /opt/cht-nocode/runner
+# Install the build runner from the newest image in ECR. On a brand-new deploy nothing has
+# been pushed yet, so this boot skips it and scripts/kiro/31-deploy-runner.sh installs it.
+tag="$(aws ecr describe-images --region "${aws_region}" --repository-name cht-nocode/worker \
+  --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]' --output text 2>/dev/null || echo None)"
+if [ "$tag" != "None" ] && [ -n "$tag" ]; then
+  worker_image="${worker_repo_url}:$tag"
+  aws ecr get-login-password --region "${aws_region}" \
+    | docker login --username AWS --password-stdin "$(echo "${worker_repo_url}" | cut -d/ -f1)"
+  docker pull "$worker_image"
+  container="$(docker create "$worker_image")"
+  docker cp "$container:/opt/cht-nocode-bundle/install-runner.sh" /tmp/install-runner.sh
+  docker rm "$container"
+  sh /tmp/install-runner.sh "$worker_image" "${build_repo_url}:$tag"
+else
+  echo "No runner image in ECR yet; skipping runner install"
+fi
