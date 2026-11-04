@@ -61,6 +61,42 @@ function jsonEqual(a: JsonValue, b: JsonValue): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+const YMD = /^(\d{4}-\d{2}-\d{2})/;
+
+/** The leading YYYY-MM-DD of a string, or null. No Date parsing, no TZ shift. */
+function calendarDay(v: JsonValue): string | null {
+  if (typeof v !== 'string') return null;
+  const m = YMD.exec(v);
+  return m ? m[1]! : null;
+}
+
+/**
+ * Compare one field's values. For the follow-up date field (L1) compare by
+ * calendar day: the form emits local midnight with an offset
+ * ("2026-02-20T00:00:00.000+03:00") while sources give a calendar day
+ * ("2026-02-20"); we compare the leading YYYY-MM-DD only, WITHOUT Date parsing
+ * (which would shift +offset midnight into the previous UTC day). Empty==empty.
+ * A non-empty actual that lacks a YYYY-MM-DD prefix stays a mismatch. Every
+ * other field uses strict jsonEqual.
+ *
+ * Returns { equal, usedDayOnly } so the builder can note day-only matches.
+ */
+function fieldEqual(
+  field: string,
+  expected: JsonValue,
+  actual: JsonValue,
+  followUpDateField: string | null,
+): { equal: boolean; usedDayOnly: boolean } {
+  if (field !== followUpDateField) return { equal: jsonEqual(expected, actual), usedDayOnly: false };
+  if (jsonEqual(expected, actual)) return { equal: true, usedDayOnly: false };
+  // Empty == empty handled by the strict check above; here values differ
+  // strictly, so try calendar-day equality.
+  const eDay = calendarDay(expected);
+  const aDay = calendarDay(actual);
+  if (eDay !== null && aDay !== null && eDay === aDay) return { equal: true, usedDayOnly: true };
+  return { equal: false, usedDayOnly: false };
+}
+
 /**
  * The field names to compare for one source: manifest output fields unioned
  * with any fields the source names, in a stable (sorted) order.
@@ -86,7 +122,8 @@ export function declaredFields(source: SourceExpectation): string[] {
 export function evaluateSource(
   actual: Record<string, JsonValue> | null,
   source: SourceExpectation,
-): ExpectedResult {
+  followUpDateField: string | null = null,
+): ExpectedResult & { usedDayOnly?: boolean } {
   const fields = declaredFields(source);
   // Record what the source expected over its declared fields.
   const recordedExpected: Record<string, JsonValue> = {};
@@ -95,17 +132,20 @@ export function evaluateSource(
   if (actual === null) return { expected: recordedExpected, status: 'fail' };
 
   let status: ExpectedResult['status'] = 'pass';
+  let usedDayOnly = false;
   for (const f of fields) {
     if (!(f in actual)) {
       status = 'fail'; // declared but missing from actual
       break;
     }
-    if (!jsonEqual(source.expected[f]!, actual[f]!)) {
+    const r = fieldEqual(f, source.expected[f]!, actual[f]!, followUpDateField);
+    if (r.usedDayOnly) usedDayOnly = true;
+    if (!r.equal) {
       status = 'fail';
       break;
     }
   }
-  return { expected: recordedExpected, status };
+  return { expected: recordedExpected, status, usedDayOnly };
 }
 
 interface DerivedCase {
@@ -119,6 +159,8 @@ interface DerivedCase {
   expectedSource?: 'evaluator' | 'golden' | 'both';
   /** Intersection of golden/evaluator declared fields (K1); set when both exist. */
   comparedFields?: string[];
+  /** True when a match relied on calendar-day comparison of the follow-up date (L1). */
+  usedDayOnly?: boolean;
 }
 
 /** Which source(s) a case has expectations from. */
@@ -140,9 +182,13 @@ function sourceLabel(c: ExecutedCase): 'evaluator' | 'golden' | 'both' | undefin
  * present source that does NOT declare it cannot meaningfully verify the case,
  * so the case status is 'error' (Correction A).
  */
-export function deriveCase(c: ExecutedCase, classificationField: string): DerivedCase {
+export function deriveCase(
+  c: ExecutedCase,
+  classificationField: string,
+  followUpDateField: string | null = null,
+): DerivedCase {
   const expectedSource = sourceLabel(c);
-  const d = deriveCaseCore(c, classificationField);
+  const d = deriveCaseCore(c, classificationField, followUpDateField);
   let out = expectedSource ? { ...d, expectedSource } : d;
   // K1: record the compared intersection when both sources are present
   // (unless deriveCaseCore already set it on a disagree).
@@ -153,9 +199,17 @@ export function deriveCase(c: ExecutedCase, classificationField: string): Derive
   return out;
 }
 
-function deriveCaseCore(c: ExecutedCase, classificationField: string): DerivedCase {
-  const golden = c.golden ? evaluateSource(c.actual, c.golden) : null;
-  const evaluator = c.evaluator ? evaluateSource(c.actual, c.evaluator) : null;
+function deriveCaseCore(
+  c: ExecutedCase,
+  classificationField: string,
+  followUpDateField: string | null,
+): DerivedCase {
+  const golden = c.golden ? evaluateSource(c.actual, c.golden, followUpDateField) : null;
+  const evaluator = c.evaluator ? evaluateSource(c.actual, c.evaluator, followUpDateField) : null;
+  const dayOnly = Boolean(golden?.usedDayOnly || evaluator?.usedDayOnly);
+  const dayNote = dayOnly
+    ? ` (note: ${followUpDateField} matched by calendar day; the form emits local midnight with offset)`
+    : '';
 
   // E4: an evaluator error (ok:false from the bridge) makes the case 'error'
   // with the evaluator's message, regardless of anything else.
@@ -218,7 +272,9 @@ function deriveCaseCore(c: ExecutedCase, classificationField: string): DerivedCa
   // empty intersection never disagrees.
   if (c.golden && c.evaluator) {
     const shared = declaredFields(c.golden).filter((f) => declaredFields(c.evaluator!).includes(f));
-    const differing = shared.filter((f) => !jsonEqual(c.golden!.expected[f] ?? null, c.evaluator!.expected[f] ?? null));
+    const differing = shared.filter(
+      (f) => !fieldEqual(f, c.golden!.expected[f] ?? null, c.evaluator!.expected[f] ?? null, followUpDateField).equal,
+    );
     if (differing.length > 0) {
       const detail =
         'golden and evaluator disagree on ' +
@@ -232,20 +288,21 @@ function deriveCaseCore(c: ExecutedCase, classificationField: string): DerivedCa
   if (golden && golden.status === 'fail') failed.push('golden');
   if (evaluator && evaluator.status === 'fail') failed.push('evaluator');
   if (failed.length > 0) {
-    return { golden, evaluator, status: 'fail', detail: `actual differs from ${failed.join(' and ')}` };
+    return { golden, evaluator, status: 'fail', detail: `actual differs from ${failed.join(' and ')}`, usedDayOnly: dayOnly };
   }
-  return { golden, evaluator, status: 'pass', detail: null };
+  return { golden, evaluator, status: 'pass', detail: dayOnly ? dayNote.trimStart() : null, usedDayOnly: dayOnly };
 }
 
 /** Disagreements: one per failed source comparison, plus golden-vs-evaluator. */
 export function buildDisagreements(
   cases: ExecutedCase[],
   classificationField: string,
+  followUpDateField: string | null = null,
 ): Disagreement[] {
   const out: Disagreement[] = [];
   for (const c of cases) {
     const actual: JsonValue | null = c.actual as JsonValue | null;
-    const derived = deriveCase(c, classificationField);
+    const derived = deriveCase(c, classificationField, followUpDateField);
     if (derived.golden && derived.golden.status === 'fail') {
       out.push({
         caseId: c.id,
@@ -300,6 +357,11 @@ export interface BuildReportArgs {
    * the fields they declare; see evaluateSource.)
    */
   classificationField: string;
+  /**
+   * Name of the follow-up date output field (manifest.outputFields.followUpDate).
+   * That one field is compared by calendar day (L1); null disables day-only.
+   */
+  followUpDateField: string | null;
   /** Which case ids used the page-count fallback (option B). */
   pageFallbackCaseIds: string[];
   /** Integrity checks other than pageFallbacks (e.g. compileArtifactHash). */
@@ -314,7 +376,7 @@ export interface BuildReportArgs {
  */
 export function buildReport(args: BuildReportArgs): VerificationReport {
   const cases: VerificationCase[] = args.cases.map((c) => {
-    const derived = deriveCase(c, args.classificationField);
+    const derived = deriveCase(c, args.classificationField, args.followUpDateField);
     return {
       id: c.id,
       input: c.input,
@@ -377,6 +439,6 @@ export function buildReport(args: BuildReportArgs): VerificationReport {
     integrityChecks,
     coverage: args.coverage,
     cases,
-    disagreements: buildDisagreements(args.cases, args.classificationField),
+    disagreements: buildDisagreements(args.cases, args.classificationField, args.followUpDateField),
   };
 }

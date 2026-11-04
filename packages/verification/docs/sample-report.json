@@ -1,0 +1,4241 @@
+{
+  "schemaVersion": "2.3.0",
+  "version": "2.3.0",
+  "packageHash": null,
+  "generatedAt": "2026-11-04T23:28:28.114Z",
+  "asOf": "2026-02-15",
+  "evaluator": {
+    "used": true,
+    "reason": null,
+    "source": "vendored-zip-unpinned",
+    "root": "/workshop/MedicalMobile---AWS-Hackathon/packages/verification/vendor/r4",
+    "evaluatorHash": "a546a6954f1c6d52f6c217f7ef465ce03b2b68019e78fcbbef95938caf1ed79a",
+    "pythonVersion": "3.12.16",
+    "jsonschemaVersion": "4.26.0",
+    "logicModelSource": "LOGIC_MODEL_FILE",
+    "asOf": "2026-02-15"
+  },
+  "passed": true,
+  "coverageComplete": true,
+  "toolVersions": {
+    "node": "v20.20.2",
+    "python": "Python 3.12.16",
+    "chtConf": "6.6.1",
+    "chtConfTestHarness": "5.0.4",
+    "chromiumRevision": "901912"
+  },
+  "run": {
+    "command": [
+      "node",
+      "run.js"
+    ],
+    "tz": "Africa/Nairobi",
+    "seed": null,
+    "fixedClock": "2026-02-15"
+  },
+  "references": {
+    "snapshotId": null,
+    "logicModelHash": null,
+    "revision": null,
+    "clinicalApprovalId": null,
+    "compilationJobId": null,
+    "packageHash": null,
+    "expectedCompileArtifactHash": null
+  },
+  "compileArtifactHash": "d5f520ce1f0c63f7cded5f5fc9ec5eef9899a9843be6e0ad1fb0c3f57156878c",
+  "testedDirHash": "0999495d42a551f8d5092a8f24cc1a46077c4d998b06cda79aa009ddfabf4f90",
+  "patientSetHash": "68e648ca4d5ac4b26ba2e95798b76fbf56239f3f81b9ee7c5cc7ae75513a6f83",
+  "goldenCasesHash": "9325a5664355911a09902755b0e680c2e4a9ce44e54ef99d4fbb267235560a41",
+  "integrityChecks": [
+    {
+      "name": "toolVersionsKnown",
+      "ok": true,
+      "detail": "all tool versions resolved (cht-conf via CHT_CONF_VERSION)"
+    },
+    {
+      "name": "compileArtifactHash",
+      "ok": true,
+      "detail": "forms/app/child_cough.xlsx: ok (disk sha256 matches manifest); forms/app/child_cough.properties.json: ok (disk sha256 matches manifest); tasks.js: ok (disk sha256 matches manifest); translations/messages-en.properties: ok (generated lines match manifest sha256 and are present in the on-disk file); (artifactHash): ok (manifest.artifactHash matches the sha256 over manifest file entries (d5f520ce1f0c63f7cded5f5fc9ec5eef9899a9843be6e0ad1fb0c3f57156878c))"
+    },
+    {
+      "name": "compileArtifactHashExpected",
+      "ok": true,
+      "detail": "not provided"
+    },
+    {
+      "name": "logicModelHash",
+      "ok": true,
+      "detail": "not provided; R7 cross-checks snapshotHash"
+    },
+    {
+      "name": "goldenCasesInfo",
+      "ok": true,
+      "detail": "22 golden cases from /workshop/MedicalMobile---AWS-Hackathon/packages/verification/test/fixtures/golden-cases.json; approval values: [\"not-clinician-approved\"]. Technical expectations, not clinician-approved; never treated as approval (clinicalApprovalId is the only approval reference)."
+    },
+    {
+      "name": "pageFallbacks",
+      "ok": true,
+      "detail": "14 of 55 cases used the hidden-page fallback: age/1m, age/2m, age/3m, age/11m, age/12m, age/13m, age/59m, age/60m, age/61m, bool/has_cough_or_difficult_breathing/false, golden/age-1-month, golden/age-60-months, golden/age-unknown, golden/no-cough-at-24-months"
+    }
+  ],
+  "coverage": {
+    "method": "observed-outcome",
+    "branchSource": "manifest",
+    "sampleWarning": null,
+    "totalBranches": 7,
+    "coveredBranches": 7,
+    "coveredBranchIds": [
+      "severe_pneumonia_or_very_severe_disease",
+      "pneumonia",
+      "cough_or_cold",
+      "not_in_pathway",
+      "out_of_scope",
+      "age_unknown"
+    ],
+    "coveredViaBlockedSubmission": [
+      "incomplete"
+    ],
+    "uncoveredBranchIds": [],
+    "uncoveredBranches": []
+  },
+  "cases": [
+    {
+      "id": "age/1m",
+      "input": {
+        "ageMonths": 1,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "1",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "out_of_scope",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 0 page array(s) ([[]])"
+    },
+    {
+      "id": "age/2m",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "age/3m",
+      "input": {
+        "ageMonths": 3,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "3",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "age/11m",
+      "input": {
+        "ageMonths": 11,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "11",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "age/12m",
+      "input": {
+        "ageMonths": 12,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "12",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "age/13m",
+      "input": {
+        "ageMonths": 13,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "13",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "age/59m",
+      "input": {
+        "ageMonths": 59,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "59",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "age/60m",
+      "input": {
+        "ageMonths": 60,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "60",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "out_of_scope",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 0 page array(s) ([[]])"
+    },
+    {
+      "id": "age/61m",
+      "input": {
+        "ageMonths": 61,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "61",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "out_of_scope",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 0 page array(s) ([[]])"
+    },
+    {
+      "id": "breaths_per_minute/39/below",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "39",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "breaths_per_minute/40/at",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "40",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "breaths_per_minute/41/above",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "41",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "breaths_per_minute/49/below",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "49",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "breaths_per_minute/50/at",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "50",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        2
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "breaths_per_minute/51/above",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "51",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "boundary",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        2
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/has_cough_or_difficult_breathing/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/has_cough_or_difficult_breathing/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        0
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "bool/not_able_to_drink_or_breastfeed/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "yes",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        1
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/not_able_to_drink_or_breastfeed/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/vomits_everything/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "yes",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        1
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/vomits_everything/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/had_convulsions/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "yes",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        1
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/had_convulsions/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/lethargic_or_unconscious/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "yes",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        1
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/lethargic_or_unconscious/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/convulsing_now/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "yes"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        1
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/convulsing_now/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/chest_indrawing/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "yes",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        2
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/chest_indrawing/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/stridor_in_calm_child/true",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "yes"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        1
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "bool/stridor_in_calm_child/false",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "0",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "evaluator",
+      "matchedRows": [
+        3
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "unanswered/has_cough_or_difficult_breathing",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "exceptional",
+      "actual": null,
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "incomplete",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "fail"
+      },
+      "status": "pass",
+      "matchedBy": "form-blocked-submission",
+      "blockedSubmission": true,
+      "expectedSource": "evaluator",
+      "matchedRows": [],
+      "failureDetail": "form blocked submission (required question unanswered) and the source expected \"incomplete\"",
+      "harnessOutput": "form blocked submission (required question unanswered): [{\"type\":\"validation\",\"question\":\"Does the child have cough or difficult breathing?*\\nYes\\nNo\\nenketo.constraint.required\",\"msg\":\"enketo.constraint.required\"}]"
+    },
+    {
+      "id": "unanswered/breaths_per_minute",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "exceptional",
+      "actual": null,
+      "golden": null,
+      "evaluator": {
+        "expected": {
+          "classification": "incomplete",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "fail"
+      },
+      "status": "pass",
+      "matchedBy": "form-blocked-submission",
+      "blockedSubmission": true,
+      "expectedSource": "evaluator",
+      "matchedRows": [],
+      "failureDetail": "form blocked submission (required question unanswered) and the source expected \"incomplete\"",
+      "harnessOutput": "form blocked submission (required question unanswered): [{\"type\":\"validation\",\"question\":\"Count the breaths in one minute. How many breaths per minute?*\\nThe child must be calm while you count.\\nenketo.constraint.required\",\"msg\":\"The child must be calm while you count.\"},{\"type\":\"validation\",\"question\":\"Count the breaths in one minute. How many breaths per minute?*\\nThe child must be calm while you count.\\nenketo.constraint.required\",\"msg\":\"enketo.constraint.required\"}]"
+    },
+    {
+      "id": "golden/age-1-month",
+      "input": {
+        "ageMonths": 1,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "1",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "",
+          "classification": "out_of_scope",
+          "fast_breathing": "",
+          "follow_up_days": "",
+          "in_scope": "no",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "out_of_scope",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 0 page array(s) ([[]])"
+    },
+    {
+      "id": "golden/age-60-months",
+      "input": {
+        "ageMonths": 60,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "60",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "",
+          "classification": "out_of_scope",
+          "fast_breathing": "",
+          "follow_up_days": "",
+          "in_scope": "no",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "out_of_scope",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 0 page array(s) ([[]])"
+    },
+    {
+      "id": "golden/age-unknown",
+      "input": {
+        "ageMonths": null,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "age_unknown",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "unknown",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "",
+          "classification": "age_unknown",
+          "fast_breathing": "",
+          "follow_up_days": "",
+          "in_scope": "unknown",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "age_unknown",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 0 page array(s) ([[]])"
+    },
+    {
+      "id": "golden/no-cough-at-24-months",
+      "input": {
+        "ageMonths": 24,
+        "pageAnswers": [
+          [
+            "no"
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "24",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "",
+          "classification": "not_in_pathway",
+          "fast_breathing": "",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "not_in_pathway",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        0
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": "page-count fallback: full arrays had hidden pages; submitted after truncating to 1 page array(s)"
+    },
+    {
+      "id": "golden/breaths-49-at-2-months",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "49",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "cough_or_cold",
+          "fast_breathing": "no",
+          "follow_up_days": "5",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        3
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-50-at-2-months",
+      "input": {
+        "ageMonths": 2,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "50",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "pneumonia",
+          "fast_breathing": "yes",
+          "follow_up_days": "3",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        2
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-49-at-11-months",
+      "input": {
+        "ageMonths": 11,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "49",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "11",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "cough_or_cold",
+          "fast_breathing": "no",
+          "follow_up_days": "5",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        3
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-50-at-11-months",
+      "input": {
+        "ageMonths": 11,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "50",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "11",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "pneumonia",
+          "fast_breathing": "yes",
+          "follow_up_days": "3",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        2
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-39-at-12-months",
+      "input": {
+        "ageMonths": 12,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "39",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "12",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "cough_or_cold",
+          "fast_breathing": "no",
+          "follow_up_days": "5",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        3
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-40-at-12-months",
+      "input": {
+        "ageMonths": 12,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "40",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "12",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "pneumonia",
+          "fast_breathing": "yes",
+          "follow_up_days": "3",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        2
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-39-at-59-months",
+      "input": {
+        "ageMonths": 59,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "39",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "59",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "cough_or_cold",
+          "fast_breathing": "no",
+          "follow_up_days": "5",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "cough_or_cold",
+          "follow_up_days": "5",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-20"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        3
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/breaths-40-at-59-months",
+      "input": {
+        "ageMonths": 59,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "40",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "59",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "pneumonia",
+          "fast_breathing": "yes",
+          "follow_up_days": "3",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        2
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/danger-sign-not-able-to-drink",
+      "input": {
+        "ageMonths": 6,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "yes",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "30",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "yes",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "no",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/danger-sign-vomits-everything",
+      "input": {
+        "ageMonths": 6,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "yes",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "30",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "yes",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "no",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/danger-sign-had-convulsions",
+      "input": {
+        "ageMonths": 6,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "yes",
+            "no",
+            "no"
+          ],
+          [
+            "30",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "yes",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "no",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/danger-sign-lethargic-or-unconscious",
+      "input": {
+        "ageMonths": 6,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "yes",
+            "no"
+          ],
+          [
+            "30",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "yes",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "no",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/danger-sign-convulsing-now",
+      "input": {
+        "ageMonths": 6,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "yes"
+          ],
+          [
+            "30",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "yes",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "no",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/danger-sign-overrides-fast-breathing",
+      "input": {
+        "ageMonths": 8,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "yes",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "55",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "8",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "yes",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "yes",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/stridor-in-calm-child",
+      "input": {
+        "ageMonths": 18,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "36",
+            "no",
+            "yes"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "18",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "fast_breathing": "no",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "yes"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "severe_pneumonia_or_very_severe_disease",
+          "follow_up_days": "",
+          "referral_urgent": "yes",
+          "t_follow_up_date": ""
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        1
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": null,
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/chest-indrawing",
+      "input": {
+        "ageMonths": 36,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "36",
+            "yes",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "36",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "pneumonia",
+          "fast_breathing": "no",
+          "follow_up_days": "3",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "pass",
+        "usedDayOnly": false
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "pneumonia",
+          "follow_up_days": "3",
+          "referral_urgent": "no",
+          "t_follow_up_date": "2026-02-18"
+        },
+        "status": "pass",
+        "usedDayOnly": true
+      },
+      "status": "pass",
+      "expectedSource": "both",
+      "matchedRows": [
+        2
+      ],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "(note: t_follow_up_date matched by calendar day; the form emits local midnight with offset)",
+      "harnessOutput": null
+    },
+    {
+      "id": "golden/incomplete-breaths-missing",
+      "input": {
+        "ageMonths": 24,
+        "pageAnswers": [
+          [
+            "yes"
+          ],
+          [
+            "no",
+            "no",
+            "no",
+            "no",
+            "no"
+          ],
+          [
+            "",
+            "no",
+            "no"
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": null,
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "no",
+          "classification": "incomplete",
+          "fast_breathing": "",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "fail"
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "incomplete",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "fail"
+      },
+      "status": "pass",
+      "matchedBy": "form-blocked-submission",
+      "blockedSubmission": true,
+      "expectedSource": "both",
+      "matchedRows": [],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "form blocked submission (required question unanswered) and the source expected \"incomplete\"",
+      "harnessOutput": "form blocked submission (required question unanswered): [{\"type\":\"validation\",\"question\":\"Count the breaths in one minute. How many breaths per minute?*\\nThe child must be calm while you count.\\nenketo.constraint.required\",\"msg\":\"The child must be calm while you count.\"},{\"type\":\"validation\",\"question\":\"Count the breaths in one minute. How many breaths per minute?*\\nThe child must be calm while you count.\\nenketo.constraint.required\",\"msg\":\"enketo.constraint.required\"}]"
+    },
+    {
+      "id": "golden/incomplete-cough-unanswered",
+      "input": {
+        "ageMonths": 24,
+        "pageAnswers": [
+          [
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            ""
+          ],
+          []
+        ]
+      },
+      "branchId": null,
+      "kind": "branch",
+      "actual": null,
+      "golden": {
+        "expected": {
+          "any_general_danger_sign": "",
+          "classification": "incomplete",
+          "fast_breathing": "",
+          "follow_up_days": "",
+          "in_scope": "yes",
+          "referral_urgent": "no"
+        },
+        "status": "fail"
+      },
+      "evaluator": {
+        "expected": {
+          "classification": "incomplete",
+          "follow_up_days": "",
+          "referral_urgent": "no",
+          "t_follow_up_date": ""
+        },
+        "status": "fail"
+      },
+      "status": "pass",
+      "matchedBy": "form-blocked-submission",
+      "blockedSubmission": true,
+      "expectedSource": "both",
+      "matchedRows": [],
+      "comparedFields": [
+        "classification",
+        "follow_up_days",
+        "referral_urgent"
+      ],
+      "failureDetail": "form blocked submission (required question unanswered) and the source expected \"incomplete\"",
+      "harnessOutput": "form blocked submission (required question unanswered): [{\"type\":\"validation\",\"question\":\"Does the child have cough or difficult breathing?*\\nYes\\nNo\\nenketo.constraint.required\",\"msg\":\"enketo.constraint.required\"}]"
+    }
+  ],
+  "disagreements": [
+    {
+      "caseId": "unanswered/has_cough_or_difficult_breathing",
+      "kind": "actual-vs-evaluator",
+      "actual": null,
+      "golden": null,
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "actual differs from evaluator expected"
+    },
+    {
+      "caseId": "unanswered/breaths_per_minute",
+      "kind": "actual-vs-evaluator",
+      "actual": null,
+      "golden": null,
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "actual differs from evaluator expected"
+    },
+    {
+      "caseId": "golden/age-1-month",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "1",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "out_of_scope",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "no",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "out_of_scope",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/age-60-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "out_of_scope",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "no",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "60",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "out_of_scope",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "no",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "out_of_scope",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/age-unknown",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "age_unknown",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "unknown",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "age_unknown",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "unknown",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "age_unknown",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/no-cough-at-24-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "not_in_pathway",
+        "referral_urgent": "no",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "",
+        "any_general_danger_sign": "",
+        "patient_age_in_months": "24",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "not_in_pathway",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "not_in_pathway",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-49-at-2-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "cough_or_cold",
+        "fast_breathing": "no",
+        "follow_up_days": "5",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "cough_or_cold",
+        "follow_up_days": "5",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-20"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-50-at-2-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "2",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "pneumonia",
+        "fast_breathing": "yes",
+        "follow_up_days": "3",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "pneumonia",
+        "follow_up_days": "3",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-18"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-49-at-11-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "11",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "cough_or_cold",
+        "fast_breathing": "no",
+        "follow_up_days": "5",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "cough_or_cold",
+        "follow_up_days": "5",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-20"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-50-at-11-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "11",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "pneumonia",
+        "fast_breathing": "yes",
+        "follow_up_days": "3",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "pneumonia",
+        "follow_up_days": "3",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-18"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-39-at-12-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "12",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "cough_or_cold",
+        "fast_breathing": "no",
+        "follow_up_days": "5",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "cough_or_cold",
+        "follow_up_days": "5",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-20"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-40-at-12-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "12",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "pneumonia",
+        "fast_breathing": "yes",
+        "follow_up_days": "3",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "pneumonia",
+        "follow_up_days": "3",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-18"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-39-at-59-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "cough_or_cold",
+        "referral_urgent": "no",
+        "follow_up_days": "5",
+        "t_follow_up_date": "2026-02-20T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "59",
+        "task_present": true,
+        "task_due_in_days": 5
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "cough_or_cold",
+        "fast_breathing": "no",
+        "follow_up_days": "5",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "cough_or_cold",
+        "follow_up_days": "5",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-20"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/breaths-40-at-59-months",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "59",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "pneumonia",
+        "fast_breathing": "yes",
+        "follow_up_days": "3",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "pneumonia",
+        "follow_up_days": "3",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-18"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/danger-sign-not-able-to-drink",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "yes",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "no",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/danger-sign-vomits-everything",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "yes",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "no",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/danger-sign-had-convulsions",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "yes",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "no",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/danger-sign-lethargic-or-unconscious",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "yes",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "no",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/danger-sign-convulsing-now",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "6",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "yes",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "no",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/danger-sign-overrides-fast-breathing",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "yes",
+        "any_general_danger_sign": "yes",
+        "patient_age_in_months": "8",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "yes",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "yes",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/stridor-in-calm-child",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "referral_urgent": "yes",
+        "follow_up_days": "",
+        "t_follow_up_date": "",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "18",
+        "task_present": false,
+        "task_due_in_days": null
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "fast_breathing": "no",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "yes"
+      },
+      "evaluator": {
+        "classification": "severe_pneumonia_or_very_severe_disease",
+        "follow_up_days": "",
+        "referral_urgent": "yes",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/chest-indrawing",
+      "kind": "golden-vs-evaluator",
+      "actual": {
+        "classification": "pneumonia",
+        "referral_urgent": "no",
+        "follow_up_days": "3",
+        "t_follow_up_date": "2026-02-18T00:00:00.000+03:00",
+        "in_scope": "yes",
+        "fast_breathing": "no",
+        "any_general_danger_sign": "no",
+        "patient_age_in_months": "36",
+        "task_present": true,
+        "task_due_in_days": 3
+      },
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "pneumonia",
+        "fast_breathing": "no",
+        "follow_up_days": "3",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "pneumonia",
+        "follow_up_days": "3",
+        "referral_urgent": "no",
+        "t_follow_up_date": "2026-02-18"
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/incomplete-breaths-missing",
+      "kind": "actual-vs-golden",
+      "actual": null,
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "incomplete",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "actual differs from golden expected"
+    },
+    {
+      "caseId": "golden/incomplete-breaths-missing",
+      "kind": "actual-vs-evaluator",
+      "actual": null,
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "incomplete",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "actual differs from evaluator expected"
+    },
+    {
+      "caseId": "golden/incomplete-breaths-missing",
+      "kind": "golden-vs-evaluator",
+      "actual": null,
+      "golden": {
+        "any_general_danger_sign": "no",
+        "classification": "incomplete",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    },
+    {
+      "caseId": "golden/incomplete-cough-unanswered",
+      "kind": "actual-vs-golden",
+      "actual": null,
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "incomplete",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "actual differs from golden expected"
+    },
+    {
+      "caseId": "golden/incomplete-cough-unanswered",
+      "kind": "actual-vs-evaluator",
+      "actual": null,
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "incomplete",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "actual differs from evaluator expected"
+    },
+    {
+      "caseId": "golden/incomplete-cough-unanswered",
+      "kind": "golden-vs-evaluator",
+      "actual": null,
+      "golden": {
+        "any_general_danger_sign": "",
+        "classification": "incomplete",
+        "fast_breathing": "",
+        "follow_up_days": "",
+        "in_scope": "yes",
+        "referral_urgent": "no"
+      },
+      "evaluator": {
+        "classification": "incomplete",
+        "follow_up_days": "",
+        "referral_urgent": "no",
+        "t_follow_up_date": ""
+      },
+      "detail": "golden and evaluator expected values differ"
+    }
+  ]
+}

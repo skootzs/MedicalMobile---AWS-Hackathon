@@ -31,8 +31,10 @@ Configured entirely through environment variables:
 | `EVALUATOR_ROOT` | no | repo `packages/`, else `vendor/r4` | Root added to the Python `sys.path` for R4's evaluator |
 | `PYTHON_BIN` | no | `python3` | Python interpreter used for the evaluator bridge |
 | `HARNESS_MODULE_PATH` | no | — | First place to look for `cht-conf-test-harness` |
-| `LOGIC_MODEL_HASH` | no | — | Compared to manifest `snapshotHash` (`sha256:` stripped); echoed into `references` |
+| `LOGIC_MODEL_HASH` | no | — | R2's **envelope** hash. Checked against manifest `snapshotHash` (`sha256:` stripped) and echoed into `references.logicModelHash` (check name `logicModelHash`) |
 | `EXPECTED_SNAPSHOT_HASH` | no | — | Alias of `LOGIC_MODEL_HASH` for the same `snapshotHash` check |
+| `INPUT_HASH` | no | — | The **bare model** hash. Checked against manifest `inputHash` (`sha256:` stripped); mismatch -> exit 1 (check `inputHash`). When set it replaces the informational `logicModelInputHash` check |
+| `GOLDEN_CASES_HASH` | no | — | Expected hash of the golden file actually loaded (`sha256:` stripped); mismatch -> exit 1 (check `goldenCasesHashExpected`). Provided with no golden file loaded -> fail |
 | `COMPILE_ARTIFACT_HASH` | no | — | Compared to the compiled artifact hash (`sha256:` stripped); mismatch -> exit 1. Echoed as `references.expectedCompileArtifactHash` |
 | `CHT_CONF_VERSION` | no | — | cht-conf version fallback when `cht --version` is unavailable |
 | `SNAPSHOT_ID` | no | — | Echoed into `references`, never verified |
@@ -169,6 +171,15 @@ export path `@cht-nocode/verification/schema`.
 | `goldenCasesHash` | COMPUTED | sha256 of the golden file bytes, or null |
 | `evaluator` block | COMPUTED | evaluator provenance (source, root, `evaluatorHash`, python/jsonschema versions, `logicModelSource`, `asOf`) |
 | `asOf` | COMPUTED | the fixed clock used for age/follow-up |
+
+Follow-up date comparison: the follow-up date field
+(`manifest.outputFields.followUpDate`) is compared by **calendar day** — the
+form emits local midnight with an offset (e.g. `2026-02-20T00:00:00.000+03:00`)
+while sources give a calendar day (`2026-02-20`). Only the leading
+`YYYY-MM-DD` is compared, with no `Date` parsing or timezone conversion (which
+would shift `+offset` midnight into the previous UTC day). Every other field is
+compared strictly. When a case matched only via this day-only rule, its
+`failureDetail` carries a note.
 | `packageHash` | ECHOED (env `PACKAGE_HASH`) | cross-check against the job's package hash |
 | `references.expectedCompileArtifactHash` | ECHOED (env `COMPILE_ARTIFACT_HASH`) | the expected value; the `compileArtifactHashExpected` check does the compare |
 | `references.logicModelHash` | ECHOED (env) | cross-check vs snapshotHash (done by the `logicModelHash` check) |

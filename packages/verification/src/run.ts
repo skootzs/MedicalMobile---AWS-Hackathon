@@ -93,6 +93,10 @@ interface Env {
   logicModelSource: 'LOGIC_MODEL_FILE' | '/in/logic.json' | 'CHT_CONFIG_DIR' | null;
   references: References;
   expectedSnapshotHash: string | null;
+  /** INPUT_HASH (M1): expected bare model hash vs manifest.inputHash. */
+  inputHash: string | null;
+  /** GOLDEN_CASES_HASH (M2): expected hash of the loaded golden file. */
+  goldenCasesHashExpected: string | null;
 }
 
 class RunnerError extends Error {} // maps to exit 2 (no valid report)
@@ -132,6 +136,8 @@ function readEnv(): Env {
       expectedCompileArtifactHash: orNull(process.env.COMPILE_ARTIFACT_HASH),
     },
     expectedSnapshotHash: orNull(process.env.EXPECTED_SNAPSHOT_HASH),
+    inputHash: orNull(process.env.INPUT_HASH),
+    goldenCasesHashExpected: orNull(process.env.GOLDEN_CASES_HASH),
   };
 }
 
@@ -296,11 +302,24 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     }
   }
 
-  // E9: when the logic model came from CHT_CONFIG_DIR, its canonical-JSON
-  // sha256 should equal manifest.inputHash. R5's canonicalization (packages/
-  // compiler/src/hash.ts canonicalJson) is not vendored here, so we cannot
-  // reproduce the exact bytes; record this as informational.
-  if (env.logicModelSource === 'CHT_CONFIG_DIR') {
+  // M1: INPUT_HASH (bare model hash) vs manifest.inputHash, "sha256:" stripped
+  // both sides. Mismatch fails (exit 1); absent is informational. When
+  // provided it REPLACES the informational logicModelInputHash check; when
+  // absent, keep that check (E9) as-is.
+  if (env.inputHash !== null) {
+    const got = env.inputHash.replace(/^sha256:/, '');
+    const want = manifest.inputHash === undefined ? undefined : manifest.inputHash.replace(/^sha256:/, '');
+    const ok = want !== undefined && got === want;
+    integrityChecks.push({
+      name: 'inputHash',
+      ok,
+      detail: ok
+        ? 'INPUT_HASH matches manifest.inputHash'
+        : `INPUT_HASH ${got} != manifest.inputHash ${String(want)}`,
+    });
+  } else if (env.logicModelSource === 'CHT_CONFIG_DIR') {
+    // E9: logic model from CHT_CONFIG_DIR; R5's canonicalJson is not vendored
+    // here, so we cannot reproduce the exact bytes. Informational.
     integrityChecks.push({
       name: 'logicModelInputHash',
       ok: true,
@@ -308,6 +327,34 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
         "informational: logic model from CHT_CONFIG_DIR; cannot confirm sha256(canonical JSON) == manifest.inputHash " +
         "(R5's canonicalJson is not vendored here)",
     });
+  } else {
+    integrityChecks.push({ name: 'inputHash', ok: true, detail: 'not provided' });
+  }
+
+  // M2: GOLDEN_CASES_HASH vs the goldenCasesHash computed for the golden file
+  // actually loaded, "sha256:" stripped. Mismatch fails (exit 1); absent is
+  // informational. If a hash is provided but no golden file was loaded, fail.
+  if (env.goldenCasesHashExpected !== null) {
+    const got = env.goldenCasesHashExpected.replace(/^sha256:/, '');
+    const loaded = deps.goldenCasesHash ?? null;
+    if (loaded === null) {
+      integrityChecks.push({
+        name: 'goldenCasesHashExpected',
+        ok: false,
+        detail: 'GOLDEN_CASES_HASH provided but no golden file was loaded',
+      });
+    } else {
+      const ok = got === loaded;
+      integrityChecks.push({
+        name: 'goldenCasesHashExpected',
+        ok,
+        detail: ok
+          ? 'GOLDEN_CASES_HASH matches the loaded golden file'
+          : `GOLDEN_CASES_HASH ${got} != goldenCasesHash ${loaded}`,
+      });
+    }
+  } else {
+    integrityChecks.push({ name: 'goldenCasesHashExpected', ok: true, detail: 'not provided' });
   }
 
   // snapshotHash check (name: logicModelHash). LOGIC_MODEL_HASH is compared to
@@ -409,6 +456,9 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   // and there is no "known unreachable" allowlist.
   const resolved = resolveBranchIds(manifest, deps.sampleBranchIds ?? null);
   const classificationField = manifest.outputFields?.classification ?? 'classification';
+  // L1: the follow-up date field is compared by calendar day. Read its name
+  // from the manifest; never hard-coded.
+  const followUpDateField = manifest.outputFields?.followUpDate ?? null;
   const { coveredBranchIds, uncoveredBranches } = computeObservedCoverage(
     resolved.branchIds,
     executed,
@@ -422,7 +472,7 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   const viaBlocked = new Set<string>();
   for (const c of executed) {
     if (!c.blockedSubmission) continue;
-    const d = deriveCase(c, classificationField);
+    const d = deriveCase(c, classificationField, followUpDateField);
     if (d.matchedBy !== 'form-blocked-submission') continue;
     const expected = (c.golden ?? c.evaluator)?.expected[classificationField];
     if (typeof expected === 'string' && resolved.branchIds.includes(expected) && !observed.has(expected)) {
@@ -457,6 +507,7 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     goldenCasesHash: deps.goldenCasesHash ?? null, // never hash empty input
     coverage,
     classificationField,
+    followUpDateField,
     pageFallbackCaseIds: fallbackIds,
     integrityChecks,
     cases: executed,

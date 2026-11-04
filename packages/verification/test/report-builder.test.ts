@@ -149,6 +149,7 @@ function baseArgs() {
       uncoveredBranches: [] as { id: string; reason: string }[],
     },
     classificationField: 'classification',
+    followUpDateField: 't_follow_up_date',
     pageFallbackCaseIds: [] as string[],
     integrityChecks: [],
   };
