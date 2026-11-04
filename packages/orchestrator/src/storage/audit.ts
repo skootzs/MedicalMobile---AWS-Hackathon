@@ -1,3 +1,4 @@
+import type { DraftingResultRecord, LogicValidationReference } from '../callback-contracts.ts';
 import type { DraftingJobIntent, WorkerOutcome } from '../job-intents.ts';
 import type { ProposedAuditEvent } from '../workflow.ts';
 import type { RevisionIdentity, RoutingResult } from '../routing.ts';
@@ -8,6 +9,8 @@ export interface AuditRecord extends ProposedAuditEvent {
   sequence: number;
   recordedAt: string;
   jobIntent?: DraftingJobIntent;
+  callbackValidation?: LogicValidationReference;
+  draftingResult?: DraftingResultRecord;
   jobDelivery?: { jobId: string; outcome: WorkerOutcome | 'NOT_ATTEMPTED' };
   /** Accepted APPLY_ROUTING only: exact decision and evidence references. */
   routing?: RoutingResult;
@@ -23,6 +26,8 @@ export interface EventReceipt {
   commandFingerprint?: string;
   /** START_LOGIC_PROPOSAL intent committed with this receipt. */
   jobId?: string;
+  /** Original accepted callback outcome, independent of later workflow revisions. */
+  draftingResult?: DraftingResultRecord;
   /** Immutable accepted routing decision; absent on older/non-routing receipts. */
   routing?: RoutingResult;
 }

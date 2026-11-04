@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test test/routing.test.ts test/workflow.test.ts test/snapshots.test.ts test/storage.test.ts test/approvals.test.ts test/api.test.ts test/requests.test.ts test/request-api.test.ts test/reviews.test.ts test/review-api.test.ts test/routing-service.test.ts test/routing-api.test.ts test/jobs.test.ts",
+    "test": "node --experimental-strip-types --test test/routing.test.ts test/workflow.test.ts test/snapshots.test.ts test/storage.test.ts test/approvals.test.ts test/api.test.ts test/requests.test.ts test/request-api.test.ts test/reviews.test.ts test/review-api.test.ts test/routing-service.test.ts test/routing-api.test.ts test/jobs.test.ts test/callbacks.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

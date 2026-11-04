@@ -1,3 +1,6 @@
+import { validationMatches, validationReference } from '../callback-contracts.ts';
+import type { DraftingResultRecord } from '../callback-contracts.ts';
+import type { DraftingResultStore } from './drafting-results.ts';
 import { createDraftingIntent } from '../job-intents.ts';
 import type { DraftingJobIntent } from '../job-intents.ts';
 import type { JobStore, JobDeliveryAttempt } from './jobs.ts';
@@ -16,6 +19,7 @@ interface Attempt { fingerprint: string; result: ApplyResult }
 interface MemoryData {
   workflows: Map<string, WorkflowState>;
   jobs: Map<string, DraftingJobIntent>;
+  draftingResults: Map<string, DraftingResultRecord>;
   snapshots: Map<string, string>;
   receipts: Map<string, EventReceipt>;
   evidence: Map<string, EvidenceRecord>;
@@ -39,8 +43,8 @@ const identity = (state: WorkflowState) => ({ requestId: state.brief.requestId, 
  * staged in replacement Maps, then committed by one pointer assignment. No awaits
  * occur in that section. This is NOT distributed/durable database atomicity.
  */
-export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore {
-  #data: MemoryData = { workflows: new Map(), jobs: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
+export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandidateSource, JobStore, DraftingResultStore {
+  #data: MemoryData = { workflows: new Map(), jobs: new Map(), draftingResults: new Map(), snapshots: new Map(), receipts: new Map(), evidence: new Map(), audits: new Map(), attempts: new Map() };
   #options: InMemoryOptions;
   constructor(options: InMemoryOptions) {
     if (typeof options.resolveActor !== 'function' || typeof options.validateSnapshot !== 'function') throw new StorageError('MISSING_BACKEND_BOUNDARY');
@@ -139,6 +143,19 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     for (const j of this.#data.jobs.values()) if (j.requestId === requestId) jobs.push((await this.getJob(requestId, j.jobId))!);
     return jobs;
   }
+  async getDraftingResult(requestId: string, jobId: string): Promise<DraftingResultRecord | null> {
+    const result = this.#data.draftingResults.get(key(requestId, jobId));
+    if (!result) return null;
+    const job = await this.getJob(requestId, jobId);
+    const receipt = this.#data.receipts.get(key(requestId, result.eventId));
+    const model = this.#readSnapshot(this.#data.snapshots, { kind: 'LOGIC_MODEL', requestId, revision: result.logic.logicRevision, requestPreview: result.requestPreview });
+    if (!job || result.requestId !== requestId || result.jobId !== jobId || result.sourceWorkflowVersion !== job.sourceWorkflowVersion ||
+        result.jobWorkflowVersion !== job.workflowVersion || result.acceptedWorkflowVersion !== job.workflowVersion + 1 || result.handoffEventId !== job.handoffEventId ||
+        canonicalizeJson(result.requestPreview) !== canonicalizeJson(job.requestPreview) || !receipt || receipt.workflowVersion !== result.acceptedWorkflowVersion ||
+        canonicalizeJson(receipt.request) !== canonicalizeJson(result.requestPreview) || canonicalizeJson(receipt.draftingResult ?? null) !== canonicalizeJson(result) ||
+        !model || model.snapshotHash !== result.logic.logicHash || !validationMatches(result.validation, model)) throw new StorageError('DRAFTING_RESULT_INTEGRITY');
+    return structuredClone(result);
+  }
   async recordJobDelivery(input: JobDeliveryAttempt, principal: unknown): Promise<ApplyResult> {
     // Internal, append-only transport audit. No workflow transition, worker call or job mutation.
     let attempt: JobDeliveryAttempt;
@@ -189,13 +206,14 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     } catch { throw new StorageError('TRANSACTION_FAILED'); }
     this.#data = candidate;
   }
-  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery'> = {}): { data: MemoryData; result: ApplyResult } {
+  #append(base: MemoryData, command: Pick<ApplyCommand, 'requestId' | 'attemptId'> & { event?: WorkflowCommand }, fingerprint: string, audit: ProposedAuditEvent, hiddenVersion = false, attachment: Pick<AuditRecord, 'jobIntent' | 'jobDelivery' | 'draftingResult' | 'callbackValidation'> = {}): { data: MemoryData; result: ApplyResult } {
     const auditId = key(command.requestId, command.attemptId);
     if (base.attempts.has(auditId)) throw new StorageError('ATTEMPT_ID_REUSED');
     const recordedAt = (this.#options.now ?? (() => new Date().toISOString()))();
     if (typeof recordedAt !== 'string' || !Number.isFinite(Date.parse(recordedAt))) throw new StorageError('INVALID_CLOCK');
     const history = base.audits.get(command.requestId) ?? [];
     const record: AuditRecord = { ...structuredClone(audit), auditId, sequence: history.length + 1, recordedAt, ...structuredClone(attachment),
+      ...(command.event?.type === 'LOGIC_PROPOSED' && 'callbackValidation' in command && validationReference(command.callbackValidation) ? { callbackValidation: validationReference(command.callbackValidation)! } : {}),
       ...(audit.outcome === 'ACCEPTED' && command.event?.type === 'APPLY_ROUTING' ? { routing: structuredClone(command.event.result) } : {}) };
     const result: ApplyResult = { outcome: audit.outcome, reason: audit.reason, version: hiddenVersion ? null : audit.stateVersion, auditId, replayed: false };
     const data = { ...base, audits: new Map(base.audits), attempts: new Map(base.attempts) };
@@ -238,7 +256,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     };
     if (!actor) return deny('UNAUTHORIZED');
     if (!validJson || !obj(command.event) || Object.hasOwn(command.event, 'actor') ||
-        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent'].includes(k))) return deny('INVALID_COMMAND');
+        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint', 'jobIntent', 'draftingResult', 'callbackValidation'].includes(k))) return deny('INVALID_COMMAND');
     if ((command.expectedActorId !== undefined && !id(command.expectedActorId)) ||
         (command.preconditionFailure !== undefined && !id(command.preconditionFailure)) ||
         (command.commandFingerprint !== undefined && !/^[a-f0-9]{64}$/.test(command.commandFingerprint))) return deny('INVALID_COMMAND');
@@ -249,6 +267,9 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     if (priorReceipt && priorReceipt.commandFingerprint !== command.commandFingerprint) return deny('EVENT_ID_REUSED');
     if (command.preconditionFailure !== undefined) return deny(command.preconditionFailure);
     if (command.jobIntent !== undefined && command.event.type !== 'START_LOGIC_PROPOSAL') return deny('UNRELATED_JOB_INTENT');
+    if (command.callbackValidation !== undefined && (command.event.type !== 'LOGIC_PROPOSED' || !validationReference(command.callbackValidation))) return deny('INVALID_VALIDATION_REFERENCE');
+    if (command.draftingResult !== undefined && command.event.type !== 'LOGIC_PROPOSED') return deny('UNRELATED_DRAFTING_RESULT');
+    if (command.event.type === 'LOGIC_PROPOSED' && command.commandFingerprint !== undefined && command.draftingResult === undefined) return deny('DRAFTING_RESULT_REQUIRED');
     const event = { ...command.event, actor } as WorkflowEvent;
     const transition = transitionWorkflow(state, event);
     if (transition.outcome !== 'ACCEPTED') {
@@ -286,6 +307,28 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
       }
       const required = this.#assertSnapshots(next, snapshots);
       if (incoming.some(slot => !required.has(slot))) return deny('UNRELATED_SNAPSHOT');
+      const draftingResults = new Map(base.draftingResults);
+      let draftingResult: DraftingResultRecord | undefined;
+      if (command.draftingResult !== undefined) {
+        const r = command.draftingResult;
+        if (!obj(r) || event.type !== 'LOGIC_PROPOSED' || !id(r.jobId)) return deny('INVALID_DRAFTING_RESULT');
+        const job = base.jobs.get(key(command.requestId, r.jobId));
+        if (!job || job.jobType !== 'DRAFT_LOGIC') return deny('JOB_NOT_FOUND');
+        const handoff = base.receipts.get(key(command.requestId, job.handoffEventId));
+        if (!handoff || handoff.jobId !== job.jobId || handoff.workflowVersion !== job.workflowVersion ||
+            canonicalizeJson(handoff.request) !== canonicalizeJson(job.requestPreview)) return deny('JOB_INTEGRITY');
+        if (state!.version !== job.workflowVersion || canonicalizeJson(identity(state!)) !== canonicalizeJson(job.requestPreview)) return deny('STALE_JOB');
+        const model = this.#readSnapshot(snapshots, { kind: 'LOGIC_MODEL', requestId: command.requestId, revision: event.logicRevision, requestPreview: identity(state!) });
+        if (!model || model.snapshotHash !== event.logicHash || !validationMatches(r.validation, model)) return deny('INVALID_VALIDATION_EVIDENCE');
+        const expected: DraftingResultRecord = { requestId: command.requestId, jobId: job.jobId, eventId: event.eventId,
+          requestPreview: identity(state!), sourceWorkflowVersion: job.sourceWorkflowVersion, jobWorkflowVersion: job.workflowVersion,
+          acceptedWorkflowVersion: next.version, handoffEventId: job.handoffEventId,
+          logic: { logicRevision: event.logicRevision, logicHash: event.logicHash }, validation: r.validation };
+        if (canonicalizeJson(r) !== canonicalizeJson(expected)) return deny('INVALID_DRAFTING_RESULT');
+        const slot = key(command.requestId, job.jobId);
+        if (draftingResults.has(slot)) return deny('JOB_RESULT_ALREADY_ACCEPTED');
+        draftingResult = structuredClone(expected); draftingResults.set(slot, draftingResult);
+      }
       const evidence = new Map(base.evidence);
       const record = evidenceFromEvent(event);
       if (record) {
@@ -293,7 +336,7 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         if (evidence.has(recordKey)) return deny('EVIDENCE_ID_REUSED');
         evidence.set(recordKey, record);
       }
-      const update = this.#append(base, command, fingerprint, transition.audit, false, jobIntent ? { jobIntent } : {});
+      const update = this.#append(base, command, fingerprint, transition.audit, false, { ...(jobIntent ? { jobIntent } : {}), ...(draftingResult ? { draftingResult } : {}) });
       const receiptKey = key(command.requestId, event.eventId);
       if (base.receipts.has(receiptKey)) throw new StorageError('RECEIPT_CONFLICT');
       const processed = next.processedEvents.find(item => item.eventId === event.eventId);
@@ -302,8 +345,9 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
         fingerprint: processed.fingerprint, workflowVersion: next.version, auditId: update.result.auditId,
         ...(command.commandFingerprint === undefined ? {} : { commandFingerprint: command.commandFingerprint }),
         ...(jobIntent ? { jobId: jobIntent.jobId } : {}),
+        ...(draftingResult ? { draftingResult: structuredClone(draftingResult) } : {}),
         ...(event.type === 'APPLY_ROUTING' ? { routing: structuredClone(event.result) } : {}) };
-      const candidate: MemoryData = { ...update.data, jobs, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
+      const candidate: MemoryData = { ...update.data, jobs, draftingResults, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
       candidate.workflows.set(command.requestId, structuredClone(next));
       candidate.receipts.set(receiptKey, receipt);
       this.#commit(candidate);

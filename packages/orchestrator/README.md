@@ -1621,3 +1621,229 @@ wrong-job results, use the replaceable R4 schema boundary, and atomically commit
 existing LOGIC_PROPOSED event, immutable model, receipt and audit. Test duplicate
 callbacks, revision races, wrong roles and rollback before adding any network endpoint
 or AWS adapter. This milestone leaves callbacks.ts unchanged.
+
+## Internal authenticated drafting-result ingestion (local milestone)
+
+callbacks.ts now exports DraftingCallbackService.ingest(command, principal). No
+callback service previously existed. This is an internal application boundary, not
+an HTTP route: server.ts and the existing deny-by-default authentication boundary
+are unchanged. There are no AWS calls, generated clinical content or new dependencies.
+The service uses the existing LOGIC_PROPOSED transition and canonical snapshot utilities.
+
+The lifecycle is: authenticate a verified worker context, authorize DRAFTER and job
+scope, load the immutable stored drafting job/handoff, compare current request and
+workflow identities, validate/hash the proposed LogicModel, obtain required injected
+R4 evidence, then atomically commit the proposal and accepted result. The existing
+state transition is DRAFTING_LOGIC -> WAITING_FOR_LOGIC_CHECKS. No LOGIC_CHECKED,
+clinical approval, compilation or release event is inferred from callback acceptance.
+
+### Worker identity, job and command bindings
+
+DraftingResultCommand contains requestId, jobId, eventId, expectedVersion,
+sourceWorkflowVersion, revision, snapshotHash, schemaVersion and logicModel. Extra
+roles, actor IDs, trusted flags, validation assertions, client-computed model hashes
+and approval fields are rejected. The principal is a separate opaque server context
+resolved by the injected identity provider; it is never taken from the payload.
+
+A verified actor must have DRAFTER, have access to the request, and satisfy the
+optional authorizeWorker(actor, job) restriction. The job must be DRAFT_LOGIC. No
+individual worker assignment is invented. Visibility and identity/job authorization
+are checked again after validation, and the store re-resolves actor/role at commit.
+Real R7 identity resolution must enforce request/job membership at that boundary.
+
+The service verifies these stored facts rather than trusting completion claims:
+
+- getJob(requestId, jobId) finds the scoped immutable intent; its snapshot and
+  routing/handoff receipt bindings are verified by the existing store reader.
+- The callback's revision/hash match the job preview and current stored request.
+- expectedVersion equals both the active DRAFTING_LOGIC state and job.workflowVersion.
+- sourceWorkflowVersion matches the READY_FOR_LOGIC_PROPOSAL version consumed by
+  that handoff, and the accepted handoff receipt references the same job/preview.
+- A job already accepted under another callback cannot receive a conflicting result.
+
+A recorded transport acceptance is not required: a worker acknowledgement can be
+lost. The authenticated, validated result must still bind to a real committed intent.
+Missing/unknown jobs cannot fabricate state advancement, and wrong-request lookups
+do not disclose another request's evidence. Malformed and unauthenticated commands
+stop before storage; authenticated rejected attempts are audited when access/storage
+permit. Provider/storage outages fail closed without exposing exception details.
+
+Test-only opaque service principals and fictional R4 evidence live exclusively in
+test/helpers/callback-fixtures.ts. Its identity provider recognizes exact object
+instances, not matching session/roles/trusted properties supplied by callers. No
+source file imports this fixture or claims to implement real service authentication.
+
+### Replaceable R4 validation boundary
+
+callback-contracts.ts defines metadata contracts, not a competing LogicModel schema.
+LogicValidationBoundary has validateSnapshot (the existing synchronous, nontransforming
+SnapshotValidator) and validateProposal (an injected R4 schema/checker adapter returning
+structured evidence). There is no pretend-success default when this boundary is absent.
+
+The snapshot module validates strict JSON and creates a frozen LOGIC_MODEL snapshot
+using initial logic revision 1, the exact request preview, supplied schemaVersion and
+the existing jcs-sha256-v1 policy. All content, including sources, citations and ordered
+rule arrays, remains covered by the computed SHA-256 hash. R2 never supplies medical
+rules or interprets the LogicModel. Test data uses the pre-existing fictional training
+model and provisional shape validator only.
+
+PASSED validation evidence must contain validatorId, validatorVersion, resultId,
+optional reportId, requestId, exact requestPreview, exact logic revision/hash,
+schemaVersion and hashPolicyVersion. Metadata must bind to the computed frozen
+snapshot. Unknown or mismatched fields, missing required evidence, null/unavailable
+validation or adapter failures block acceptance. Malformed/unsupported model content
+is rejected. Failed validation rejects the proposal without marking the job accepted.
+Available validator/result/report references are preserved on rejected validation
+audits as audit-only traceability, not passing checker evidence.
+
+The fictional adapter is isolated in tests and is not a clinical checker. R4 still
+owns official schema/checker implementation and result provenance. This milestone
+records validation needed to admit a proposal; it does not automatically turn that
+report into the separate authoritative LOGIC_CHECKED workflow evidence required by
+the existing clinician gate. Agree with R4 whether and how an actual report may be
+adopted through that next explicit transition. Even a passing formal checker report
+would not replace independent clinician or release approval.
+
+### Atomic acceptance and duplicate delivery
+
+DraftingResultStore extends the job read port with getDraftingResult(requestId, jobId).
+Acceptance is written only through the existing apply() operation. ApplyCommand can
+carry draftingResult plus immutable snapshots; EventReceipt and AuditRecord retain
+the exact accepted result. The in-memory adapter stages the model snapshot, current
+state, one job-result record, receipt and audit together, then publishes one Map
+replacement. Failed commits leave no accepted result marker or partial snapshot/state.
+The immutable job intent remains separate from its accepted result record.
+
+The store rechecks handoff/current-job bindings, validation metadata, model identity,
+result-record shape and one accepted result per job. An application LOGIC_PROPOSED
+command with a command fingerprint cannot omit its callback result metadata. Trusted
+legacy raw workflow commands without application fingerprints remain compatible with
+existing local fixtures; they do not create authenticated callback-result records.
+Those low-level fixture paths must not be exposed to workers/browser clients. A real
+adapter must restrict writes to the authenticated application boundary and enforce
+its job/result evidence requirements.
+
+The complete callback payload and verified actor ID are fingerprinted with canonical
+JSON. Identical accepted retries return DUPLICATE_EVENT with the original model,
+validation references, accepted workflow version and original auditId, even after
+later request revisions. attemptAuditId identifies the current duplicate/rejection
+attempt's audit. The original result is acknowledged without restoring stale state
+or re-running R4 validation. Changed content/evidence under an accepted event ID
+conflicts. Stable service identity across retries is an R7 integration requirement.
+
+Concurrent distinct results cannot both consume the same drafting version. A second
+receipt check handles an identical callback committing between separate receipt/state
+reads; the original committed result is replayed. Revisions during asynchronous R4
+validation are rejected by the store's final version check. getDraftingResult() verifies
+linked job, model snapshot, validation metadata and accepted receipt on every load.
+
+Result statuses are ACCEPTED, DUPLICATE_EVENT, BLOCKED, REJECTED, STALE_VERSION and
+STORAGE_FAILURE. Missing R4 evidence returns BLOCKED / VALIDATION_UNAVAILABLE;
+mismatched report bindings return BLOCKED / INVALID_VALIDATION_EVIDENCE. No failure
+response claims a proposed model or accepted job result. A failure reading acceptance
+back after a successful commit may still return STORAGE_FAILURE; retrying the identical
+command safely resolves that uncertainty.
+
+### Fictional callback examples
+
+With the isolated verified worker principal, ingest this fictional result:
+
+```json
+{
+  "requestId": "fictional-001",
+  "jobId": "draft-4bfe1ceed09f9d7794d4866073273953867ef1dbb6406a19a97bbe7a6725391d",
+  "eventId": "fictional-drafting-result",
+  "expectedVersion": 5,
+  "sourceWorkflowVersion": 4,
+  "revision": 1,
+  "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952",
+  "schemaVersion": "1.0",
+  "logicModel": {
+    "schemaVersion": "1.0",
+    "pathwayId": "fictional-training",
+    "title": "Fictional model 1",
+    "language": "en",
+    "sources": [{"id":"fictional-guide","title":"Fictional training guide"}],
+    "context": [],
+    "questions": [{"id":"complete","type":"boolean","label":"Fictional training complete?"}],
+    "derived": [],
+    "decisionTables": [{"id":"classification","hitPolicy":"first","rows":[],"otherwise":"complete"}],
+    "outcomes": [{"id":"complete","label":"Training complete","referral":"none"}],
+    "ambiguities": []
+  }
+}
+```
+
+Selected fields from the accepted response:
+
+```json
+{
+  "status": "ACCEPTED",
+  "reason": "LOGIC_PROPOSED",
+  "workflowVersion": 6,
+  "result": {
+    "jobWorkflowVersion": 5,
+    "acceptedWorkflowVersion": 6,
+    "logic": {
+      "logicRevision": 1,
+      "logicHash": "b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1"
+    }
+  },
+  "validationReference": {
+    "validatorId": "fictional-r4-validator",
+    "validatorVersion": "fixture-v1",
+    "resultId": "fictional-validation-b8da115e6b0ab7e0",
+    "reportId": "fictional-report-b8da115e6b0ab7e0"
+  }
+}
+```
+
+The workflow is now WAITING_FOR_LOGIC_CHECKS with no clinical/release approval.
+The full result also contains job/request/handoff identities, validation bindings
+and audit references. All snapshot hashes above were computed from fictional data.
+
+If the PO materially revises the request before this result is accepted, the same
+late callback instead returns these selected fields:
+
+```json
+{
+  "status": "STALE_VERSION",
+  "reason": "VERSION_CONFLICT",
+  "result": null,
+  "workflowVersion": 6,
+  "validationReference": null
+}
+```
+
+That separate scenario remains WAITING_FOR_SCREENING on the new preview, with no
+accepted result for the old job. A callback already accepted before a later revision
+is acknowledged as a historical duplicate instead; it never restores the old model.
+
+### Remaining integration and next milestone
+
+R3 must send the exact recorded job/preview/source version, retain callback event IDs
+for retries and submit data through real verified service authentication. It must not
+provide trusted flags or its own validation/approval authority. R4 must finalize the
+model schema, deterministic validation/report protocol, metadata ID scope and schema/
+hash-policy migration support. These contracts remain package-local and provisional.
+
+R7 must provide real service identity, job/tenant permissions and durable conditional
+transactions. Enforce unique accepted result per logical job and atomically preserve
+snapshot, workflow, result marker, receipt and audit. Keep historical snapshots and
+validation versions readable. The current in-memory fake is volatile, not a durable
+or distributed database. No production HTTP callback, real authentication, AWS service,
+background execution or deployment was added.
+
+Verification: 825 passing tests (748 original + 77 new callback tests), strict
+TypeScript with zero errors and clean whitespace checks. Runtime: Node v24.18.0,
+with existing Node 22 typings. Actual Node 22 execution remains pending. All existing
+routing, workflow, snapshot, request, reviewer, approval and handoff test files are
+unchanged. No root/shared configuration or dependency installation was needed.
+
+Smallest next milestone: authenticated, version-bound R4 checker-result ingestion
+using the same pattern to record LOGIC_CHECKED with exact current LogicModel/report
+bindings. Then add R5 compilation and R6 verification result services bound to approved
+model and actual artifact identities. Keep clinician approval mandatory before
+compilation and separate release approval mandatory after verification; add no model
+calls, generic trusted-flag callbacks or production endpoints until identity/storage
+contracts are ready.

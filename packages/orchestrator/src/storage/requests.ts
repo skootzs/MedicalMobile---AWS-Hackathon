@@ -1,5 +1,6 @@
 import type { Actor, WorkflowEvent, WorkflowState } from '../workflow.ts';
 import type { RevisionIdentity } from '../routing.ts';
+import type { DraftingResultRecord, LogicValidationReference } from '../callback-contracts.ts';
 import type { DraftingJobIntent } from '../job-intents.ts';
 import type { Snapshot, SnapshotValidator } from '../snapshots.ts';
 import type { AuditRecord, EventReceipt } from './audit.ts';
@@ -19,6 +20,10 @@ export interface ApplyCommand {
   snapshots?: readonly Snapshot[];
   /** Only valid with START_LOGIC_PROPOSAL; store verifies authoritative bindings. */
   jobIntent?: DraftingJobIntent;
+  /** Authenticated callback metadata; only valid with LOGIC_PROPOSED. */
+  draftingResult?: DraftingResultRecord;
+  /** Audit-only provider references; never permission or a passing checker record. */
+  callbackValidation?: LogicValidationReference;
   /** Internal application guards; these can reject, never grant permission. */
   expectedActorId?: string;
   preconditionFailure?: string;
