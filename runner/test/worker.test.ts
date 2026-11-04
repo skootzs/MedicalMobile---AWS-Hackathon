@@ -200,6 +200,17 @@ describe('fails closed', () => {
     assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
   });
 
+  it('accepts payloads still on contract 1.0.0 and rejects unknown versions', () => {
+    assert.ok('payload' in validatePayload(h.payload({ contractVersion: '1.0.0' })));
+    assert.ok('error' in validatePayload(h.payload({ contractVersion: '9.9.9' })));
+  });
+
+  it('golden case fields must come together', () => {
+    assert.ok('payload' in validatePayload(h.payload({ goldenCasesUri: 's3://b/g.json', goldenCasesHash: 'sha256:g' })));
+    assert.ok('error' in validatePayload(h.payload({ goldenCasesUri: 's3://b/g.json' })));
+    assert.ok('error' in validatePayload(h.payload({ goldenCasesHash: 'sha256:g' })));
+  });
+
   it('COMPILE_LOGIC without a mode is invalid', () => {
     const payload = h.payload();
     delete (payload as Record<string, unknown>).mode;
