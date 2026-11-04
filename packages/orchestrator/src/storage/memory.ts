@@ -43,6 +43,11 @@ interface MemoryData {
   audits: Map<string, readonly AuditRecord[]>;
   attempts: Map<string, Attempt>;
 }
+/** Internal trusted persistence image, never a browser import/export contract. */
+export interface RepositoryImage {
+  format: 'r2-repository-image-v1';
+  collections: Record<string, readonly (readonly [string, unknown])[]>;
+}
 export interface InMemoryOptions extends StoreDependencies {
   /** Local synchronous conditional read against the injected authoritative R7 test source.
    * Real DynamoDB adapter MUST condition JOB/META record version/attempt in its transaction. */
@@ -69,6 +74,24 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
   constructor(options: InMemoryOptions) {
     if (typeof options.resolveActor !== 'function' || typeof options.validateSnapshot !== 'function') throw new StorageError('MISSING_BACKEND_BOUNDARY');
     this.#options = options;
+  }
+  /** Stateless durable-adapter planning bridge; all guards below remain unchanged. */
+  exportRepositoryImage(): RepositoryImage {
+    return structuredClone({ format: 'r2-repository-image-v1', collections: Object.fromEntries(Object.entries(this.#data).map(([name, map]) => [name, [...map]])) });
+  }
+  static restoreRepositoryImage(options: InMemoryOptions, image: RepositoryImage): InMemoryOrchestratorStore {
+    const store = new InMemoryOrchestratorStore(options);
+    const copy = JSON.parse(canonicalizeJson(image)) as RepositoryImage;
+    const names = Object.keys(store.#data).sort();
+    if (copy.format !== 'r2-repository-image-v1' || !copy.collections || canonicalizeJson(Object.keys(copy.collections).sort()) !== canonicalizeJson(names)) throw new StorageError('INVALID_REPOSITORY_IMAGE');
+    const restored: Record<string, Map<string, unknown>> = {};
+    for (const name of names) {
+      const entries = copy.collections[name];
+      if (!Array.isArray(entries) || entries.some(e => !Array.isArray(e) || e.length !== 2 || typeof e[0] !== 'string') || new Set(entries.map(e => e[0])).size !== entries.length) throw new StorageError('INVALID_REPOSITORY_IMAGE');
+      restored[name] = new Map(entries);
+    }
+    store.#data = restored as unknown as MemoryData;
+    return store;
   }
   #decode(slot: string, bytes: string): Snapshot {
     try {

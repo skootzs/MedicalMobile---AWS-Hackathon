@@ -2413,3 +2413,193 @@ Reconciliation validation: **1,076 passing tests** (all 1,057 prior cases + 19 f
 regressions), strict TypeScript zero errors and clean whitespace checks. Runtime:
 Node v24.18.0; actual Node 22 execution and real AWS serialization remain untested.
 All changes remain uncommitted; no push, merge or deployment occurred.
+
+## Durable repository and real restart recovery
+
+This milestone was developed from clean branch feature/task-2-orchestrator at
+0a64c60. The 1,076 prior tests are preserved. New code remains uncommitted.
+
+### Integration inspection and ownership
+
+The local Terraform/Compose files are empty and local refs do not include r7-infra.
+Read-only inspection of the live GitHub branch found R7 infrastructure and a job
+contract, but **no reusable DynamoDB storage adapter**. Reviewed branch head:
+`d766d02d02a2471c27cc4d7a026d684a91c8f81b`:
+
+- [R7 table/index definitions](https://github.com/skootzs/MedicalMobile---AWS-Hackathon/blob/d766d02d02a2471c27cc4d7a026d684a91c8f81b/infra/terraform/dynamodb.tf)
+- [R7 job delivery contract](https://github.com/skootzs/MedicalMobile---AWS-Hackathon/blob/d766d02d02a2471c27cc4d7a026d684a91c8f81b/docs/job-delivery.md)
+- [R7 local table setup](https://github.com/skootzs/MedicalMobile---AWS-Hackathon/blob/d766d02d02a2471c27cc4d7a026d684a91c8f81b/scripts/dynamodb-local/create-table.sh)
+
+R7 explicitly owns table shape; R2 owns record layout. `storage/r7-layout.ts` uses
+published pk/sk, GSI1 gsi1pk/gsi1sk (REQ#requestId / JOB#createdAt), GSI2
+gsi2pk/gsi2sk (INBOX#service_designer|clinician|release_approver / createdAt), and
+zero-padded REV#000003 keys. Nonpending states have no reviewer-index attributes.
+The adapter requires an explicit layout; it never guesses a shared table configuration.
+R2 request receipts/evidence and audit attempt suffixes are package-local domain choices.
+No R7 files, table/queue/bucket infrastructure, shared schema or publisher were changed.
+
+### What is durable, and where
+
+Previously all records lived only in private Maps in storage/memory.ts. Its existing
+business guards now also serve as a **stateless transaction planner**: every durable
+operation loads fresh persisted data, invokes exactly those guards, and conditionally
+commits the resulting data. There is no second workflow engine and no cached memory
+fallback. In-memory storage remains available explicitly for the original fast tests.
+
+`storage/dynamodb.ts` implements existing request/snapshot/evidence/audit/job/checker/
+compilation/result/read-queue ports using the AWS SDK. It uses:
+
+| Record | Durable representation |
+| --- | --- |
+| Current state/version | REQ#id / META with workflowVersion, status, r2StorageVersion and immutable repositoryRef |
+| Request revisions | REQ#id / REV#000001 etc. with snapshot hash and object reference |
+| Request/LogicModel snapshots | SNAP#hash / META plus verified canonical object at snapshots/hash.json |
+| Clinical/release decisions | REQ#id / APPROVAL#eventId, normalized decision and current validity, plus immutable decision reference |
+| Checker, screening, PO, compiled and verification evidence | REQ partition evidence references plus complete version-bound history in the repository image |
+| Job intents | JOB#id / META, initial requested status, GSI1 request index; R7 owns later execution status |
+| Job results | JOB#id / RECEIPT#R2#eventId plus immutable result/evidence reference |
+| Idempotency | Immutable request receipt and preserved event/attempt fingerprints |
+| Audit | Append-only AUDIT#timestamp#eventId#attempt entry and immutable payload |
+| Outbox | JOB#id / OUTBOX with payload, committed with the authorized intent; no publisher here |
+
+The repository image is a provisional R2 serialization format, `r2-durable-image-v1`,
+covering all existing storage collections, including checker invocations, histories and
+results not previously exposed as independent Dynamo rows. It lives under the existing
+allowed S3 prefix `snapshots/r2-records/<sha256>.json`. Request META's strong-read pointer
+is authoritative; all corresponding domain projections are committed with it. This
+avoids oversized Dynamo items and preserves existing guards without rewriting them.
+It is not a claim that R7 has already approved this nested serialization/reader contract.
+
+Snapshots in an image are references, not embedded mutable objects. Canonical snapshot
+objects exclude top-level snapshotHash, as previously agreed; reads reinsert the
+expected hash and reuse verifySnapshot/schema/hash checks. Other immutable records use
+separate canonical JSON digests. Large content, reports and images remain in object
+storage, not inline Dynamo items. The adapter enforces conservative 300 KiB item,
+3 MiB transaction and 100-action limits and fails closed instead of splitting writes.
+Objects written before a failed transaction can remain orphaned; they authorize nothing.
+R7 must agree on retention/migration/cleanup; this milestone deletes no production data.
+
+### Atomic updates and approvals
+
+A mutation builds one TransactWriteItems operation containing conditional META update,
+new receipts, audit, decisions, revisions, job/result and outbox records. The independent
+r2StorageVersion serializes *all* writes, including rejected-attempt audit updates whose
+workflow version does not advance. On a storage-version conflict, the adapter reloads
+and reruns the original guards. An old expected workflow version then rejects; identical
+accepted retries remain duplicates. No transaction is replaced by independent writes.
+
+The original clinical/release decisions remain immutable in history. Relevant revisions
+atomically mark their current Dynamo projections SUPERSEDED / superseded=true while
+clearing current authority through workflow.ts. A stale APPROVAL row therefore cannot
+continue presenting itself as current authority to a runner that rechecks it.
+Approval projections include decision=approved/rejected/returned and logicModelHash;
+release projections additionally retain package/verification bindings.
+
+Compilation finalization requires an injected R7 execution condition on JOB#id/META,
+in the same transaction as R2's result acceptance. It must compare real record version,
+current attempt and terminal status using the agreed R7 field names. Missing mapping
+fails closed. A changed execution condition becomes a durably audited STALE_JOB_ATTEMPT
+without saving artifact/result/state advancement. Historical duplicate acknowledgements
+do not condition on a later runner attempt. R7 execution state is never overwritten by
+R2's immutable intent view; future ExecutionSource must read the actual JOB/META record.
+
+Review queues use GSI2 for discovery, then strongly read current request state and reuse
+ReviewService's access, evidence and independence checks. GSI discovery can lag; queue
+membership is never an authorization token. No assignment or review job is fabricated.
+
+### Immutable object port and shared-sandbox boundaries
+
+`storage/durable-objects.ts` defines DurableObjects.putIfAbsent/read with pinned version,
+size and SHA-256 checks. `DurableLogicModelReferences` bridges the existing approved-
+compilation S3-first interface, so handoffs use the exact same snapshot bytes/hash/URI.
+No URI is invented and no browser trust flag is accepted. A real adapter must enforce
+private/versioned/encrypted S3, allowed buckets/prefixes, If-None-Match: *, and verified
+existing bytes/version on upload conflicts. **No real S3 adapter or AWS call was added.**
+
+The disk-backed implementation is under test/helpers only, with fictional s3:// labels
+resolved to real temporary files. This proves restart persistence of object bytes,
+not real S3 behavior. No disk or memory provider is selected by production default.
+
+Create DynamoOrchestratorStore with explicit DocumentClient, tableName, r7Layout,
+trusted resolveActor, schema validator, durable object provider and R7 execution
+condition. Inject it into the existing RequestService, ApprovalService, ReviewService
+and Fastify factory. There is no implicit fallback. Missing table/network/object data
+returns errors/HTTP 503 rather than acknowledging a memory-only request.
+
+The current R7 branch has npm workspaces and a root lockfile, unlike this local checkout.
+Only this package's manifest was updated; root and shared lockfiles remain untouched.
+Pinned SDK dependencies are @aws-sdk/client-dynamodb and @aws-sdk/lib-dynamodb 3.1161.0,
+installed package-locally with --workspaces=false --package-lock=false --ignore-scripts.
+The shared root lockfile update must be coordinated during team integration.
+
+### Tests actually run against DynamoDB Local
+
+No Docker or installed Java runtime was initially available. Official DynamoDB Local
+3.3.2 and a portable Corretto 21 runtime were downloaded to /private/tmp, checksums
+verified, and run with file-backed DB data (not -inMemory) on port 8765. Final runs use
+-disableTelemetry. No global Java/Node installation, Terraform, credentials or AWS
+account was changed. DynamoDB's generated root metadata artifact was moved to scratch;
+no test-generated file remains outside the orchestrator in the repository.
+
+From packages/orchestrator, with DynamoDB Local already running:
+
+```sh
+npm test
+npm run typecheck
+R2_DYNAMODB_LOCAL_ENDPOINT=http://127.0.0.1:8765 npm run test:dynamodb
+```
+
+The test helper enforces loopback HTTP, fictional credentials and unique r2-local-test-*
+tables. Tables match R7's pk/sk, both GSI definitions and stream NEW_AND_OLD_IMAGES.
+Tests remove only their own temporary tables/files. Without the endpoint, 13 database
+tests explicitly skip; skipped tests are not proof of persistence.
+
+The 14-case suite includes **13 real database tests plus one configuration guard**:
+
+- Fastify creates a fictional request; existing synthetic R3/R4 fixtures advance it to
+  clinical approval pending; a *new Node OS process* with new SDK client/object provider/
+  store/Fastify retrieves the current model, checker report, queue, snapshots and audit.
+  A recreated API then approves it; stale, missing-auth, wrong-role and self-approval
+  attempts remain blocked.
+- Two independent adapters race approvals; one transition/decision wins. Identical
+  concurrent retries do not duplicate approval records. Creation retries/conflicts
+  also survive new adapters.
+- Real canceled Dynamo transactions leave no partial state, approval, receipt, audit,
+  job intent or outbox. These are not mocked successful/failed database operations.
+- Revisions retain snapshot/evidence history and supersede approval projections.
+- Compiled result/manifest/tool evidence and pending release review survive recreation;
+  clinician/release separation remains enforced. R7 attempt changes during verification
+  are rejected by an actual DynamoDB ConditionCheck.
+- Missing execution conditions, unavailable tables, corrupt object bytes and large
+  fictional content are tested. A >400 KiB workflow remains retrievable while Dynamo
+  items remain small. A missing table produces HTTP 503, not memory fallback.
+
+Compiler/checker/verifier identities and outputs in these tests are fictional adapters;
+no R5 compiler, real R4 clinical logic, R6 harness or JWT authentication ran. The database
+and disk persistence themselves are real. No public Fastify listener is started.
+
+### Remaining R7 integration decisions
+
+The live R7 document confirms table/index shape, but runner/src/contract.ts and a shared
+storage adapter are not published there. Resolve these before shared-sandbox startup:
+
+1. Review R2 repository-image format, object reference shape and record key suffixes,
+   serialization migration and object retention. This MVP reads/hashes the whole request
+   history on each operation; it favors correctness/reuse over large-history throughput.
+2. Supply real S3 version-aware adapter and verify IAM/KMS permissions. The current R7
+   IAM source lists GetObject but not GetObjectVersion; version-pinned reads need review.
+3. Reconcile initial requested versus PENDING in the R7 lease section (user-confirmed
+   mapping currently writes requested). Publish exact runner status/result/condition
+   fields and payload schema. Outbox includes payload as the documented Pipe expects;
+   no fallback poller, extra queue or publisher was added. Pipe event filters must
+   distinguish JOB#.../META from request META status changes.
+4. Align R7's post-conversion manifestHash with R2's current compiler-manifest reference;
+   don't silently equate those byte representations or change existing approval guards.
+5. Wire real Cognito/service identity and validated schemas into backend startup; provision
+   the agreed table/bucket through R7, then run an AWS sandbox smoke test. Local SDK test
+   credentials/session mocks must never be reused for that environment.
+
+Validation: original **1,076 tests pass**, DynamoDB suite **14/14 pass** (13 actual DB
+cases), strict TypeScript **0 errors**, whitespace clean. Runtime is **Node v24.18.0**;
+Node 22 is not installed in the inspected local locations and was not changed. All code
+remains uncommitted. No push, merge, production deployment or R7 infrastructure change.
