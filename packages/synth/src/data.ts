@@ -24,18 +24,39 @@ export type RateRelation = 'below' | 'at' | 'above';
 
 export type ThresholdOperator = '>=' | '>' | '<=' | '<';
 
-/** Boolean inputs a branch target may set. */
+/**
+ * Boolean sign questions a branch target may set. These mirror the real form's
+ * select_one yes_no questions: the five danger signs (danger_signs page) and
+ * the two breathing-page signs. hasCoughOrDifficultBreathing is modelled
+ * separately on PatientInput because it is nullable (unanswered), so it is not
+ * part of this always-boolean set.
+ */
 export type SignField =
-  | 'hasCoughOrDifficultBreathing'
-  | 'generalDangerSign'
+  | 'not_able_to_drink_or_breastfeed'
+  | 'vomits_everything'
+  | 'had_convulsions'
+  | 'lethargic_or_unconscious'
+  | 'convulsing_now'
   | 'chestIndrawing'
   | 'stridorInCalmChild';
 
 export const SIGN_FIELDS: readonly SignField[] = [
-  'hasCoughOrDifficultBreathing',
-  'generalDangerSign',
+  'not_able_to_drink_or_breastfeed',
+  'vomits_everything',
+  'had_convulsions',
+  'lethargic_or_unconscious',
+  'convulsing_now',
   'chestIndrawing',
   'stridorInCalmChild',
+];
+
+/** The five named danger-sign questions, in the form's page order. */
+export const DANGER_SIGN_FIELDS: readonly SignField[] = [
+  'not_able_to_drink_or_breastfeed',
+  'vomits_everything',
+  'had_convulsions',
+  'lethargic_or_unconscious',
+  'convulsing_now',
 ];
 
 export interface StepValue {
@@ -64,7 +85,14 @@ export interface ThresholdsData {
   };
 }
 
-export type Baseline = Record<SignField, boolean> & { confirmed: boolean };
+/**
+ * Baseline inputs every generated case starts from. The seven SIGN_FIELDS are
+ * always boolean; hasCoughOrDifficultBreathing is nullable (unanswered).
+ */
+export type Baseline = Record<SignField, boolean> & {
+  hasCoughOrDifficultBreathing: boolean | null;
+  confirmed: boolean;
+};
 
 export interface BranchSpec {
   id: string;
@@ -192,7 +220,14 @@ export function parseThresholds(raw: unknown, file = 'thresholds.json'): Thresho
 export function parseBranches(raw: unknown, file = 'branches.json'): BranchesData {
   const root = obj(file, '(root)', raw);
   const b = obj(file, 'baseline', root['baseline']);
-  const baseline = { confirmed: bool(file, 'baseline.confirmed', b['confirmed']) } as Baseline;
+  const cough = b['hasCoughOrDifficultBreathing'];
+  if (cough !== null && typeof cough !== 'boolean') {
+    fail(file, 'baseline.hasCoughOrDifficultBreathing', 'must be a boolean or null');
+  }
+  const baseline = {
+    confirmed: bool(file, 'baseline.confirmed', b['confirmed']),
+    hasCoughOrDifficultBreathing: cough,
+  } as Baseline;
   for (const f of SIGN_FIELDS) baseline[f] = bool(file, `baseline.${f}`, b[f]);
 
   const list = arr(file, 'branches', root['branches']);
@@ -262,4 +297,73 @@ export function dataStatusWarnings(thresholds: ThresholdsData, branches: Branche
   check('thresholds.json', thresholds.dataStatus);
   check('branches.json', branches.dataStatus);
   return warnings;
+}
+
+// ---------------------------------------------------------------------------
+// Branch ids from the compiler manifest (preferred when available)
+
+/**
+ * The branch ids a pathway can produce, taken verbatim from the compiler
+ * manifest: the decisionTable outcomes and its `otherwise` value. These are
+ * the classification ids the form emits; they are NOT invented here, and no
+ * outcome is added that the manifest does not list.
+ */
+export interface ManifestBranches {
+  source: 'manifest';
+  /** Outcome ids in manifest order, plus decisionTable.otherwise if distinct. */
+  branchIds: string[];
+}
+
+/** Sample branch ids from branches.json, used when no manifest is available. */
+export interface SampleBranches {
+  source: 'sample';
+  branchIds: string[];
+  /** The unconfirmed-data warning for the sample list. */
+  warning: string;
+}
+
+export type ResolvedBranches = ManifestBranches | SampleBranches;
+
+interface ManifestShape {
+  decisionTable?: { otherwise?: unknown };
+  outcomes?: Array<{ id?: unknown }>;
+}
+
+/**
+ * Derive branch ids from a parsed manifest object. Returns null if the
+ * manifest has no usable outcomes, so the caller can fall back to the sample.
+ */
+export function branchIdsFromManifest(manifest: unknown): string[] | null {
+  const m = manifest as ManifestShape;
+  const outcomes = m.outcomes;
+  if (!Array.isArray(outcomes) || outcomes.length === 0) return null;
+  const ids: string[] = [];
+  for (const o of outcomes) {
+    if (o && typeof o.id === 'string' && o.id.length > 0 && !ids.includes(o.id)) ids.push(o.id);
+  }
+  const otherwise = m.decisionTable?.otherwise;
+  if (typeof otherwise === 'string' && otherwise.length > 0 && !ids.includes(otherwise)) {
+    ids.push(otherwise);
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+/**
+ * Resolve the branch id list. Prefers compile-manifest.json when a path is
+ * given and it yields outcomes; otherwise falls back to the sample branch ids
+ * from branches.json and returns the unconfirmed-data warning.
+ */
+export function resolveBranchIds(options: {
+  manifestPath?: string | null;
+  branchesPath: string;
+}): ResolvedBranches {
+  if (options.manifestPath) {
+    const ids = branchIdsFromManifest(readJson(options.manifestPath));
+    if (ids) return { source: 'manifest', branchIds: ids };
+  }
+  const branches = loadBranches(options.branchesPath);
+  const warning =
+    `WARNING: branches.json dataStatus is "${branches.dataStatus}", not "${CONFIRMED_DATA_STATUS}". ` +
+    'Branch ids come from unconfirmed sample data (no manifest was available) and must not be used as release evidence.';
+  return { source: 'sample', branchIds: branches.branches.map((b) => b.id), warning };
 }

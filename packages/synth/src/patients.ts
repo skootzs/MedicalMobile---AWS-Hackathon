@@ -9,6 +9,7 @@
  * the evaluator.
  */
 import {
+  DANGER_SIGN_FIELDS,
   dataStatusWarnings,
   type BranchesData,
   type RateRelation,
@@ -21,17 +22,25 @@ export type PatientKind = 'branch' | 'boundary' | 'exceptional';
 
 /**
  * DRAFT: reconcile with the evaluator's input type once packages/evaluator
- * publishes it. Field names and units here are provisional.
+ * publishes it. Field names mirror the real form's questions.
  *
  * Deliberately has no `expected` field.
  */
 export interface PatientInput {
   id: string;
-  ageMonths: number;
-  /** null means the rate was not recorded. */
-  respiratoryRate: number | null;
-  hasCoughOrDifficultBreathing: boolean;
-  generalDangerSign: boolean;
+  /** Age in months, or null for no date of birth (age_unknown path). */
+  ageMonths: number | null;
+  /** breaths_per_minute; null means the breath count was not recorded. */
+  breathsPerMinute: number | null;
+  /** intro page; null means the question was left unanswered. */
+  hasCoughOrDifficultBreathing: boolean | null;
+  /** danger_signs page (form order). */
+  not_able_to_drink_or_breastfeed: boolean;
+  vomits_everything: boolean;
+  had_convulsions: boolean;
+  lethargic_or_unconscious: boolean;
+  convulsing_now: boolean;
+  /** breathing page. */
   chestIndrawing: boolean;
   stridorInCalmChild: boolean;
   /**
@@ -95,9 +104,10 @@ export function generatePatients(
     id: string,
     kind: PatientKind,
     targetBranch: string | null,
-    ageMonths: number,
-    respiratoryRate: number | null,
+    ageMonths: number | null,
+    breathsPerMinute: number | null,
     signs: Partial<Record<SignField, boolean>> = {},
+    options: { hasCoughOrDifficultBreathing?: boolean | null } = {},
   ): void => {
     if (ids.has(id)) throw new Error(`duplicate generated patient id "${id}"`);
     ids.add(id);
@@ -105,9 +115,16 @@ export function generatePatients(
     out.push({
       id,
       ageMonths,
-      respiratoryRate,
-      hasCoughOrDifficultBreathing: signs.hasCoughOrDifficultBreathing ?? b.hasCoughOrDifficultBreathing,
-      generalDangerSign: signs.generalDangerSign ?? b.generalDangerSign,
+      breathsPerMinute,
+      hasCoughOrDifficultBreathing:
+        'hasCoughOrDifficultBreathing' in options
+          ? options.hasCoughOrDifficultBreathing ?? null
+          : b.hasCoughOrDifficultBreathing,
+      not_able_to_drink_or_breastfeed: signs.not_able_to_drink_or_breastfeed ?? b.not_able_to_drink_or_breastfeed,
+      vomits_everything: signs.vomits_everything ?? b.vomits_everything,
+      had_convulsions: signs.had_convulsions ?? b.had_convulsions,
+      lethargic_or_unconscious: signs.lethargic_or_unconscious ?? b.lethargic_or_unconscious,
+      convulsing_now: signs.convulsing_now ?? b.convulsing_now,
       chestIndrawing: signs.chestIndrawing ?? b.chestIndrawing,
       stridorInCalmChild: signs.stridorInCalmChild ?? b.stridorInCalmChild,
       targetBranch,
@@ -145,36 +162,69 @@ export function generatePatients(
   }
 
   // 4. Exceptional inputs.
-  add('exceptional/missing-respiratory-rate', 'exceptional', null, lowestAge, null);
+  add('exceptional/missing-breaths-per-minute', 'exceptional', null, lowestAge, null);
+  add('exceptional/no-date-of-birth', 'exceptional', null, null, rateFor(lowestAge, 'below'));
   add('exceptional/age-negative', 'exceptional', null, -ageStep, rateFor(-ageStep, 'below'));
-  add('exceptional/no-cough', 'exceptional', null, lowestAge, rateFor(lowestAge, 'below'), {
+  add('exceptional/no-cough', 'exceptional', null, lowestAge, rateFor(lowestAge, 'below'), {}, {
     hasCoughOrDifficultBreathing: false,
   });
+  add('exceptional/cough-unanswered', 'exceptional', null, lowestAge, rateFor(lowestAge, 'below'), {}, {
+    hasCoughOrDifficultBreathing: null,
+  });
+  // One case per named danger sign, each combined with a fast-breathing rate.
   for (const t of bands) {
-    add(
-      `exceptional/danger-sign-with-fast-breathing/${t.id}`,
-      'exceptional',
-      null,
-      t.ageMinMonths,
-      rateAt(t, 'above'),
-      { generalDangerSign: true },
-    );
+    for (const sign of DANGER_SIGN_FIELDS) {
+      add(
+        `exceptional/danger-sign-with-fast-breathing/${t.id}/${sign}`,
+        'exceptional',
+        null,
+        t.ageMinMonths,
+        rateAt(t, 'above'),
+        { [sign]: true },
+      );
+    }
   }
   // Contradictory combinations: signs recorded without the entry symptom,
   // and every sign at once.
   add('exceptional/no-cough-with-chest-indrawing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'below'), {
-    hasCoughOrDifficultBreathing: false,
     chestIndrawing: true,
-  });
-  add('exceptional/no-cough-with-fast-breathing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'above'), {
+  }, { hasCoughOrDifficultBreathing: false });
+  add('exceptional/no-cough-with-fast-breathing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'above'), {}, {
     hasCoughOrDifficultBreathing: false,
   });
   add('exceptional/all-signs-with-fast-breathing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'above'), {
-    hasCoughOrDifficultBreathing: true,
-    generalDangerSign: true,
+    not_able_to_drink_or_breastfeed: true,
+    vomits_everything: true,
+    had_convulsions: true,
+    lethargic_or_unconscious: true,
+    convulsing_now: true,
     chestIndrawing: true,
     stridorInCalmChild: true,
-  });
+  }, { hasCoughOrDifficultBreathing: true });
 
   return out;
+}
+
+/**
+ * Serialise a patient set deterministically: stable key order per patient and
+ * a trailing newline, so the file bytes (and their sha256) are reproducible.
+ * The array order is the generator's fixed enumeration order.
+ */
+export function serializePatients(patients: readonly PatientInput[]): string {
+  const ordered = patients.map((p) => ({
+    id: p.id,
+    kind: p.kind,
+    targetBranch: p.targetBranch,
+    ageMonths: p.ageMonths,
+    breathsPerMinute: p.breathsPerMinute,
+    hasCoughOrDifficultBreathing: p.hasCoughOrDifficultBreathing,
+    not_able_to_drink_or_breastfeed: p.not_able_to_drink_or_breastfeed,
+    vomits_everything: p.vomits_everything,
+    had_convulsions: p.had_convulsions,
+    lethargic_or_unconscious: p.lethargic_or_unconscious,
+    convulsing_now: p.convulsing_now,
+    chestIndrawing: p.chestIndrawing,
+    stridorInCalmChild: p.stridorInCalmChild,
+  }));
+  return `${JSON.stringify(ordered, null, 2)}\n`;
 }

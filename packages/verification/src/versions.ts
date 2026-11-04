@@ -48,8 +48,21 @@ function harnessVersion(): string {
 
 function chtConfVersion(): string {
   // cht-conf runs in the build stage, not necessarily installed beside the
-  // runner. Record its version if resolvable, else 'unknown'. Never throw:
-  // version detection must not prevent a valid report.
+  // runner. Prefer CHT_CONF_VERSION, then `cht --version`, then a resolvable
+  // package.json, else 'unknown'. Never throw: version detection must not
+  // prevent a valid report.
+  const fromEnv = process.env.CHT_CONF_VERSION;
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+
+  try {
+    const out = execFileSync('cht', ['--version'], { encoding: 'utf8' }).trim();
+    // cht-conf prints e.g. "INFO 6.6.1" or "6.6.1"; take the first version token.
+    const m = /(\d+\.\d+\.\d+[^\s]*)/.exec(out);
+    if (m) return m[1]!;
+  } catch {
+    // fall through to resolution
+  }
+
   const tryResolve = (paths?: string[]): string | null => {
     try {
       const p = paths
@@ -67,6 +80,11 @@ function chtConfVersion(): string {
     viaHarness = null;
   }
   return viaHarness ?? tryResolve() ?? 'unknown';
+}
+
+/** True if no tool version is "unknown". Backs the toolVersionsKnown check. */
+export function allToolVersionsKnown(tv: ToolVersions): boolean {
+  return Object.values(tv).every((v) => v !== 'unknown');
 }
 
 /**

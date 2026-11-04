@@ -102,6 +102,16 @@ export function derivePages(rowsFilePath: string): PageSpec[] {
 /** The exact page-visibility error the harness emits (see Task 2). */
 const PAGE_VISIBILITY_MSG = /Attempted to fill \d+ questions, but only \d+ are visible\./;
 
+/**
+ * The harness fills visible pages greedily in order, then raises the
+ * page-visibility error on the first supplied array with no visible target.
+ * Its error `section` resets per visible page, so it does NOT directly give
+ * the count of arrays already consumed. The robust, clinical-constant-free
+ * fallback is therefore progressive: retry with one fewer trailing page array
+ * until the form submits, down to [[]]. Each retry relies solely on the
+ * harness's accept/reject signal, never on an age or threshold rule.
+ */
+
 export interface PatientExecutorOptions {
   harness: HarnessLike;
   formId: string;
@@ -184,27 +194,44 @@ export class PatientExecutor implements CaseExecutor {
     }
 
     // Fallback only when the sole problem is page visibility (option B).
+    // Progressive truncation: drop one trailing page array at a time and retry,
+    // down to [[]], until the form submits. Stop immediately on any non-
+    // visibility error (that is a real failure, never a fallback).
     if (this.isPageVisibilityError(result) && !result.report) {
-      await this.opts.harness.clear();
-      this.opts.harness.setNow(this.opts.fixedClock);
-      let fb: FillResult;
-      try {
-        fb = await this.opts.harness.fillForm(loadArg, []);
-      } catch (e) {
-        return { actual: null, harnessOutput: `fallback fillForm threw: ${String((e as Error).message ?? e)}`, usedPageFallback: true, status: 'error' };
-      }
-      const fbOther = this.otherErrors(fb)!;
-      if (fb.report && fbOther.length === 0) {
-        return {
-          actual: this.pick(fb),
-          harnessOutput: 'page-count fallback: full arrays had no visible target; refilled with [[]]',
-          usedPageFallback: true,
-          status: 'ok',
-        };
+      const full = pageAnswers as unknown[];
+      for (let n = full.length - 1; n >= 0; n--) {
+        const attempt = n === 0 ? [[]] : full.slice(0, n);
+        await this.opts.harness.clear();
+        this.opts.harness.setNow(this.opts.fixedClock);
+        let fb: FillResult;
+        try {
+          fb = await this.opts.harness.fillForm(loadArg, ...attempt);
+        } catch (e) {
+          return { actual: null, harnessOutput: `fallback fillForm threw: ${String((e as Error).message ?? e)}`, usedPageFallback: true, status: 'error' };
+        }
+        const fbOther = this.otherErrors(fb)!;
+        if (fb.report && fbOther.length === 0) {
+          return {
+            actual: this.pick(fb),
+            harnessOutput: `page-count fallback: full arrays had hidden pages; submitted after truncating to ${n} page array(s)${n === 0 ? ' ([[]])' : ''}`,
+            usedPageFallback: true,
+            status: 'ok',
+          };
+        }
+        if (fbOther.length > 0 && !this.isPageVisibilityError(fb)) {
+          // A real (non-visibility) failure: stop, record it as an error.
+          return {
+            actual: fb.report ? this.pick(fb) : null,
+            harnessOutput: `fallback (truncate to ${n}) failed with non-visibility error: ${JSON.stringify(fbOther)}`,
+            usedPageFallback: true,
+            status: 'error',
+          };
+        }
+        // else: still a page-visibility error, keep truncating.
       }
       return {
-        actual: fb.report ? this.pick(fb) : null,
-        harnessOutput: `fallback failed: ${JSON.stringify(fbOther)}`,
+        actual: null,
+        harnessOutput: 'page-count fallback exhausted: form did not submit even with [[]]',
         usedPageFallback: true,
         status: 'error',
       };
@@ -231,15 +258,85 @@ export function outputFieldsFromManifest(manifest: {
   return [...new Set([...fromManifest, ...extras])];
 }
 
-/** Resolve the manifest path's formId etc. */
-export function readManifest(configDir: string): {
+/** The manifest fields the runner reads. */
+export interface CompileManifest {
   formId: string;
   snapshotHash: string | null;
   artifactHash: string;
   outputFields?: Record<string, string | null>;
-} {
+  decisionTable?: { otherwise?: unknown };
+  outcomes?: Array<{ id?: unknown }>;
+}
+
+/** Resolve the manifest path's formId etc. */
+export function readManifest(configDir: string): CompileManifest {
   const raw = JSON.parse(readFileSync(join(configDir, 'compile-manifest.json'), 'utf8'));
   if (typeof raw.formId !== 'string') throw new Error('compile-manifest.json: formId missing');
   if (typeof raw.artifactHash !== 'string') throw new Error('compile-manifest.json: artifactHash missing');
   return raw;
+}
+
+/** Resolved required branch set for coverage. */
+export type ResolvedBranchIds =
+  | { source: 'manifest'; branchIds: string[] }
+  | { source: 'sample'; branchIds: string[]; warning: string };
+
+/** Minimal executed-case shape needed to compute observed-outcome coverage. */
+export interface CoverageCase {
+  actual: Record<string, JsonValue> | null;
+}
+
+/**
+ * Observed-outcome coverage: a branch is HIT only when some case has a non-null
+ * actual whose classification field equals that branch id. A status-error case
+ * (actual null) never counts. Returns covered/uncovered with a reason each. No
+ * branch is excluded from the required set; there is no unreachable allowlist.
+ */
+export function computeObservedCoverage(
+  branchIds: readonly string[],
+  cases: readonly CoverageCase[],
+  classificationField: string,
+): {
+  coveredBranchIds: string[];
+  uncoveredBranches: { id: string; reason: string }[];
+} {
+  const hit = new Set<string>();
+  for (const c of cases) {
+    if (c.actual === null) continue;
+    const cls = c.actual[classificationField];
+    if (typeof cls === 'string') hit.add(cls);
+  }
+  const coveredBranchIds = branchIds.filter((id) => hit.has(id));
+  const uncoveredBranches = branchIds
+    .filter((id) => !hit.has(id))
+    .map((id) => ({ id, reason: 'no executed case reached it' }));
+  return { coveredBranchIds, uncoveredBranches };
+}
+
+/**
+ * Branch ids from the manifest's outcomes (plus decisionTable.otherwise),
+ * taken verbatim; or the supplied sample ids with an unconfirmed warning when
+ * the manifest yields none. Mirrors synth's resolveBranchIds but reads the
+ * already-parsed manifest object (verification does not depend on synth).
+ */
+export function resolveBranchIds(
+  manifest: CompileManifest,
+  sampleBranchIds: string[] | null,
+): ResolvedBranchIds {
+  const ids: string[] = [];
+  for (const o of manifest.outcomes ?? []) {
+    if (o && typeof o.id === 'string' && o.id.length > 0 && !ids.includes(o.id)) ids.push(o.id);
+  }
+  const otherwise = manifest.decisionTable?.otherwise;
+  if (typeof otherwise === 'string' && otherwise.length > 0 && !ids.includes(otherwise)) {
+    ids.push(otherwise);
+  }
+  if (ids.length > 0) return { source: 'manifest', branchIds: ids };
+  return {
+    source: 'sample',
+    branchIds: sampleBranchIds ?? [],
+    warning:
+      'WARNING: branch ids come from unconfirmed sample data (the manifest had no outcomes) ' +
+      'and must not be used as release evidence.',
+  };
 }

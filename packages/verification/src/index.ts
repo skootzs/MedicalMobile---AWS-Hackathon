@@ -11,6 +11,7 @@ export type {
   ResultStatus,
   RunInfo,
   ToolVersions,
+  UncoveredBranch,
   VerificationCase,
   VerificationReport,
 } from './report.js';
@@ -39,15 +40,23 @@ export type {
   HarnessLike,
   PatientExecutorOptions,
 } from './case-executor.js';
+export type { CompileManifest, CoverageCase, ResolvedBranchIds } from './case-executor.js';
 export {
   PatientExecutor,
+  computeObservedCoverage,
   derivePages,
   outputFieldsFromManifest,
   readManifest,
+  resolveBranchIds,
 } from './case-executor.js';
 
-export type { BuildReportArgs, ExecutedCase } from './report-builder.js';
-export { buildReport, buildDisagreements, deriveStatus } from './report-builder.js';
+export type { MappablePatient, PageSpecLike } from './patient-mapper.js';
+export { mapPatientToPages } from './patient-mapper.js';
+
+export type { BuildReportArgs, ExecutedCase, SourceExpectation } from './report-builder.js';
+export { buildReport, buildDisagreements, deriveCase, evaluateSource } from './report-builder.js';
 
 export type { PatientCase, RunDeps } from './run.js';
 export { runVerification } from './run.js';
+
+export { allToolVersionsKnown } from './versions.js';

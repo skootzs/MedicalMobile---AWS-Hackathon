@@ -23,7 +23,7 @@
     "disagreements"
   ],
   "properties": {
-    "schemaVersion": { "const": "2.0.0" },
+    "schemaVersion": { "const": "2.1.0" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "passed": { "type": "boolean" },
     "coverageComplete": { "type": "boolean" },
@@ -42,7 +42,7 @@
     "run": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["command", "tz", "seed"],
+      "required": ["command", "tz", "seed", "fixedClock"],
       "properties": {
         "command": {
           "type": "array",
@@ -50,7 +50,8 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "tz": { "type": "string", "minLength": 1 },
-        "seed": { "type": ["string", "null"] }
+        "seed": { "type": ["string", "null"] },
+        "fixedClock": { "type": "string", "minLength": 1 }
       }
     },
     "references": {
@@ -77,14 +78,43 @@
     "coverage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["totalBranches", "coveredBranches", "uncoveredBranchIds"],
+      "required": [
+        "method",
+        "branchSource",
+        "sampleWarning",
+        "totalBranches",
+        "coveredBranches",
+        "coveredBranchIds",
+        "uncoveredBranchIds",
+        "uncoveredBranches"
+      ],
       "properties": {
+        "method": { "const": "observed-outcome" },
+        "branchSource": { "enum": ["manifest", "sample"] },
+        "sampleWarning": { "type": ["string", "null"], "minLength": 1 },
         "totalBranches": { "type": "integer", "minimum": 0 },
         "coveredBranches": { "type": "integer", "minimum": 0 },
+        "coveredBranchIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
         "uncoveredBranchIds": {
           "type": "array",
           "items": { "type": "string" },
           "uniqueItems": true
+        },
+        "uncoveredBranches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "reason"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
         }
       }
     },

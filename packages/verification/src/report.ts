@@ -18,7 +18,7 @@
  *       python too old, missing inputs, or the harness could not start).
  */
 
-export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.0.0';
+export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.1.0';
 
 /** Any JSON-serialisable value. Used where the shape belongs to a teammate. */
 export type JsonValue =
@@ -77,10 +77,32 @@ export interface ToolVersions {
   python: string;
 }
 
+/** An uncovered branch and why it was not reached. */
+export interface UncoveredBranch {
+  id: string;
+  reason: string;
+}
+
 export interface Coverage {
+  /**
+   * How coverage was measured. "observed-outcome" means a branch counts as hit
+   * only when an executed case with status ok produced that branch id as its
+   * actual classification. Evaluator-trace coverage is a separate method that
+   * will be added later and must NOT silently replace this one.
+   */
+  method: 'observed-outcome';
+  /** Where the required branch set came from. */
+  branchSource: 'manifest' | 'sample';
+  /** Present (and coverageComplete false) when branchSource is "sample". */
+  sampleWarning: string | null;
   totalBranches: number;
   coveredBranches: number;
+  /** Ids of hit branches, in required-set order. */
+  coveredBranchIds: string[];
+  /** Ids of unhit branches (kept for back-compatibility and quick scanning). */
   uncoveredBranchIds: string[];
+  /** Unhit branches with a reason each. */
+  uncoveredBranches: UncoveredBranch[];
 }
 
 /**
@@ -124,6 +146,8 @@ export interface RunInfo {
   tz: string;
   /** Generator seed, if the patient set used one; null if fully enumerated. */
   seed: string | null;
+  /** Fixed clock ('YYYY-MM-DD') used so age and date calcs are deterministic. */
+  fixedClock: string;
 }
 
 export interface VerificationCase {

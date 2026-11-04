@@ -1,19 +1,23 @@
 {
   "dataStatus": "SAMPLE - UNCONFIRMED, not from a reviewed guideline page",
-  "note": "Branch ids and the inputs used to TARGET each branch. Targeting is not an expected outcome: what a case actually produces is decided by golden cases and the evaluator, never by this file.",
+  "note": "Branch ids and the inputs used to TARGET each branch. Targeting is not an expected outcome: what a case actually produces is decided by golden cases and the evaluator, never by this file. Sign field names mirror the real form's questions.",
   "baseline": {
-    "note": "Inputs every generated case starts from. respiratoryRate is set per case relative to thresholds.json.",
+    "note": "Inputs every generated case starts from. breathsPerMinute is set per case relative to thresholds.json.",
     "hasCoughOrDifficultBreathing": true,
-    "generalDangerSign": false,
+    "not_able_to_drink_or_breastfeed": false,
+    "vomits_everything": false,
+    "had_convulsions": false,
+    "lethargic_or_unconscious": false,
+    "convulsing_now": false,
     "chestIndrawing": false,
     "stridorInCalmChild": false,
     "confirmed": false
   },
   "branches": [
     {
-      "id": "general-danger-sign",
-      "label": "General danger sign",
-      "set": { "generalDangerSign": true },
+      "id": "danger-sign-not-able-to-drink",
+      "label": "Danger sign: not able to drink or breastfeed",
+      "set": { "not_able_to_drink_or_breastfeed": true },
       "respiratoryRate": "below",
       "sourcePassage": "TODO",
       "confirmed": false

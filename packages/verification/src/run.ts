@@ -14,20 +14,23 @@
  * runner NEVER writes an expected value or copies actuals into expected.
  */
 import { createRequire } from 'node:module';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { IntegrityCheck, References, RunInfo, VerificationReport } from './report.js';
-import { collectToolVersions, PythonTooOldError } from './versions.js';
+import type { IntegrityCheck, JsonValue, References, RunInfo, VerificationReport } from './report.js';
+import { allToolVersionsKnown, collectToolVersions, PythonTooOldError } from './versions.js';
 import { compileArtifactHash, hashDirectory, sha256 } from './hashing.js';
 import {
   PatientExecutor,
   derivePages,
+  computeObservedCoverage,
   outputFieldsFromManifest,
   readManifest,
+  resolveBranchIds,
   type CaseExecutor,
   type ExecutionResult,
   type HarnessLike,
 } from './case-executor.js';
+import { mapPatientToPages, type MappablePatient } from './patient-mapper.js';
 import { buildReport, type ExecutedCase } from './report-builder.js';
 
 const require = createRequire(import.meta.url);
@@ -40,6 +43,7 @@ interface Env {
   configDir: string;
   outDir: string;
   tz: string;
+  patientsFile: string | null;
   references: References;
   expectedSnapshotHash: string | null;
 }
@@ -54,6 +58,7 @@ function readEnv(): Env {
     configDir,
     outDir: process.env.OUT_DIR || DEFAULT_OUT,
     tz: process.env.TZ || DEFAULT_TZ,
+    patientsFile: orNull(process.env.PATIENTS_FILE),
     references: {
       snapshotId: orNull(process.env.SNAPSHOT_ID),
       logicModelHash: orNull(process.env.LOGIC_MODEL_HASH),
@@ -64,6 +69,22 @@ function readEnv(): Env {
     },
     expectedSnapshotHash: orNull(process.env.EXPECTED_SNAPSHOT_HASH),
   };
+}
+
+/** One patient as stored in patients.json (synth output). */
+interface StoredPatient {
+  id: string;
+  kind: ExecutedCase['kind'];
+  targetBranch: string | null;
+  ageMonths: number | null;
+  [field: string]: JsonValue;
+}
+
+/** Load patients.json (array of synth patients). Throws on malformed input. */
+function loadPatients(path: string): StoredPatient[] {
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  if (!Array.isArray(raw)) throw new RunnerError(`PATIENTS_FILE ${path} must contain a JSON array`);
+  return raw as StoredPatient[];
 }
 
 /** Load the real harness. Isolated so tests can inject a fake. */
@@ -78,12 +99,7 @@ function loadHarness(configDir: string, tz: string): HarnessLike {
   });
 }
 
-/**
- * The patient set is a list of { id, input } cases. At present there is no
- * wired source of inputs in-container, so this is empty unless a caller injects
- * one; an empty set makes the report fail (passed:false), which is correct.
- * This is where synth-generated patients will be fed in once reconciled.
- */
+/** A patient ready to execute: id/branch/kind plus the mapped input. */
 export interface PatientCase {
   id: string;
   branchId: string | null;
@@ -96,6 +112,10 @@ export interface RunDeps {
   harness: HarnessLike;
   executorFactory: (h: HarnessLike, formId: string, rowsPath: string, outputFields: string[]) => CaseExecutor;
   patients: PatientCase[];
+  /** sha256 of the patients file bytes, or null when no file was supplied. */
+  patientSetHash: string | null;
+  /** Sample branch ids, used only if the manifest yields no outcomes. */
+  sampleBranchIds?: string[] | null;
   log: (line: string) => void;
 }
 
@@ -104,6 +124,13 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   const integrityChecks: IntegrityCheck[] = [];
 
   const toolVersions = await collectToolVersions(); // throws PythonTooOldError -> exit 2
+  integrityChecks.push({
+    name: 'toolVersionsKnown',
+    ok: allToolVersionsKnown(toolVersions),
+    detail: allToolVersionsKnown(toolVersions)
+      ? 'all tool versions resolved'
+      : `one or more tool versions are "unknown": ${JSON.stringify(toolVersions)}`,
+  });
 
   const manifest = readManifest(env.configDir);
   const formId = manifest.formId;
@@ -172,7 +199,39 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     }
   }
 
-  const run: RunInfo = { command: process.argv.slice(), tz: env.tz, seed: null };
+  const run: RunInfo = {
+    command: process.argv.slice(),
+    tz: env.tz,
+    seed: null,
+    fixedClock: FIXED_CLOCK,
+  };
+
+  // Observed-outcome coverage. The required branch set is the manifest's
+  // outcome ids (plus decisionTable.otherwise); if the manifest yields none we
+  // fall back to the sample branch ids and keep the unconfirmed warning. A
+  // branch counts as HIT only when an executed case with status ok produced
+  // that branch id as its ACTUAL classification. This is observed-outcome
+  // coverage; evaluator-trace coverage is a separate method added later and
+  // must not silently replace it. No branch is excluded from the required set,
+  // and there is no "known unreachable" allowlist.
+  const resolved = resolveBranchIds(manifest, deps.sampleBranchIds ?? null);
+  const classificationField = manifest.outputFields?.classification ?? 'classification';
+  const { coveredBranchIds, uncoveredBranches } = computeObservedCoverage(
+    resolved.branchIds,
+    executed,
+    classificationField,
+  );
+  const coverage = {
+    method: 'observed-outcome' as const,
+    branchSource: resolved.source,
+    sampleWarning: resolved.source === 'sample' ? resolved.warning : null,
+    totalBranches: resolved.branchIds.length,
+    coveredBranches: coveredBranchIds.length,
+    coveredBranchIds,
+    uncoveredBranchIds: uncoveredBranches.map((u) => u.id),
+    uncoveredBranches,
+  };
+  if (resolved.source === 'sample') log(resolved.warning);
 
   const report = buildReport({
     generatedAt: new Date().toISOString(),
@@ -181,9 +240,10 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     references: env.references,
     compileArtifactHash: recomputed,
     testedDirHash,
-    patientSetHash: sha256(JSON.stringify(deps.patients)),
+    patientSetHash: deps.patientSetHash ?? sha256(JSON.stringify([])),
     goldenCasesHash: null, // no golden file supplied; never hash empty input
-    coverage: { totalBranches: 0, coveredBranches: 0, uncoveredBranchIds: [] },
+    coverage,
+    outputFields,
     pageFallbackCaseIds: fallbackIds,
     integrityChecks,
     cases: executed,
@@ -214,13 +274,44 @@ async function main(): Promise<number> {
   }
 
   try {
+    // Load and map patients from PATIENTS_FILE, if supplied. patientSetHash is
+    // the sha256 of the file's raw bytes (not a re-serialisation).
+    let patients: PatientCase[] = [];
+    let patientSetHash: string | null = null;
+    if (env.patientsFile) {
+      const bytes = readFileSync(env.patientsFile);
+      patientSetHash = sha256(bytes);
+      const stored = loadPatients(env.patientsFile);
+      // Page derivation is needed to map inputs; done once here.
+      const rowsPath = join(env.configDir, 'compile-rows.json');
+      const pages = derivePages(rowsPath);
+      patients = stored.map((p) => ({
+        id: p.id,
+        branchId: p.targetBranch,
+        kind: p.kind,
+        input: {
+          ageMonths: p.ageMonths,
+          pageAnswers: mapPatientToPages(p as MappablePatient, pages),
+        },
+      }));
+      log(`loaded ${patients.length} patients from ${env.patientsFile}`);
+    } else {
+      log('no PATIENTS_FILE supplied; running with an empty patient set (passed will be false)');
+    }
+
     const harness = loadHarness(env.configDir, env.tz);
     const report = await runVerification({
       env,
       harness,
       executorFactory: (h, formId, rowsPath, outputFields) =>
         new PatientExecutor({ harness: h, formId, rowsFilePath: rowsPath, fixedClock: FIXED_CLOCK, outputFields }),
-      patients: [], // no in-container patient source yet; empty => passed:false
+      patients,
+      patientSetHash,
+      // Sample branch ids (used only if the manifest has no outcomes): the
+      // distinct targetBranch values from the loaded patient set.
+      sampleBranchIds: [
+        ...new Set(patients.map((p) => p.branchId).filter((b): b is string => b !== null)),
+      ].sort(),
       log,
     });
     writeOutputs(env.outDir, report, logLines);

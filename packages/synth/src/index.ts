@@ -9,18 +9,23 @@ export type {
   ThresholdOperator,
   ThresholdsData,
 } from './data.js';
+export type { ManifestBranches, ResolvedBranches, SampleBranches } from './data.js';
 export {
   CONFIRMED_DATA_STATUS,
+  DANGER_SIGN_FIELDS,
   SIGN_FIELDS,
+  branchIdsFromManifest,
   dataStatusWarnings,
   loadBranches,
   loadThresholds,
   parseBranches,
   parseThresholds,
+  resolveBranchIds,
 } from './data.js';
 
 export type { GenerateOptions, PatientInput, PatientKind } from './patients.js';
-export { generatePatients } from './patients.js';
+export { generatePatients, serializePatients } from './patients.js';
+export { writePatientsFile } from './write-patients.js';
 
 export type { CoverageResult } from './coverage.js';
 export { computeCoverage } from './coverage.js';
