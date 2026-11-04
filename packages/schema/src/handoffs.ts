@@ -128,9 +128,11 @@ export interface JobResult {
   reportVersion?: string; // e.g. "2.0.0"
 }
 
-// Thin; R2 reads the job item for details. The events Pipe sends only jobId, status and attempt.
+// Thin; R2 reads the job item for details. The events Pipe sends only requestId, jobId,
+// status and attempt.
 export interface JobEvent {
   contractVersion?: typeof CONTRACT_VERSION;
+  requestId: string;
   jobId: string;
   status: JobStatus;
   attempt: number;
@@ -324,11 +326,12 @@ export const jobEventSchema: JSONSchemaType<JobEvent> = {
   additionalProperties: false,
   properties: {
     contractVersion: { type: 'string', const: CONTRACT_VERSION, nullable: true },
+    requestId: { type: 'string', minLength: 1 },
     jobId: { type: 'string', minLength: 1 },
     status: { type: 'string', enum: ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED'] },
     attempt: { type: 'integer', minimum: 1 },
   },
-  required: ['jobId', 'status', 'attempt'],
+  required: ['requestId', 'jobId', 'status', 'attempt'],
 } as unknown as JSONSchemaType<JobEvent>;
 
 // --- Ajv validators. Fail closed: treat "not valid" the same as "rejected". ---

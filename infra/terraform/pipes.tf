@@ -138,7 +138,7 @@ resource "aws_pipes_pipe" "job_events" {
   }
 
   target_parameters {
-    input_template = "{\"jobId\":\"<$.dynamodb.NewImage.jobId.S>\",\"status\":\"<$.dynamodb.NewImage.status.S>\",\"attempt\":<$.dynamodb.NewImage.attempt.N>}"
+    input_template = "{\"requestId\":\"<$.dynamodb.NewImage.requestId.S>\",\"jobId\":\"<$.dynamodb.NewImage.jobId.S>\",\"status\":\"<$.dynamodb.NewImage.status.S>\",\"attempt\":<$.dynamodb.NewImage.attempt.N>}"
   }
 
   depends_on = [aws_iam_role_policy.pipe_job_events]
