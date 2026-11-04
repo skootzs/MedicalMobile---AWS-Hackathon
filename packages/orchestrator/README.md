@@ -672,8 +672,8 @@ The provider must authenticate session/service context and authorize access to t
 request before returning only the required actor ID/roles. Fictional string-to-actor
 mappings exist only in test fixtures and must never become browser authentication.
 The store re-resolves at commit; a provider failure or mismatched identity cannot
-fall back to granting approval. No real authentication or public read authorization
-has been implemented.
+fall back to granting approval. Real authentication remains pending; the local HTTP milestone below adds an
+injected request-access boundary, with access denied by default.
 
 Stored R4/R5/R6 events are authoritative only within the backend trust boundary.
 Real integration must authenticate callbacks and verify the actual reports and
@@ -683,8 +683,8 @@ clinical correctness or a complete R4 evaluator implementation.
 
 All new application contracts remain local until R4 confirms shared schemas for
 commands, checker/verification evidence, schema versions, and audit/idempotency
-metadata. The in-memory store remains process-local and volatile. No database,
-Fastify, Cognito, Bedrock, AWS or Strands Box integration is added.
+metadata. The in-memory store remains process-local and volatile. This application-service milestone added no database, Cognito, Bedrock, AWS
+or Strands Box integration. The following milestone supplies the local HTTP adapter.
 
 Next: add a thin Fastify adapter around this service with explicit request/response
 schemas and injected authentication. Derive principal context from server-verified
@@ -693,3 +693,147 @@ HTTP responses. Test routes with `inject()` using fictional providers first; nev
 accept actor/role/trusted flags from the body or public headers as authentication.
 Coordinate a durable adapter and request-scoped identity integration with R7 before
 exposing the service publicly.
+
+
+## Local Fastify API (provisional, test-only)
+
+`createLocalApi()` in `src/server.ts` wraps the existing ApprovalService and store.
+It exposes only `inject()` and `close()`: no public listener, `listen()` method,
+raw server, or start script is provided. All business guards still belong to the
+existing service/workflow/store; the HTTP layer validates and translates messages.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/requests/:requestId/status` | Read an accessible request's status and current version only. |
+| `POST /api/requests/:requestId/clinical-decisions` | Record APPROVE, REJECT, or RETURN for exact checked clinical/content LogicModel evidence. |
+| `POST /api/requests/:requestId/release-decisions` | Record APPROVE, REJECT, or RETURN for exact compiled/verified artifact evidence. |
+
+The POST body is the existing application command without `type` or `requestId`:
+the server derives those from the route. Common fields are `eventId`,
+`expectedVersion`, `requestRevision`, `requestSnapshotHash`, `logicRevision`,
+`logicHash`, `decision`, and optional `note`. REJECT/RETURN require a nonblank note.
+Clinical decisions also require `checkerReportId`. Release decisions instead require
+`clinicalApprovalEventId`, `compilationId`, `artifactHash`, `verificationId`, and
+`verificationReportHash`. These are references, never authoritative evidence supplied
+by the client: ApprovalService loads and checks backend records.
+
+### Authentication and validation
+
+`AuthenticationBoundary` is injected server code with `authenticate()` and
+`canAccessRequest()`. Omitted authentication denies every request. Authentication
+establishes an opaque principal before body parsing; request access is checked before
+handler storage/service calls. The service/store must resolve that context through
+the same trusted identity source. Role and independence checks remain in the service
+and workflow. The only mock session mapping is under `test/helpers/api-fixtures.ts`;
+no source file imports it. It has no production security value.
+
+Actor IDs, roles, trusted flags, evidence-authority fields, body request IDs and
+command types are rejected as unexpected body properties. Spoofed actor/role headers
+do not authenticate anyone. Input validation does not coerce values, remove unknown
+fields or insert defaults. Provisional transport limits: 32 KiB body, identifiers
+1–100 characters without leading/trailing whitespace, positive safe revision
+integers, nonnegative safe expected versions, lowercase 64-character SHA-256 strings,
+and notes up to 2,000 characters. Unknown query parameters are rejected. Responses
+use explicit schemas, generic infrastructure errors, and `Cache-Control: no-store`.
+
+### Response semantics
+
+| HTTP | Meaning |
+| --- | --- |
+| 200 | Decision recorded, or identical previously accepted event recognized; GET returns status/version. |
+| 400 | Malformed JSON, invalid/missing field or unexpected property. |
+| 401 | No verified principal. |
+| 403 | Authenticated actor fails decision role or reviewer-independence rules. |
+| 404 | Request absent or inaccessible; same generic response for both. |
+| 409 | Stale version, conflicting event or incompatible/missing approval evidence. |
+| 503 | Authentication/access provider or storage/infrastructure failure; no internal exception details. |
+
+A successful POST returns `reviewType`, `decision`, `decisionRecorded: true`,
+`outcome: DECISION_RECORDED`, `duplicate: false`, `workflowVersion`, `auditId`, and
+request/event IDs. A recorded REJECT or RETURN is a successful decision submission,
+not approval. There is no `approvalGranted` flag or download permission in this
+response. Clinical approval alone never authorizes release.
+
+An exact retry returns 200 with `outcome: DUPLICATE_EVENT` and `duplicate: true`.
+It does not repeat a transition or decision record; a distinct attempt may append
+a DUPLICATE audit entry under the existing service semantics. Reusing an accepted
+event ID with a changed command returns 409. A retry after later revisions acknowledges
+the original event and never reactivates old approval. Read current status separately.
+Malformed/unauthenticated/resource-denied HTTP attempts are blocked before the service
+and do not receive durable audit entries; operational security logging is still pending.
+
+### Fictional examples
+
+An authorized injected GET `/api/requests/fictional-001/status` returns 200:
+
+```json
+{"requestId":"fictional-001","status":"WAITING_FOR_CLINICAL_APPROVAL","version":7}
+```
+
+A clinical POST to `/api/requests/fictional-001/clinical-decisions` in the existing
+fictional test fixture uses hashes computed from its immutable snapshots:
+
+```json
+{
+  "eventId": "http-clinical-7",
+  "expectedVersion": 7,
+  "requestRevision": 1,
+  "requestSnapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952",
+  "logicRevision": 1,
+  "logicHash": "b8da115e6b0ab7e04e56dcb9d4d1167e2b34a481c7c5a0dcbdbd87f22aa103f1",
+  "checkerReportId": "checks-6",
+  "decision": "APPROVE"
+}
+```
+
+With the fictional clinician context and deterministic test attempt ID, it returns:
+
+```json
+{
+  "requestId": "fictional-001",
+  "eventId": "http-clinical-7",
+  "reviewType": "CLINICAL_CONTENT",
+  "decision": "APPROVE",
+  "outcome": "DECISION_RECORDED",
+  "decisionRecorded": true,
+  "duplicate": false,
+  "workflowVersion": 8,
+  "auditId": "[\"fictional-001\",\"example-http-attempt\"]"
+}
+```
+
+Use `api.inject({ method, url, headers, payload })` with the test-only provider;
+there is no listening URL. Tests seed the store directly. They cover clinical and
+release approval, explicit REJECT/RETURN, independent reviewers, stale/concurrent
+commands, duplicates, schema validation, access isolation and rollback on failure.
+Run `npm run typecheck` and `npm test` from this package. There are 56 HTTP tests
+plus the original 303 tests (359 total).
+
+### Dependencies and Pending Role 4 Integration
+
+Fastify is pinned to 5.12.8 in this package. Fastify v5 supports Node.js 20+, which
+includes the intended Node.js 22 runtime. See the official
+[migration guide](https://fastify.dev/docs/latest/Guides/Migration-Guide-V5/),
+[validation reference](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/)
+and [injection testing guide](https://fastify.dev/docs/latest/Guides/Testing/).
+Verification here used Node.js 24.18.0 and Node 22 typings; running the suite on an
+actual Node.js 22 runtime remains an integration check.
+
+Installation stayed package-local with `--workspaces=false --package-lock=false
+--ignore-scripts`; no root configuration, shared lockfile, other package or existing
+strict tsconfig was changed. Shared package manager/lockfile ownership still needs
+team agreement before workspace integration; a clean install currently resolves
+transitive dependencies without a committed lockfile.
+
+R4 must confirm final command/evidence schemas, identifier/hash formats, transport
+limits and error/state vocabulary. The provisional schema-validation boundary still
+does not establish full clinical correctness. No request creation, PO confirmation,
+screening callback, review-job dispatch, artifact download, real authentication or
+durable database is implemented. Mock providers and the volatile store remain local
+fixtures. Real provider/callback verification, request membership policy and atomic
+durable storage are required before exposing a server.
+
+Smallest next step: agree a read-only authorized review-context response with R1
+and R4 (snapshot, checker and verification references needed to build these commands),
+then test one UI review journey through `inject()`. Follow with request creation/PO
+confirmation and trusted authentication/durable adapters with the responsible teammates.
