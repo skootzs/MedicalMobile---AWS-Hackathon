@@ -110,6 +110,12 @@ export class FakeStages implements Stages {
     return this.verifyResult;
   }
   async imageDigest(image: string) { return `${image}@sha256:test`; }
+  cleanupCalls: string[] = [];
+  onCleanup: ((dir: string) => void) | undefined;
+  async removeContainerFiles(dir: string) {
+    this.cleanupCalls.push(dir);
+    this.onCleanup?.(dir);
+  }
 }
 
 let messageCounter = 0;

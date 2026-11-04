@@ -120,6 +120,7 @@ export interface Stages {
   convert(input: ConvertStageInput, signal: AbortSignal, timeoutMs: number): Promise<StageResult>;
   verify(input: VerifyStageInput, signal: AbortSignal, timeoutMs: number): Promise<StageResult>;
   imageDigest(image: string): Promise<string | undefined>;
+  removeContainerFiles(dir: string, image: string): Promise<void>;
 }
 
 export const dockerStages: Stages = {
@@ -129,6 +130,18 @@ export const dockerStages: Stages = {
   async imageDigest(image) {
     const result = await runInspect(image);
     return result || undefined;
+  },
+  // Stage containers leave uid 1000 files, which a host user with another uid can't remove,
+  // so a container with that uid removes them. Files it doesn't own are left to the caller.
+  removeContainerFiles(dir, image) {
+    return new Promise((resolve) => {
+      const child = spawn('docker', [
+        'run', '--rm', ...BASE_FLAGS, '-v', `${dir}:/clean`, image,
+        'sh', '-c', 'chmod -R u+rwX /clean 2>/dev/null; find /clean -mindepth 1 -delete 2>/dev/null; true',
+      ], { stdio: 'ignore' });
+      child.on('error', () => resolve());
+      child.on('close', () => resolve());
+    });
   },
 };
 

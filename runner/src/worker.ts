@@ -291,7 +291,7 @@ export class Worker {
     } as const;
     let toolVersions: JobResult['toolVersions'] = {};
     try {
-      rmSync(dir, { recursive: true, force: true });
+      await this.#removeAttemptDir(dir);
       mkdirSync(dir, { recursive: true });
       await this.#secondGuard(payload);
       const fields = payload.jobType === 'VERIFY_BUILD'
@@ -323,13 +323,22 @@ export class Worker {
       });
     } finally {
       clearInterval(beat);
-      // Containers may leave uid 1000 files this user can't remove. The result is already
-      // recorded, so a failed cleanup must not change the job's outcome.
+      // The result is already recorded, so a failed cleanup must not change the job's outcome.
       try {
-        rmSync(dir, { recursive: true, force: true });
+        await this.#removeAttemptDir(dir);
       } catch (err) {
         this.#log('error', 'Could not clean the attempt directory', { dir, error: String(err) });
       }
+    }
+  }
+
+  // Containers can leave uid 1000 files that this user can't remove directly.
+  async #removeAttemptDir(dir: string): Promise<void> {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      await this.#d.stages.removeContainerFiles(dir, this.#d.config.buildImage);
+      rmSync(dir, { recursive: true, force: true });
     }
   }
 

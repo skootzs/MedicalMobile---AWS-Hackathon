@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { before, beforeEach, describe, it } from 'node:test';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { sha256 } from '../src/hashing.ts';
@@ -561,22 +561,39 @@ describe('VERIFY_BUILD', () => {
     assert.ok(withGolden.includes('GOLDEN_CASES_HASH=golden'));
   });
 
-  it('a job dir it cannot clean up does not change the outcome', async () => {
-    const payload = await verifyPayload();
+  // Stands in for a uid 1000 directory: this user can't remove what's inside it.
+  function lockOutDir(payload: Record<string, unknown>) {
     h.stages.report = report(payload, true);
     const fakeVerify = h.stages.verify.bind(h.stages);
-    let locked = '';
+    const paths = { locked: '', attemptDir: '' };
     h.stages.verify = async (input) => {
-      locked = join(input.outDir, 'locked');
-      mkdirSync(locked);
-      writeFileSync(join(locked, 'file'), 'x');
-      chmodSync(locked, 0o555);
+      paths.locked = join(input.outDir, 'locked');
+      paths.attemptDir = dirname(input.outDir);
+      mkdirSync(paths.locked);
+      writeFileSync(join(paths.locked, 'file'), 'x');
+      chmodSync(paths.locked, 0o555);
       return fakeVerify(input);
     };
+    return paths;
+  }
+
+  it('removes an attempt dir with files only the container user can remove', async () => {
+    const payload = await verifyPayload();
+    const paths = lockOutDir(payload);
+    h.stages.onCleanup = () => chmodSync(paths.locked, 0o755);
+    assert.equal(await h.run(payload), 'SUCCEEDED');
+    assert.deepEqual(h.stages.cleanupCalls, [paths.attemptDir]);
+    assert.equal(existsSync(paths.attemptDir), false);
+  });
+
+  it('an attempt dir it cannot clean up does not change the outcome', async () => {
+    const payload = await verifyPayload();
+    const paths = lockOutDir(payload);
     try {
       assert.equal(await h.run(payload), 'SUCCEEDED');
+      assert.equal((await h.job(payload.jobId)).status, 'SUCCEEDED');
     } finally {
-      chmodSync(locked, 0o755);
+      chmodSync(paths.locked, 0o755);
     }
   });
 
