@@ -184,14 +184,10 @@ export function generatePatients(
       );
     }
   }
-  // Contradictory combinations: signs recorded without the entry symptom,
-  // and every sign at once.
-  add('exceptional/no-cough-with-chest-indrawing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'below'), {
-    chestIndrawing: true,
-  }, { hasCoughOrDifficultBreathing: false });
-  add('exceptional/no-cough-with-fast-breathing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'above'), {}, {
-    hasCoughOrDifficultBreathing: false,
-  });
+  // Every sign at once (with cough answered yes, so all pages are visible).
+  // Note: cases that set breathing/danger-sign answers while cough is "no"
+  // were removed, because those pages are hidden and the answers cannot be
+  // given (Correction B). Plain "no cough" above remains.
   add('exceptional/all-signs-with-fast-breathing', 'exceptional', null, lowestAge, rateFor(lowestAge, 'above'), {
     not_able_to_drink_or_breastfeed: true,
     vomits_everything: true,

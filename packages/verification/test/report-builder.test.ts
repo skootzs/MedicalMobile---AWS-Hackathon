@@ -12,7 +12,7 @@ import { buildReport, deriveCase, evaluateSource } from '../src/report-builder.j
 import type { ExecutedCase, SourceExpectation } from '../src/report-builder.js';
 import type { References, RunInfo, ToolVersions } from '../src/report.js';
 
-const OUTPUT_FIELDS = ['classification', 'in_scope'];
+const CLASSIFICATION = 'classification';
 
 function mkCase(overrides: Partial<ExecutedCase>): ExecutedCase {
   return {
@@ -32,7 +32,6 @@ test('matching values give pass', () => {
   const r = evaluateSource(
     { classification: 'pneumonia', in_scope: 'yes' },
     { expected: { classification: 'pneumonia', in_scope: 'yes' } },
-    OUTPUT_FIELDS,
   );
   assert.equal(r.status, 'pass');
 });
@@ -41,39 +40,65 @@ test('a differing value gives fail', () => {
   const r = evaluateSource(
     { classification: 'pneumonia', in_scope: 'yes' },
     { expected: { classification: 'cough_or_cold', in_scope: 'yes' } },
-    OUTPUT_FIELDS,
   );
   assert.equal(r.status, 'fail');
 });
 
-test('a source that omits a field the actual has is a fail', () => {
+// --- Correction A: compare only the fields a source declares ---
+
+test('A: a declared field missing from actual is a fail', () => {
   const r = evaluateSource(
-    { classification: 'pneumonia', in_scope: 'yes' },
-    { expected: { classification: 'pneumonia' } }, // in_scope omitted
-    OUTPUT_FIELDS,
+    { classification: 'pneumonia' }, // in_scope absent from actual
+    { expected: { classification: 'pneumonia', in_scope: 'yes' } }, // declares in_scope
   );
   assert.equal(r.status, 'fail');
+});
+
+test('A: a field in actual the source does not declare is neither compared nor a fail', () => {
+  // Source declares only classification; actual also has in_scope. Still pass.
+  const r = evaluateSource(
+    { classification: 'pneumonia', in_scope: 'no' },
+    { expected: { classification: 'pneumonia' } },
+  );
+  assert.equal(r.status, 'pass');
+});
+
+test('A: explicit fields list restricts the comparison', () => {
+  // Declares only in_scope via fields; classification differs but is ignored.
+  const r = evaluateSource(
+    { classification: 'pneumonia', in_scope: 'yes' },
+    { expected: { classification: 'cough_or_cold', in_scope: 'yes' }, fields: ['in_scope'] },
+  );
+  assert.equal(r.status, 'pass');
+});
+
+test("A: a case whose source doesn't declare 'classification' gets status error", () => {
+  const d = deriveCase(
+    mkCase({ golden: { expected: { in_scope: 'yes' } } }), // no classification declared
+    CLASSIFICATION,
+  );
+  assert.equal(d.status, 'error');
+  assert.match(d.detail ?? '', /did not declare the "classification" field/);
 });
 
 test("a passed-in status of 'pass' on mismatching values still gives fail", () => {
-  // The caller tries to force a pass; the builder must ignore it.
   const sneaky = {
     expected: { classification: 'cough_or_cold', in_scope: 'yes' },
     status: 'pass',
   } as unknown as SourceExpectation;
-  const r = evaluateSource({ classification: 'pneumonia', in_scope: 'yes' }, sneaky, OUTPUT_FIELDS);
+  const r = evaluateSource({ classification: 'pneumonia', in_scope: 'yes' }, sneaky);
   assert.equal(r.status, 'fail');
 });
 
 test('deriveCase: no source => error; cannot pass without a source', () => {
-  const d = deriveCase(mkCase({ golden: null, evaluator: null }), OUTPUT_FIELDS);
+  const d = deriveCase(mkCase({ golden: null, evaluator: null }), CLASSIFICATION);
   assert.equal(d.status, 'error');
 });
 
 test('deriveCase: matching golden => pass', () => {
   const d = deriveCase(
     mkCase({ golden: { expected: { classification: 'pneumonia', in_scope: 'yes' } } }),
-    OUTPUT_FIELDS,
+    CLASSIFICATION,
   );
   assert.equal(d.status, 'pass');
 });
@@ -84,7 +109,7 @@ test('deriveCase: golden and evaluator expected differ => disagree', () => {
       golden: { expected: { classification: 'pneumonia', in_scope: 'yes' } },
       evaluator: { expected: { classification: 'cough_or_cold', in_scope: 'yes' } },
     }),
-    OUTPUT_FIELDS,
+    CLASSIFICATION,
   );
   assert.equal(d.status, 'disagree');
 });
@@ -120,7 +145,7 @@ function baseArgs() {
       uncoveredBranchIds: [] as string[],
       uncoveredBranches: [] as { id: string; reason: string }[],
     },
-    outputFields: OUTPUT_FIELDS,
+    classificationField: 'classification',
     pageFallbackCaseIds: [] as string[],
     integrityChecks: [],
   };

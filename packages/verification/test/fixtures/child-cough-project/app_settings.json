@@ -1,0 +1,22 @@
+{
+  "locale": "en",
+  "languages": [
+    "en"
+  ],
+  "contact_types": [
+    {
+      "id": "person",
+      "name_key": "person",
+      "person": true,
+      "parents": []
+    }
+  ],
+  "tasks": {
+    "rules": "",
+    "schedules": [],
+    "targets": []
+  },
+  "forms": {},
+  "permissions": {},
+  "roles": {}
+}

@@ -7,8 +7,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -b",
-    "test": "node --test"
+    "build": "npx -y -p typescript@5 tsc -p tsconfig.json",
+    "build:test": "npx -y -p typescript@5 tsc -p tsconfig.test.json",
+    "pretest": "npm run build && npm run build:test",
+    "test": "node --test dist-test/test/*.test.js",
+    "start": "node dist/run.js"
   },
   "dependencies": {
     "cht-conf-test-harness": "^5.0.4"

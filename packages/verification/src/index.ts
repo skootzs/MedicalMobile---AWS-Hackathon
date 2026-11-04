@@ -25,7 +25,9 @@ export {
 
 export { sha256, hashFileSet, hashDirectory, compileArtifactHash, listFilesRelative } from './hashing.js';
 
+export type { ChtConfVersion, ChtConfVersionSource, CollectedToolVersions } from './versions.js';
 export {
+  chtConfVersion,
   collectToolVersions,
   isPythonSupported,
   parsePythonMajorMinor,
@@ -54,9 +56,9 @@ export type { MappablePatient, PageSpecLike } from './patient-mapper.js';
 export { mapPatientToPages } from './patient-mapper.js';
 
 export type { BuildReportArgs, ExecutedCase, SourceExpectation } from './report-builder.js';
-export { buildReport, buildDisagreements, deriveCase, evaluateSource } from './report-builder.js';
+export { buildReport, buildDisagreements, declaredFields, deriveCase, evaluateSource } from './report-builder.js';
 
 export type { PatientCase, RunDeps } from './run.js';
-export { runVerification } from './run.js';
+export { runVerification, sanitizeCommand } from './run.js';
 
 export { allToolVersionsKnown } from './versions.js';

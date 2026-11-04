@@ -480,36 +480,6 @@
     "stridorInCalmChild": false
   },
   {
-    "id": "exceptional/no-cough-with-chest-indrawing",
-    "kind": "exceptional",
-    "targetBranch": null,
-    "ageMonths": 2,
-    "breathsPerMinute": 49,
-    "hasCoughOrDifficultBreathing": false,
-    "not_able_to_drink_or_breastfeed": false,
-    "vomits_everything": false,
-    "had_convulsions": false,
-    "lethargic_or_unconscious": false,
-    "convulsing_now": false,
-    "chestIndrawing": true,
-    "stridorInCalmChild": false
-  },
-  {
-    "id": "exceptional/no-cough-with-fast-breathing",
-    "kind": "exceptional",
-    "targetBranch": null,
-    "ageMonths": 2,
-    "breathsPerMinute": 51,
-    "hasCoughOrDifficultBreathing": false,
-    "not_able_to_drink_or_breastfeed": false,
-    "vomits_everything": false,
-    "had_convulsions": false,
-    "lethargic_or_unconscious": false,
-    "convulsing_now": false,
-    "chestIndrawing": false,
-    "stridorInCalmChild": false
-  },
-  {
     "id": "exceptional/all-signs-with-fast-breathing",
     "kind": "exceptional",
     "targetBranch": null,

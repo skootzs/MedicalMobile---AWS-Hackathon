@@ -58,22 +58,30 @@ function jsonEqual(a: JsonValue, b: JsonValue): boolean {
  * The field names to compare for one source: manifest output fields unioned
  * with any fields the source names, in a stable (sorted) order.
  */
-function comparisonFields(outputFields: readonly string[], source: SourceExpectation): string[] {
-  return [...new Set([...outputFields, ...(source.fields ?? [])])].sort();
+/**
+ * The fields a source declares: its explicit `fields` list if present,
+ * otherwise the keys of its `expected` object. Only these are compared.
+ */
+export function declaredFields(source: SourceExpectation): string[] {
+  return [...new Set(source.fields ?? Object.keys(source.expected))].sort();
 }
 
 /**
- * Compare actual with a source's expected over the comparison fields. A field
- * the source expects but actual lacks (or vice versa) is a mismatch. Returns a
- * builder-derived ExpectedResult; the source's own status (if any) is ignored.
+ * Compare actual with a source over ONLY the fields the source declares
+ * (Correction A):
+ *   - a declared field missing from actual is a fail;
+ *   - a declared field whose values differ is a fail;
+ *   - a field present in actual but not declared is neither compared nor a
+ *     fail.
+ * Returns a builder-derived ExpectedResult; any status the source carried is
+ * ignored. `outputFields` is no longer part of the comparison basis.
  */
 export function evaluateSource(
   actual: Record<string, JsonValue> | null,
   source: SourceExpectation,
-  outputFields: readonly string[],
 ): ExpectedResult {
-  const fields = comparisonFields(outputFields, source);
-  // The report records what the source expected over the compared fields.
+  const fields = declaredFields(source);
+  // Record what the source expected over its declared fields.
   const recordedExpected: Record<string, JsonValue> = {};
   for (const f of fields) if (f in source.expected) recordedExpected[f] = source.expected[f]!;
 
@@ -81,14 +89,11 @@ export function evaluateSource(
 
   let status: ExpectedResult['status'] = 'pass';
   for (const f of fields) {
-    const inExpected = f in source.expected;
-    const inActual = f in actual;
-    // A field present on one side but not the other is a mismatch.
-    if (inExpected !== inActual) {
-      status = 'fail';
+    if (!(f in actual)) {
+      status = 'fail'; // declared but missing from actual
       break;
     }
-    if (inExpected && inActual && !jsonEqual(source.expected[f]!, actual[f]!)) {
+    if (!jsonEqual(source.expected[f]!, actual[f]!)) {
       status = 'fail';
       break;
     }
@@ -107,16 +112,32 @@ interface DerivedCase {
  * Derive one case's verdicts and status. Status order is strict:
  * error > disagree > fail > pass. A case can only be 'pass' if at least one
  * source is present and every present source passed.
+ *
+ * `classificationField` is the name of the classification output field. A
+ * present source that does NOT declare it cannot meaningfully verify the case,
+ * so the case status is 'error' (Correction A).
  */
-export function deriveCase(c: ExecutedCase, outputFields: readonly string[]): DerivedCase {
-  const golden = c.golden ? evaluateSource(c.actual, c.golden, outputFields) : null;
-  const evaluator = c.evaluator ? evaluateSource(c.actual, c.evaluator, outputFields) : null;
+export function deriveCase(c: ExecutedCase, classificationField: string): DerivedCase {
+  const golden = c.golden ? evaluateSource(c.actual, c.golden) : null;
+  const evaluator = c.evaluator ? evaluateSource(c.actual, c.evaluator) : null;
 
   if (c.actual === null) {
     return { golden, evaluator, status: 'error', detail: 'no actual outcome recorded' };
   }
   if (!golden && !evaluator) {
     return { golden, evaluator, status: 'error', detail: 'no expected-outcome source (golden or evaluator) available' };
+  }
+  // A present source must declare the classification field.
+  const undeclared: string[] = [];
+  if (c.golden && !declaredFields(c.golden).includes(classificationField)) undeclared.push('golden');
+  if (c.evaluator && !declaredFields(c.evaluator).includes(classificationField)) undeclared.push('evaluator');
+  if (undeclared.length > 0) {
+    return {
+      golden,
+      evaluator,
+      status: 'error',
+      detail: `${undeclared.join(' and ')} did not declare the "${classificationField}" field`,
+    };
   }
   if (golden && evaluator && !jsonEqual(golden.expected, evaluator.expected)) {
     return { golden, evaluator, status: 'disagree', detail: 'golden and evaluator expected values differ' };
@@ -133,12 +154,12 @@ export function deriveCase(c: ExecutedCase, outputFields: readonly string[]): De
 /** Disagreements: one per failed source comparison, plus golden-vs-evaluator. */
 export function buildDisagreements(
   cases: ExecutedCase[],
-  outputFields: readonly string[],
+  classificationField: string,
 ): Disagreement[] {
   const out: Disagreement[] = [];
   for (const c of cases) {
     const actual: JsonValue | null = c.actual as JsonValue | null;
-    const derived = deriveCase(c, outputFields);
+    const derived = deriveCase(c, classificationField);
     if (derived.golden && derived.golden.status === 'fail') {
       out.push({
         caseId: c.id,
@@ -183,8 +204,12 @@ export interface BuildReportArgs {
   patientSetHash: string;
   goldenCasesHash: string | null;
   coverage: Coverage;
-  /** Output field names from the manifest; the comparison basis for sources. */
-  outputFields: readonly string[];
+  /**
+   * Name of the classification output field. A source that doesn't declare it
+   * makes the case status 'error'. (Sources are otherwise compared only over
+   * the fields they declare; see evaluateSource.)
+   */
+  classificationField: string;
   /** Which case ids used the page-count fallback (option B). */
   pageFallbackCaseIds: string[];
   /** Integrity checks other than pageFallbacks (e.g. compileArtifactHash). */
@@ -199,7 +224,7 @@ export interface BuildReportArgs {
  */
 export function buildReport(args: BuildReportArgs): VerificationReport {
   const cases: VerificationCase[] = args.cases.map((c) => {
-    const derived = deriveCase(c, args.outputFields);
+    const derived = deriveCase(c, args.classificationField);
     return {
       id: c.id,
       input: c.input,
@@ -251,6 +276,6 @@ export function buildReport(args: BuildReportArgs): VerificationReport {
     integrityChecks,
     coverage: args.coverage,
     cases,
-    disagreements: buildDisagreements(args.cases, args.outputFields),
+    disagreements: buildDisagreements(args.cases, args.classificationField),
   };
 }

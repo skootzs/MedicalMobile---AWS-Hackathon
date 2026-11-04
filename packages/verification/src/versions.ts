@@ -46,22 +46,39 @@ function harnessVersion(): string {
   }
 }
 
-function chtConfVersion(): string {
-  // cht-conf runs in the build stage, not necessarily installed beside the
-  // runner. Prefer CHT_CONF_VERSION, then `cht --version`, then a resolvable
-  // package.json, else 'unknown'. Never throw: version detection must not
-  // prevent a valid report.
-  const fromEnv = process.env.CHT_CONF_VERSION;
-  if (fromEnv && fromEnv.length > 0) return fromEnv;
+/** Where the cht-conf version came from, recorded for the integrityCheck. */
+export type ChtConfVersionSource = 'cht --version' | 'CHT_CONF_VERSION' | 'package.json' | 'unknown';
 
+export interface ChtConfVersion {
+  version: string;
+  source: ChtConfVersionSource;
+}
+
+/**
+ * cht-conf runs in the build stage, not necessarily installed beside the
+ * runner. Resolution order (per item 4):
+ *   1. `cht --version` run against the tested project (cwd), if available;
+ *   2. the CHT_CONF_VERSION env var;
+ *   3. a resolvable cht-conf/package.json;
+ *   4. "unknown".
+ * Never throws: version detection must not prevent a valid report. The chosen
+ * source is returned so the toolVersionsKnown check can report it honestly.
+ */
+export function chtConfVersion(cwd?: string): ChtConfVersion {
   try {
-    const out = execFileSync('cht', ['--version'], { encoding: 'utf8' }).trim();
+    const out = execFileSync('cht', ['--version'], {
+      encoding: 'utf8',
+      ...(cwd ? { cwd } : {}),
+    }).trim();
     // cht-conf prints e.g. "INFO 6.6.1" or "6.6.1"; take the first version token.
     const m = /(\d+\.\d+\.\d+[^\s]*)/.exec(out);
-    if (m) return m[1]!;
+    if (m) return { version: m[1]!, source: 'cht --version' };
   } catch {
-    // fall through to resolution
+    // fall through
   }
+
+  const fromEnv = process.env.CHT_CONF_VERSION;
+  if (fromEnv && fromEnv.length > 0) return { version: fromEnv, source: 'CHT_CONF_VERSION' };
 
   const tryResolve = (paths?: string[]): string | null => {
     try {
@@ -79,7 +96,9 @@ function chtConfVersion(): string {
   } catch {
     viaHarness = null;
   }
-  return viaHarness ?? tryResolve() ?? 'unknown';
+  const resolved = viaHarness ?? tryResolve();
+  if (resolved) return { version: resolved, source: 'package.json' };
+  return { version: 'unknown', source: 'unknown' };
 }
 
 /** True if no tool version is "unknown". Backs the toolVersionsKnown check. */
@@ -105,18 +124,29 @@ export async function readChromiumRevision(): Promise<string> {
   }
 }
 
+export interface CollectedToolVersions {
+  versions: ToolVersions;
+  /** How the cht-conf version was obtained, for the toolVersionsKnown detail. */
+  chtConfSource: ChtConfVersionSource;
+}
+
 /**
  * Collect tool versions. Enforces the python gate: throws PythonTooOldError
- * (the caller maps this to exit 2) before returning.
+ * (the caller maps this to exit 2) before returning. `cwd`, when given, is the
+ * tested project directory used to run `cht --version`.
  */
-export async function collectToolVersions(): Promise<ToolVersions> {
+export async function collectToolVersions(cwd?: string): Promise<CollectedToolVersions> {
   const python = readPythonVersion();
   if (!isPythonSupported(python)) throw new PythonTooOldError(python);
+  const chtConf = chtConfVersion(cwd);
   return {
-    node: process.version,
-    python,
-    chtConf: chtConfVersion(),
-    chtConfTestHarness: harnessVersion(),
-    chromiumRevision: await readChromiumRevision(),
+    versions: {
+      node: process.version,
+      python,
+      chtConf: chtConf.version,
+      chtConfTestHarness: harnessVersion(),
+      chromiumRevision: await readChromiumRevision(),
+    },
+    chtConfSource: chtConf.source,
   };
 }

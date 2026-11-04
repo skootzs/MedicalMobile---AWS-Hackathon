@@ -101,7 +101,7 @@ function reportWithCoverage(coverage: Coverage) {
     toolVersions, run, references,
     compileArtifactHash: HASH, testedDirHash: HASH, patientSetHash: HASH, goldenCasesHash: null,
     coverage,
-    outputFields: ['classification'],
+    classificationField: 'classification',
     pageFallbackCaseIds: [],
     integrityChecks: [],
     cases: [],
@@ -156,7 +156,7 @@ test('2b-2: pageFallbacks detail reports N of M cases', () => {
       method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null,
       totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], uncoveredBranchIds: [], uncoveredBranches: [],
     },
-    outputFields: ['classification'],
+    classificationField: 'classification',
     pageFallbackCaseIds: ['a', 'b'],
     integrityChecks: [],
     cases: [

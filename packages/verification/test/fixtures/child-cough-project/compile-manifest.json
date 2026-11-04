@@ -1,0 +1,118 @@
+{
+  "manifestVersion": 1,
+  "compiler": {
+    "name": "@cht-nocode/compiler",
+    "version": "0.1.0"
+  },
+  "logicModelSchemaVersion": "1.0",
+  "pathwayId": "child_cough",
+  "formId": "child_cough",
+  "title": "Child Cough and Fast Breathing (Demo)",
+  "snapshotHash": null,
+  "inputHash": "186214726c73a4b8db5e641a5b28a7fc6c42689078d7fcacdf3839a8f1ee1a67",
+  "artifactHash": "32e7ab30a7729cc682d2be50769bb85b30fdb770c26ab8bfbf5d6031e5281b89",
+  "options": {
+    "watermark": "DEMONSTRATION ONLY",
+    "icon": "icon-healthcare"
+  },
+  "files": [
+    {
+      "path": "forms/app/child_cough.xlsx",
+      "sha256": "6681c1710a3f76e42a842c7a61c88df005a3ac63b58724e23148e4620547a963",
+      "bytes": 24101
+    },
+    {
+      "path": "forms/app/child_cough.properties.json",
+      "sha256": "eb41a38d6a48b79b6915e4c641c340225bf6ae3cc3a4f4567731b52019e18831",
+      "bytes": 247
+    }
+  ],
+  "outputFields": {
+    "classification": "classification",
+    "referralUrgent": "referral_urgent",
+    "followUpDays": "follow_up_days",
+    "followUpDate": "t_follow_up_date",
+    "inScope": "in_scope"
+  },
+  "decisionTable": {
+    "id": "classification",
+    "hitPolicy": "unique",
+    "rows": 4,
+    "otherwise": "incomplete"
+  },
+  "outcomes": [
+    {
+      "id": "severe_pneumonia_or_very_severe_disease",
+      "referral": "urgent",
+      "followUpDays": null
+    },
+    {
+      "id": "pneumonia",
+      "referral": "none",
+      "followUpDays": 3
+    },
+    {
+      "id": "cough_or_cold",
+      "referral": "none",
+      "followUpDays": 5
+    },
+    {
+      "id": "not_in_pathway",
+      "referral": "none",
+      "followUpDays": null
+    },
+    {
+      "id": "out_of_scope",
+      "referral": "none",
+      "followUpDays": null
+    },
+    {
+      "id": "age_unknown",
+      "referral": "none",
+      "followUpDays": null
+    },
+    {
+      "id": "incomplete",
+      "referral": "none",
+      "followUpDays": null
+    }
+  ],
+  "openAmbiguities": [
+    {
+      "id": "A1",
+      "text": "Is 12 months in the first or second breathing-rate band, and is age measured in completed months?"
+    },
+    {
+      "id": "A2",
+      "text": "What should a CHW do for a child outside the 2 months to 5 years range?"
+    },
+    {
+      "id": "A3",
+      "text": "General danger signs are only asked when cough is present; WHO checks them for every sick child."
+    },
+    {
+      "id": "A4",
+      "text": "The wheeze bronchodilator trial before classification is not modelled."
+    },
+    {
+      "id": "A5",
+      "text": "COUGH OR COLD follow-up applies only if not improving; the model schedules it unconditionally."
+    },
+    {
+      "id": "A6",
+      "text": "No plausible upper bound for breaths per minute is given."
+    },
+    {
+      "id": "A7",
+      "text": "The chart booklet targets facility health workers; CHW suitability of chest indrawing and stridor assessment is undecided."
+    },
+    {
+      "id": "A8",
+      "text": "Age comes from the contact's date of birth; the form stops if it is missing."
+    }
+  ],
+  "template": {
+    "hash": "c40d71680adeb0bb12eeccbc7ee213436ed90788fe6d26ac549ee7df824623a9",
+    "files": 4
+  }
+}

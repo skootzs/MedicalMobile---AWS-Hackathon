@@ -15,7 +15,7 @@
  */
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { IntegrityCheck, JsonValue, References, RunInfo, VerificationReport } from './report.js';
 import { allToolVersionsKnown, collectToolVersions, PythonTooOldError } from './versions.js';
 import { compileArtifactHash, hashDirectory, sha256 } from './hashing.js';
@@ -35,9 +35,25 @@ import { buildReport, type ExecutedCase } from './report-builder.js';
 
 const require = createRequire(import.meta.url);
 
-const DEFAULT_TZ = 'Africa/Nairobi';
 const DEFAULT_OUT = '/out';
 const FIXED_CLOCK = '2026-02-15'; // deterministic clock for age and date calcs
+
+/**
+ * Sanitize argv for the report: keep only the basenames of the node binary and
+ * the script, so no absolute local paths (e.g. the npx cache) or environment
+ * values are recorded. argv[0] -> its basename (usually "node"), argv[1] ->
+ * script basename, and any further args are kept verbatim only if they contain
+ * no path separator (defensive; the runner takes no positional args today).
+ */
+export function sanitizeCommand(argv: readonly string[]): string[] {
+  const out: string[] = [];
+  if (argv[0] !== undefined) out.push(basename(argv[0]));
+  if (argv[1] !== undefined) out.push(basename(argv[1]));
+  for (const extra of argv.slice(2)) {
+    out.push(extra.includes('/') || extra.includes('\\') ? basename(extra) : extra);
+  }
+  return out;
+}
 
 interface Env {
   configDir: string;
@@ -54,10 +70,23 @@ function readEnv(): Env {
   const configDir = process.env.CHT_CONFIG_DIR;
   if (!configDir) throw new RunnerError('CHT_CONFIG_DIR is required');
   const orNull = (v: string | undefined): string | null => (v && v.length > 0 ? v : null);
+  // TZ must be pinned explicitly (item 5): t_follow_up_date and age depend on
+  // it, so an unset TZ would make the run non-reproducible. Fail fast (exit 2).
+  const tz = process.env.TZ;
+  if (!tz || tz.length === 0) {
+    throw new RunnerError('TZ is required and must be set explicitly (e.g. Africa/Nairobi)');
+  }
+  // Validate the IANA zone name; an invalid TZ would silently fall back to a
+  // different zone and make t_follow_up_date wrong. Fail fast (exit 2).
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: tz });
+  } catch {
+    throw new RunnerError(`TZ is not a valid time zone name: ${JSON.stringify(tz)}`);
+  }
   return {
     configDir,
     outDir: process.env.OUT_DIR || DEFAULT_OUT,
-    tz: process.env.TZ || DEFAULT_TZ,
+    tz,
     patientsFile: orNull(process.env.PATIENTS_FILE),
     references: {
       snapshotId: orNull(process.env.SNAPSHOT_ID),
@@ -123,13 +152,15 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   const { env, harness, log } = deps;
   const integrityChecks: IntegrityCheck[] = [];
 
-  const toolVersions = await collectToolVersions(); // throws PythonTooOldError -> exit 2
+  // `cht --version` is run against the tested project directory (item 4).
+  const collected = await collectToolVersions(env.configDir); // throws PythonTooOldError -> exit 2
+  const toolVersions = collected.versions;
   integrityChecks.push({
     name: 'toolVersionsKnown',
     ok: allToolVersionsKnown(toolVersions),
     detail: allToolVersionsKnown(toolVersions)
-      ? 'all tool versions resolved'
-      : `one or more tool versions are "unknown": ${JSON.stringify(toolVersions)}`,
+      ? `all tool versions resolved (cht-conf via ${collected.chtConfSource})`
+      : `one or more tool versions are "unknown" (cht-conf via ${collected.chtConfSource}): ${JSON.stringify(toolVersions)}`,
   });
 
   const manifest = readManifest(env.configDir);
@@ -200,7 +231,7 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
   }
 
   const run: RunInfo = {
-    command: process.argv.slice(),
+    command: sanitizeCommand(process.argv),
     tz: env.tz,
     seed: null,
     fixedClock: FIXED_CLOCK,
@@ -243,7 +274,7 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     patientSetHash: deps.patientSetHash ?? sha256(JSON.stringify([])),
     goldenCasesHash: null, // no golden file supplied; never hash empty input
     coverage,
-    outputFields,
+    classificationField,
     pageFallbackCaseIds: fallbackIds,
     integrityChecks,
     cases: executed,
