@@ -837,3 +837,216 @@ Smallest next step: agree a read-only authorized review-context response with R1
 and R4 (snapshot, checker and verification references needed to build these commands),
 then test one UI review journey through `inject()`. Follow with request creation/PO
 confirmation and trusted authentication/durable adapters with the responsible teammates.
+
+## Request creation, revisions and PO confirmation (local milestone)
+
+`src/requests.ts` adds RequestService around existing SUBMIT,
+SCREENING_COMPLETED, PO_DECISION and REVISE_REQUEST events. It does not replace
+routing, workflow, snapshot validation or store guards. `createLocalApi()` accepts
+an optional `requests` service; without it, existing approval-only integrations
+retain their old routes. There are still only `inject()` and `close()` methods,
+no listening server or real authentication.
+
+The lifecycle is:
+
+```mermaid
+stateDiagram-v2
+  [*] --> WAITING_FOR_SCREENING: authenticated PO submits
+  WAITING_FOR_SCREENING --> WAITING_FOR_SCREENING: material interpretation/correction creates new preview
+  WAITING_FOR_SCREENING --> WAITING_FOR_PO_CONFIRMATION: trusted R3 completed screening
+  WAITING_FOR_PO_CONFIRMATION --> READY_TO_ROUTE: owner PO confirms exact preview and screening
+  WAITING_FOR_PO_CONFIRMATION --> RETURNED_FOR_CLARIFICATION: owner PO requests revision
+  RETURNED_FOR_CLARIFICATION --> WAITING_FOR_SCREENING: material correction creates new preview
+```
+
+An eligible confirmation ends at READY_TO_ROUTE. No routing result, review task,
+model call, downstream job or approval is created. Existing guarded routing remains
+an explicit later backend action. PO confirmation records agreement that the current
+AI interpretation represents the requested change, not clinical approval. Clinical
+and independent release approval remain mandatory later.
+
+### HTTP contracts for R1
+
+| Route | Input / result |
+| --- | --- |
+| `POST /api/requests` | `{eventId, expectedVersion: 0, content}`. Returns 201 for new request, 200 for exact retry. |
+| `GET /api/requests/:requestId` | Owner-only current status/version, immutable preview metadata/content, current screening, confirmation and `clinicalApprovalRequired: true`. |
+| `POST /api/requests/:requestId/confirmations` | `{eventId, expectedVersion, revision, snapshotHash, screeningId, decision}`. Decision is CONFIRMED or REVISION_REQUESTED. |
+| `POST /api/requests/:requestId/revisions` | `{eventId, expectedVersion, revision, snapshotHash, content}`. Identity/version reference the old current preview; server creates revision + 1. |
+
+A separate revision endpoint is needed because requesting a correction records a
+PO decision, while supplying corrected content creates a distinct immutable revision.
+Revision commands supply full replacement content, not a partial patch. Unchanged
+content (including reordered object keys) is rejected with NO_MATERIAL_CHANGE;
+changing revision metadata alone must not manufacture a content change. Historical
+snapshots, screenings, decisions and audit entries are retained. The current state
+clears superseded screening, confirmation, routing, logic and downstream approval/
+build evidence through the existing workflow's revision event.
+
+All new write commands reject unknown fields. The provisional content contract is
+`title`, `objective`, `targetPopulation`, and a nonempty `requirements` array of
+`{condition, action}`. HTTP text fields are limited to 5,000 characters, requirements
+to 100 items, with the existing 32 KiB total body limit. This is minimum structured
+intake, not an assessment of completeness/ambiguity/clinical safety; R3 still owns
+those assessments. Free-text-only/incomplete drafts need an agreed R1/R3/R4 contract
+before adding another intake shape. Stored preview responses preserve every hashed
+content field, including schema extensions; response serialization must not silently
+trim fields covered by the snapshot hash.
+
+Each successful write returns status SUCCESS or DUPLICATE_EVENT, reason, requestId,
+eventId, workflowVersion, accepted request revision/hash, and auditId. The current
+version on a duplicate can be newer than the original accepted revision; fetch the
+current request before editing again. A duplicate never restores stale evidence.
+Read current status to distinguish CONFIRMED from a recorded correction request.
+HTTP errors follow the previous API conventions: 400 malformed input, 401 missing
+principal, 403 wrong action role, generic 404 missing/inaccessible/not-owned resource,
+409 wrong state/stale revision/version/conflicting event, and sanitized 503 storage
+or provider failure. Rejected valid attempts are audited when storage permits;
+malformed/unauthenticated/access-denied HTTP attempts never reach the store.
+
+### Server identity and creation idempotency
+
+The authentication boundary still defaults to deny. The creation route alone has
+no existing request membership to check; it still requires authentication, and
+RequestService checks the server-resolved PO role. Other routes require existing
+request access; RequestService additionally enforces PO ownership for intake reads,
+confirmations and public corrections. The store re-resolves the actor and enforces
+workflow authorization at atomic commit, including optimistic version protection.
+Reviewer access belongs to a future separate review-context API.
+
+The backend assigns `req-` plus SHA-256 of canonical JSON containing the fixed
+`r2-request-id-v1` namespace, verified owner ID and submission eventId. This is a
+provisional deterministic request-ID policy, separate from snapshot hashing. It
+provides a stable unique namespace per owner/submission key without a process-local
+reservation map or an additional non-atomic storage write. Browser callers cannot
+choose requestId or ownerId. These IDs are predictable identifiers, never secrets
+or access tokens. Ownership checks remain required. A future random-ID policy would
+need a durable unique `(ownerId, submissionEventId)` index committed with creation;
+changing this policy requires an integration/migration decision.
+
+R1 should generate a new eventId for each user intent and retain it for retries.
+Retrying identical creation returns the same request ID, even through a new service
+instance sharing storage. Changed content under the same key returns 409. Two
+verified POs using the same eventId get separate requests. Accepted event receipts
+and command fingerprints detect conflicting retries. All state, snapshots,
+receipts and audit updates use existing store.apply(), with no side map. A failed
+commit leaves no partial write. A failure reading the receipt after a successful
+commit can return 503 even though the write exists; retry the identical command to
+resolve it safely. In-memory receipts last only as long as that store instance.
+
+### Internal integration for R3
+
+There is NO HTTP screening callback or interpretation endpoint. RequestService
+exposes these internal methods for a future authenticated backend adapter:
+
+- `reviseInterpretation({...currentIdentity, eventId, expectedVersion, content}, principal)`
+  creates a changed preview through REVISE_REQUEST. Existing workflow rules allow
+  DRAFTER changes only while waiting for screening or after return for clarification.
+  If the preview is already awaiting PO confirmation, a correction must first be
+  requested; R3 cannot silently replace it.
+- `recordScreening({...currentIdentity, eventId, expectedVersion, screening}, principal)`
+  requires a server-resolved DRAFTER. Screening must bind to exactly requestId,
+  revision and snapshotHash, with screeningId, status and the five structured checks:
+  completeness, ambiguities, contradictions, clinicalSafety and feasibility.
+
+Pending, failed, malformed or stale screening cannot advance eligibility. The
+existing workflow/router validate completed screening; unresolved concerns may reach
+PO interpretation confirmation and then require Service Designer review through an
+explicit routing event. They are not clinical approval. After a material change,
+R3 must screen the new preview, and PO must confirm that same screened preview.
+R3 event/screening IDs must be unique within the request; exact accepted retries are
+idempotent. A retry of an older accepted screening acknowledges the old event without
+restoring superseded state.
+
+`test/helpers/request-fixtures.ts` isolates fictional token mappings and a mock
+internal R3 adapter. No src file imports those fixtures. Real R3 service identity,
+request/tenant authorization and callback integrity remain unimplemented. No
+browser-supplied trusted flag, role, actor ID, screening completion or approval is
+used as authority.
+
+### Fictional API example
+
+Through an injected fictional PO session, create a request:
+
+```http
+POST /api/requests
+Content-Type: application/json
+```
+
+```json
+{
+  "eventId": "fictional-create-1",
+  "expectedVersion": 0,
+  "content": {
+    "title": "Fictional training checklist 1",
+    "objective": "Record a training visit.",
+    "targetPopulation": "Fictional training households",
+    "requirements": [{"condition":"Checklist completed","action":"Show completion message"}]
+  }
+}
+```
+
+The fictional owner fixture produces requestId
+`req-169ca093953000d6fa78f9e50492d1fbe76731831cb9f962f44fc946f8031e8b`.
+The 201 response includes `workflowVersion: 1` and the computed request identity:
+
+```json
+{
+  "requestId": "req-169ca093953000d6fa78f9e50492d1fbe76731831cb9f962f44fc946f8031e8b",
+  "revision": 1,
+  "snapshotHash": "fba85d3a816b864747b6779e15b2fd6870a2caadf23fb757f59d0ea8d2eb20b6"
+}
+```
+
+GET `/api/requests/<returned-requestId>` returns status WAITING_FOR_SCREENING,
+version 1, preview metadata/content, null screening/confirmation and
+`clinicalApprovalRequired: true`. After the internal fictional R3 adapter records
+screening `screen-1`, GET returns WAITING_FOR_PO_CONFIRMATION at version 2.
+POST `/api/requests/<returned-requestId>/confirmations`:
+
+```json
+{
+  "eventId": "confirm-event",
+  "expectedVersion": 2,
+  "revision": 1,
+  "snapshotHash": "fba85d3a816b864747b6779e15b2fd6870a2caadf23fb757f59d0ea8d2eb20b6",
+  "screeningId": "screen-1",
+  "decision": "CONFIRMED"
+}
+```
+
+The 200 response records PO_DECISION with workflowVersion 3. A subsequent GET
+shows READY_TO_ROUTE; clinical/release approval has not been granted. For correction,
+use REVISION_REQUESTED instead, then submit new content to `/revisions` with the
+returned current version and old preview identity. The next revision waits for
+screening again. All hashes above were computed from fictional snapshots; clients
+must read actual current identities rather than copying fixture values.
+
+### Pending Role 4 Integration and next milestone
+
+No dependency installation or root configuration changes were necessary. All original
+359 tests are preserved. The added service/HTTP tests cover ownership, revisions,
+rescreening, event retries, concurrent updates, immutable history, rollback and
+mandatory approval gates. Run `npm run typecheck` and `npm test` in this package.
+The test environment remains Node 24.18.0 with Node 22 typings; actual Node 22 runtime
+verification remains pending.
+
+R4 still needs to agree request/interpretation content shape, how incomplete drafts
+are represented, schema version 1.0 replacement, hash-policy/schema migrations,
+material-change policy (currently any canonical content change), event/screening ID
+rules, state/error vocabulary and transport limits. Confirmation ID currently uses
+its accepted eventId. Original submissions and interpreted previews share the request
+preview revision sequence; the initial immutable revision remains in history when R3
+revises it. LogicModel and compiled artifact identities remain separate.
+
+With R1/R3/R4 agree owner versus delegated/tenant access, event-key lifecycle and the
+workflow for returning AI interpretations. Durable database transactions, real
+session/service authentication and operational security logging are still required
+before exposing this local harness. No AWS, production listener, job dispatch,
+compilation, download or database adapter is introduced.
+
+Next milestone: owner/reviewer-specific read-only review-context APIs plus authorized
+reviewer queues. First agree R1's display needs and R4's checker/verification bindings;
+return exact snapshot/evidence references to authorized independent reviewers, then
+connect the existing decision endpoints. Keep queue reads separate from job dispatch
+and enforce request visibility without leaking inaccessible work.

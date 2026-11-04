@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ApprovalService } from './approvals.ts';
+import type { RequestService } from './requests.ts';
+import { registerRequestRoutes } from './routes/requests.ts';
 import { denyAllAuthentication } from './auth.ts';
 import type { AuthenticationBoundary, VerifiedPrincipal } from './auth.ts';
 import type { OrchestratorStore } from './storage/requests.ts';
@@ -11,6 +13,8 @@ import { apiError, notFound, unavailable } from './routes/http.ts';
 export interface LocalApiDependencies {
   store: OrchestratorStore;
   approvals: Pick<ApprovalService, 'execute'>;
+  /** Optional so existing approval-only local integration stays unchanged. */
+  requests?: RequestService;
   /** No default mock: omitted authentication always denies access. */
   authentication?: AuthenticationBoundary;
 }
@@ -40,6 +44,8 @@ export function createLocalApi(deps: LocalApiDependencies): LocalApi {
   app.addHook('preHandler', async (request, reply) => {
     const principal = principals.get(request);
     if (!principal) return apiError(reply, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required.');
+    // Creation has no existing resource: RequestService authorizes the verified PO.
+    if (deps.requests && request.method === 'POST' && request.routeOptions.url === '/api/requests') return;
     const requestId = (request.params as { requestId?: string } | undefined)?.requestId;
     try {
       if (!requestId || !await authentication.canAccessRequest(principal, requestId)) return notFound(reply);
@@ -52,10 +58,12 @@ export function createLocalApi(deps: LocalApiDependencies): LocalApi {
   });
   app.setNotFoundHandler((_request, reply) => notFound(reply));
   registerStatusRoute(app, deps.store);
-  registerApprovalRoutes(app, deps.approvals, request => {
+  const principalFor = (request: FastifyRequest) => {
     const principal = principals.get(request);
     if (!principal) throw new Error('Authentication guard did not establish a principal.');
     return principal;
-  });
+  };
+  registerApprovalRoutes(app, deps.approvals, principalFor);
+  if (deps.requests) registerRequestRoutes(app, deps.requests, principalFor);
   return { inject: app.inject.bind(app), close: () => app.close() };
 }
