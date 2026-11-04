@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cht-nocode/verification/verification-report.schema.json",
+  "title": "VerificationReport",
+  "description": "Output of one synthetic-patient verification run against one built CHT configuration directory. Mirrors src/report.ts. passed and each case status are computed by the report builder, never set by hand.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "snapshotId",
+    "passed",
+    "coverageComplete",
+    "toolVersions",
+    "run",
+    "artifactHash",
+    "patientSetHash",
+    "goldenCasesHash",
+    "coverage",
+    "cases",
+    "disagreements"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "snapshotId": { "type": ["string", "null"], "minLength": 1 },
+    "passed": { "type": "boolean" },
+    "coverageComplete": { "type": "boolean" },
+    "toolVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "chtConf", "chtConfTestHarness", "chromiumRevision", "python"],
+      "properties": {
+        "node": { "type": "string", "minLength": 1 },
+        "chtConf": { "type": "string", "minLength": 1 },
+        "chtConfTestHarness": { "type": "string", "minLength": 1 },
+        "chromiumRevision": { "type": "string", "minLength": 1 },
+        "python": { "type": "string", "minLength": 1 }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "tz", "seed"],
+      "properties": {
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "tz": { "type": "string", "minLength": 1 },
+        "seed": { "type": ["string", "null"] }
+      }
+    },
+    "artifactHash": { "$ref": "#/$defs/sha256" },
+    "patientSetHash": { "$ref": "#/$defs/sha256" },
+    "goldenCasesHash": { "$ref": "#/$defs/sha256" },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalBranches", "coveredBranches", "uncoveredBranchIds"],
+      "properties": {
+        "totalBranches": { "type": "integer", "minimum": 0 },
+        "coveredBranches": { "type": "integer", "minimum": 0 },
+        "uncoveredBranchIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" }
+    },
+    "disagreements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/disagreement" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "expectedResult": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["expected", "status"],
+      "properties": {
+        "expected": {},
+        "status": { "enum": ["pass", "fail"] }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "input",
+        "branchId",
+        "kind",
+        "actual",
+        "golden",
+        "evaluator",
+        "status",
+        "failureDetail",
+        "harnessOutput"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "input": {},
+        "branchId": { "type": ["string", "null"] },
+        "kind": { "enum": ["branch", "boundary", "exceptional"] },
+        "actual": {},
+        "golden": { "$ref": "#/$defs/expectedResult" },
+        "evaluator": { "$ref": "#/$defs/expectedResult" },
+        "status": { "enum": ["pass", "fail", "disagree", "error"] },
+        "failureDetail": { "type": ["string", "null"] },
+        "harnessOutput": { "type": ["string", "null"] }
+      }
+    },
+    "disagreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "kind", "actual", "golden", "evaluator", "detail"],
+      "properties": {
+        "caseId": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["golden-vs-evaluator", "actual-vs-golden", "actual-vs-evaluator"] },
+        "actual": {},
+        "golden": {},
+        "evaluator": {},
+        "detail": { "type": "string" }
+      }
+    }
+  }
+}

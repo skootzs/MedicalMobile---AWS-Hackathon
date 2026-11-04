@@ -1,0 +1,41 @@
+{
+  "dataStatus": "SAMPLE - UNCONFIRMED, not from a reviewed guideline page",
+  "source": {
+    "guideline": "TODO: guideline title and edition",
+    "passage": "TODO: page/section the cut-offs come from",
+    "confirmed": false
+  },
+  "ageStepMonths": {
+    "value": 1,
+    "note": "Test granularity for 'just under' / 'just outside' age cases. TODO: confirm whether ages are whole months.",
+    "confirmed": false
+  },
+  "respiratoryRate": {
+    "unit": "breaths per minute",
+    "step": {
+      "value": 1,
+      "note": "Test granularity for 'one below' / 'one above' cases. TODO: confirm.",
+      "confirmed": false
+    },
+    "thresholds": [
+      {
+        "id": "fast-breathing-2-to-12-months",
+        "ageMinMonths": 2,
+        "ageMaxMonthsExclusive": 12,
+        "operator": ">=",
+        "value": 50,
+        "sourcePassage": "TODO",
+        "confirmed": false
+      },
+      {
+        "id": "fast-breathing-12-to-60-months",
+        "ageMinMonths": 12,
+        "ageMaxMonthsExclusive": 60,
+        "operator": ">=",
+        "value": 40,
+        "sourcePassage": "TODO",
+        "confirmed": false
+      }
+    ]
+  }
+}

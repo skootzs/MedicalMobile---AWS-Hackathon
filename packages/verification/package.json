@@ -1,0 +1,16 @@
+{
+  "name": "@cht-nocode/verification",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Synthetic-patient verification: runs built CHT forms and tasks through cht-conf-test-harness and reports branch coverage against approved logic.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cht-conf-test-harness": "^5.0.4"
+  }
+}

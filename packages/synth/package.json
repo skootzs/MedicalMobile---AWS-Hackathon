@@ -1,0 +1,13 @@
+{
+  "name": "@cht-nocode/synth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic synthetic-patient generator and branch-coverage tracker for CHT pathway verification. Loads unconfirmed threshold/branch data and golden cases; computes no expected outcomes.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test"
+  }
+}
