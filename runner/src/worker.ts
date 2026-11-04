@@ -328,7 +328,13 @@ export class Worker {
       });
     } finally {
       clearInterval(beat);
-      rmSync(dir, { recursive: true, force: true });
+      // Containers may leave uid 1000 files this user can't remove. The result is already
+      // recorded, so a failed cleanup must not change the job's outcome.
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch (err) {
+        this.#log('error', 'Could not clean the attempt directory', { dir, error: String(err) });
+      }
     }
   }
 

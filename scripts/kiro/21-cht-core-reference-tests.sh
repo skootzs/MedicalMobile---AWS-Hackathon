@@ -8,7 +8,8 @@ set -euo pipefail
 
 IMAGE_TAG="${BUILD_IMAGE_TAG:-cht-nocode/build-image:latest}"
 WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
+# Files the container (uid 1000) created may not be removable by this user.
+trap 'rm -rf "$WORK_DIR" 2>/dev/null || true' EXIT
 
 echo "== 21-cht-core-reference-tests: cloning cht-core (shallow, default branch) =="
 git clone --depth 1 https://github.com/medic/cht-core.git "$WORK_DIR/cht-core"
@@ -16,6 +17,8 @@ git clone --depth 1 https://github.com/medic/cht-core.git "$WORK_DIR/cht-core"
 CONFIG_DIR="$WORK_DIR/cht-core/config/default"
 echo "== 21-cht-core-reference-tests: npm ci (network needed for this step only) =="
 (cd "$CONFIG_DIR" && npm ci)
+# The mount is writable and the image runs as uid 1000, which may not own this checkout.
+chmod -R a+rwX "$CONFIG_DIR"
 
 LOG_FILE="$(mktemp)"
 echo "== 21-cht-core-reference-tests: npm run test-unit, inside $IMAGE_TAG, --network none =="

@@ -2,7 +2,7 @@
 // the R5 fixture. Not part of `npm test`, because it needs both images and a compiler
 // checkout. Driven by scripts/kiro/26-runner-e2e.sh.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dockerStages } from '../launch-build.ts';
 import { canonicalJson, sha256 } from '../src/hashing.ts';
@@ -15,6 +15,9 @@ if (!COMPILE_IMAGE || !BUILD_IMAGE || !COMPILER_ROOT || !RUNNER_WORK_DIR) {
 }
 
 mkdirSync(RUNNER_WORK_DIR, { recursive: true });
+chmodSync(RUNNER_WORK_DIR, 0o755);
+const workRoot = mkdtempSync(join(RUNNER_WORK_DIR, 'e2e-'));
+chmodSync(workRoot, 0o755);
 const h = new Harness(createTable());
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/child-cough.logic.json', import.meta.url), 'utf8'));
 const envelope = canonicalJson({ kind: 'LOGIC_MODEL', revision: 1, content: fixture });
@@ -27,7 +30,7 @@ const worker = new Worker({
     buildImage: BUILD_IMAGE,
     compilerDir: join(COMPILER_ROOT, 'packages/compiler'),
     templateDir: join(COMPILER_ROOT, 'templates/cht-base'),
-    workRoot: mkdtempSync(join(RUNNER_WORK_DIR, 'e2e-')),
+    workRoot,
   }),
   store: h.store(),
   queue: h.queue,

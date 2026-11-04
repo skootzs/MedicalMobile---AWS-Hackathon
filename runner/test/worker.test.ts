@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { before, beforeEach, describe, it } from 'node:test';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { sha256 } from '../src/hashing.ts';
@@ -476,6 +478,25 @@ describe('VERIFY_BUILD', () => {
     const payload = await verifyPayload();
     h.stages.report = { passed: true };
     assert.equal(await h.run(payload), 'RETRYING');
+  });
+
+  it('a job dir it cannot clean up does not change the outcome', async () => {
+    const payload = await verifyPayload();
+    h.stages.report = report(payload, true);
+    const fakeVerify = h.stages.verify.bind(h.stages);
+    let locked = '';
+    h.stages.verify = async (input) => {
+      locked = join(input.outDir, 'locked');
+      mkdirSync(locked);
+      writeFileSync(join(locked, 'file'), 'x');
+      chmodSync(locked, 0o555);
+      return fakeVerify(input);
+    };
+    try {
+      assert.equal(await h.run(payload), 'SUCCEEDED');
+    } finally {
+      chmodSync(locked, 0o755);
+    }
   });
 
   const crossChecks: [string, (r: ReturnType<typeof report>) => void][] = [

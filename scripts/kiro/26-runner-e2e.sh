@@ -8,6 +8,9 @@ COMPILE_IMAGE="${COMPILE_IMAGE:-node:22.23.4-slim}"
 BUILD_IMAGE_TAG="${BUILD_IMAGE_TAG:-cht-nocode/build-image:latest}"
 WORK_PARENT="${RUNNER_E2E_DIR:-$(mktemp -d)}"
 COMPILER_ROOT="$WORK_PARENT/compiler-worktree"
+# mktemp dirs are mode 700, but stage containers run as uid 1000. The runner chmods its
+# own mounts; the parents and the compiler checkout are this script's job.
+chmod 0755 "$WORK_PARENT"
 
 cleanup() {
   git -C "$REPO_ROOT" worktree remove --force "$COMPILER_ROOT" 2>/dev/null || true
@@ -20,6 +23,7 @@ fail() { echo "RESULT: FAIL $1"; exit 1; }
 echo "== 26-runner-e2e: compiler worktree at $COMPILER_COMMIT =="
 git -C "$REPO_ROOT" fetch origin compiler
 git -C "$REPO_ROOT" worktree add --detach "$COMPILER_ROOT" "$COMPILER_COMMIT"
+chmod -R a+rX "$COMPILER_ROOT"
 
 echo "== 26-runner-e2e: DynamoDB Local =="
 docker compose -f "$REPO_ROOT/docker-compose.test.yml" up -d
