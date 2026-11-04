@@ -48,8 +48,8 @@ Implemented in `runner/src/worker.ts` and `runner/src/store.ts`.
 1. **Receive** from `jobs` (long polling) and validate against
    `packages/schema/src/handoffs.ts`. An invalid payload fails the job
    `INVALID_PAYLOAD`, but only if the job is still `PENDING`, so a garbled message
-   can't kill a running job. A message with no usable `jobId` stays on the queue and
-   reaches the DLQ.
+   can't kill a running job. The message is deleted only once that failure is recorded.
+   Otherwise, or if there's no usable `jobId`, it stays on the queue and reaches the DLQ.
 2. **Take the job** in one `TransactWriteItems`: put a receipt, update
    `JOB#<jobId>/META` to `RUNNING` with `leaseOwner`/`leaseUntil`/`attempt + 1`
    (condition: `PENDING`, or `RUNNING` with an expired lease), put an audit event.
@@ -112,8 +112,12 @@ hash chain for that build
 (`logicModelHash`/`snapshotHash`/`inputHash`/`compileArtifactHash`/
 `templateHash`/`manifestHash`/`packageHash`), `toolVersions` (image digests,
 compiler/verifier commits, model ID), `startedAt`/`finishedAt`,
-`errorCode`/`errorMessage` (both `null` on success), and `logUri`. A
-`VERIFY_BUILD` result additionally carries `reportUri`/`reportHash`/
+`errorCode`/`errorMessage` (both `null` on success), and `logUri`. The runner also writes
+`runnerActorId` to META: `<WORKER_ID>-compile` or `<WORKER_ID>-verify`. A `COMPILE_LOGIC`
+result carries `packageVersionId`/`manifestVersionId`, the compile report
+(`compileReportUri`/`compileReportHash`/`compileReportVersionId`, which is
+`compile-manifest.json`), and `compilerExitCode`/`chtConfStatus`/`failureKind`. A
+`VERIFY_BUILD` result additionally carries `reportUri`/`reportVersionId`/`reportHash`/
 `verificationPassed`/`coverageComplete`/`testedDirHash`/`reportVersion`. When
 the job had a `baselineUri`, it also carries `compileDiffUri` (the uploaded
 `compile-diff.json`).
@@ -191,14 +195,22 @@ Read-only mounts: `/project`, `/in` (`logic.json`, plus `golden-cases.json` when
 
 ### R2 alignment still needed
 
-Branch `feature/task-2-orchestrator` @ `19e75e1` doesn't match this contract yet. Until
-one side changes, real R2 jobs won't run:
+Checked against `feature/task-2-orchestrator` @ `0a00233`. Until the first two rows change, real R2
+jobs fail or never start.
 
-| | R2 today | Runner / `handoffs.ts` |
-|---|---|---|
-| Initial `JOB#/META` status | `requested` | `PENDING` |
-| Job payload | `CompilationJobIntent`, with `logicModelUri`, `snapshotReference` and more | `JobPayload`, with `snapshotUri`, `checkReportHash`, `contractVersion`, closed schema |
-| Terminal statuses it reads | also `TIMED_OUT`, `EXHAUSTED` | `SUCCEEDED`, `FAILED` |
+| | R2 today | Contract | Next step |
+|---|---|---|---|
+| Initial `JOB#/META` status | `requested` | `PENDING` | R2 switches to `PENDING`, as agreed. The runner won't take a `requested` job |
+| `OUTBOX.payload` | The internal intent, with `logicModelUri`, `snapshotReference` and more | `JobPayload` or `VerifyBuildPayload`, closed schema | R2 stores the projected payload, and adds a compile projection. `toVerifyBuildPayload` exists but is only used for validation |
+| Verify `snapshotUri` | Placeholder `s3://r2/snapshots/...` | Inside the artifact bucket | R2 uses the real snapshot reference |
+| Report `references.logicModelHash` | R2 requires null or the envelope hash | R6 sets it to `inputHash` | R6 stops echoing `inputHash` there, or R2 drops the check. See [Verify stage](#verify-stage-r6s-verifier--90fd841) |
+| Result fields | Mirror is on contract 1.0.0 | 1.1.0 adds version IDs, compile report, `compilerExitCode`, `chtConfStatus`, `failureKind` | R2 updates its mirror. The runner still accepts 1.0.0 payloads |
+| Service actors | Caller supplies `resolveServiceActor` | Runner records `cht-runner-compile` and `cht-runner-verify` | The integrator registers both, with the COMPILER and VERIFIER roles |
+| Golden cases | Not in R2's intents or mirror | Optional `goldenCasesUri` and `goldenCasesHash` | R2 adds them when it has golden cases. Without them, the verifier runs without golden cases |
+| `checkReportHash` on verify jobs | Sends `compileArtifactHash` | The checker report's hash | R2 sends the real hash. The runner doesn't read it, so nothing fails |
+
+Already aligned: approval records, `sha256:` prefix handling, report schema 2.2.0, and `TIMED_OUT` and
+`EXHAUSTED`, which R2 can read but the runner never writes.
 
 ### Pinned compiler commit
 
