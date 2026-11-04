@@ -40,6 +40,12 @@ export interface JobPayload {
   checkReportHash: string; // the compiler doesn't read this; the runner records it
   clinicalApprovalId: string | null; // required (non-null) when mode = 'approved'
   baselineHash?: string | null; // absent or null for first integration (compiler ignores it)
+  // Baseline diff support (compiler@7f488e6): R2 decides which build is "last
+  // deployed"; the runner just uses the URI it's given. If set, the runner
+  // downloads it, verifies the stored hashes, mounts it read-only at
+  // /baseline, and passes --baseline /baseline to the compiler.
+  baselineUri?: string | null; // S3 prefix of the last deployed build's /out (compile-manifest.json + compile-rows.json)
+  taskWindow?: string | null; // "<start>,<end>" days before/after the follow-up date; passed as --task-window verbatim
   createdBy: string;
   createdAt: string; // ISO
 }
@@ -64,12 +70,13 @@ export interface JobResult {
   logicModelHash: string;
   snapshotHash?: string; // from compile-manifest.json; must equal logicModelHash
   inputHash?: string; // from compile-manifest.json; must equal the runner's own hash of /in/logic.json
-  compileArtifactHash?: string; // compile-manifest.json artifactHash
+  compileArtifactHash?: string; // compile-manifest.json artifactHash (compiler@7f488e6: also covers tasks.js when the pathway has a follow-up; no runner change needed)
   templateHash?: string; // compile-manifest.json template.hash
   compileErrors?: { code: string; path: string; message: string }[]; // compiler exit 1 (stderr JSON)
   retryable?: boolean; // false for MODEL_REJECTED, true for infra errors
   manifestHash?: string;
   manifestUri?: string;
+  compileDiffUri?: string; // s3://... location of compile-diff.json; only present when the job had a baselineUri
   packageHash?: string;
   packageUri?: string; // s3://.../builds/<logicModelHash>/<jobId>/attempt-<n>/project.tgz
   toolVersions: {
@@ -135,6 +142,8 @@ export const jobPayloadSchema: JSONSchemaType<JobPayload> = {
     checkReportHash: { type: 'string', minLength: 1 },
     clinicalApprovalId: { type: 'string', nullable: true },
     baselineHash: { type: 'string', nullable: true },
+    baselineUri: { type: 'string', nullable: true },
+    taskWindow: { type: 'string', pattern: '^\\d+,\\d+$', nullable: true },
     createdBy: { type: 'string', minLength: 1 },
     createdAt: { type: 'string', minLength: 1 },
   },
@@ -216,6 +225,7 @@ export const jobResultSchema: JSONSchemaType<JobResult> = {
     retryable: { type: 'boolean', nullable: true },
     manifestHash: { type: 'string', nullable: true },
     manifestUri: { type: 'string', nullable: true },
+    compileDiffUri: { type: 'string', nullable: true },
     packageHash: { type: 'string', nullable: true },
     packageUri: { type: 'string', nullable: true },
     toolVersions: {
@@ -233,7 +243,8 @@ export const jobResultSchema: JSONSchemaType<JobResult> = {
     },
     startedAt: { type: 'string', minLength: 1 },
     finishedAt: { type: 'string', minLength: 1 },
-    errorCode: { type: 'string', enum: jobErrorCodeEnum, nullable: true },
+    // `nullable: true` only patches the implicit `type`; `enum` needs `null` listed explicitly too.
+    errorCode: { type: 'string', enum: [...jobErrorCodeEnum, null], nullable: true },
     errorMessage: { type: 'string', nullable: true },
     logUri: { type: 'string', nullable: true },
     reportUri: { type: 'string', nullable: true },

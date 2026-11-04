@@ -5,8 +5,8 @@
   "description": "Pinned test toolchain baked into build-image. Superset so either R6's runner or cht-core's .mocharc.js works.",
   "devDependencies": {
     "cht-conf-test-harness": "5.0.4",
-    "mocha": "^10.7.3",
-    "chai": "^4.5.0",
+    "mocha": "12.0.3",
+    "chai": "4.5.0",
     "chai-like": "^1.1.3",
     "chai-things": "^0.2.0",
     "chai-exclude": "^2.1.1",

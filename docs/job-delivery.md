@@ -5,10 +5,9 @@ Sushma) owns workflow decisions: whether a job is authorized, creating it,
 and advancing the request afterward. R7 never makes an approval decision; it
 only re-checks one as a second guard and fails closed.
 
-> Job payload/result **types** live in `runner/src/contract.ts` for now
-> (TODO: move to `packages/schema/src/handoffs.ts` once R4/skootzs confirms
-> the location — see Commit 2). This document describes the contract they
-> implement; it isn't gated on that file existing yet.
+> Job payload/result **types**, JSON Schemas and Ajv validators live in
+> `packages/schema/src/handoffs.ts` (confirmed with R4/skootzs). Every
+> service validates what it receives against these schemas and fails closed.
 
 ## DynamoDB key layout
 
@@ -80,15 +79,38 @@ safe), and R2 polling job status instead of consuming events.
 
 ## Result fields
 
-`JobResult` (full shape in `runner/src/contract.ts` once Commit 2 lands)
-carries, at minimum: `jobId`, `jobType`, `attempt`, `status`
-(`SUCCEEDED`/`FAILED`), the hash chain for that build
+`JobResult` (full shape in `packages/schema/src/handoffs.ts`) carries, at
+minimum: `jobId`, `jobType`, `attempt`, `status` (`SUCCEEDED`/`FAILED`), the
+hash chain for that build
 (`logicModelHash`/`snapshotHash`/`inputHash`/`compileArtifactHash`/
 `templateHash`/`manifestHash`/`packageHash`), `toolVersions` (image digests,
 compiler/verifier commits, model ID), `startedAt`/`finishedAt`,
 `errorCode`/`errorMessage` (both `null` on success), and `logUri`. A
 `VERIFY_BUILD` result additionally carries `reportUri`/`reportHash`/
-`verificationPassed`/`coverageComplete`/`testedDirHash`/`reportVersion`.
+`verificationPassed`/`coverageComplete`/`testedDirHash`/`reportVersion`. When
+the job had a `baselineUri`, it also carries `compileDiffUri` (the uploaded
+`compile-diff.json`).
+
+### Baseline diff (compiler@7f488e6)
+
+`JobPayload` gained two optional fields:
+
+- `baselineUri`: S3 prefix of the **last deployed** build's `/out` (i.e. the
+  folder containing that build's `compile-manifest.json` and
+  `compile-rows.json`). R2 decides which build counts as "last deployed";
+  the runner just uses whatever URI it's given, with no opinion of its own.
+- `taskWindow`: `"<start>,<end>"` days before/after the follow-up date;
+  passed to the compiler verbatim as `--task-window <value>`.
+
+When `baselineUri` is set, the runner downloads it, **verifies the stored
+hashes** before trusting it, mounts it read-only at `/baseline`, and passes
+`--baseline /baseline` to the compiler. The compiler then writes
+`compile-diff.json` (added/removed/changed survey rows and choices, changed
+settings except `version`, added/removed/changed outcomes, any task change,
+and `warnings` a deploy approver must check — e.g. a possible field rename).
+The runner uploads it alongside the other build artifacts and records
+`compileDiffUri` on the `JobResult`. No hash fields change shape for this —
+it's a new, independent artifact.
 
 ### Hash identities
 
@@ -101,7 +123,7 @@ several of them flow through the same job.
 | `snapshotHash` | R2 → R5 | Not a new hash — it's `logicModelHash`, passed to the compiler with `--snapshot-hash` and copied into `compile-manifest.json`. Must match `^[A-Za-z0-9:_-]{8,128}$`. |
 | `inputHash` | R5 | The bare LogicModel only: sha256 (hex) of canonical JSON with object keys sorted at every level, no whitespace, array order kept, values as `JSON.stringify` writes them. The runner computes the same hash over the bytes it writes to `/in/logic.json` and compares. |
 | `checkReportHash` | R4 / R2 | sha256 of the canonical checker report JSON. Recorded by the runner; the compiler doesn't read it. |
-| `compileArtifactHash` | R5 | Manifest `artifactHash`: sha256 of lines `path\tsha256hex\n`, sorted by path, over `forms/app/<formId>.xlsx` + `.properties.json`. Does **not** cover `.xml`. |
+| `compileArtifactHash` | R5 | Manifest `artifactHash`: sha256 of lines `path\tsha256hex\n`, sorted by path, over every file in `manifest.files` — the form `.xlsx` + `.properties.json`, and (compiler@7f488e6) `tasks.js` + the generated translation lines too when the pathway has a follow-up. Still does **not** cover `.xml`. No runner change needed; keep recording it as-is. |
 | `templateHash` | R5 | Manifest `template.hash`: same method over every file copied from `/template` (excluding `.gitkeep`, `.DS_Store`). |
 | `manifestHash` | R7 | sha256 of the canonical `manifest.json`, which lists path + sha256 of every file after convert (including `.xml`). |
 | `testedDirHash` | R6 | From VerificationReport v2.0.0: hash of the directory the harness tested (R6's definition). Recorded separately; the runner doesn't recompute it. |
@@ -111,6 +133,18 @@ Release approval binds to `packageHash` (exact bytes downloaded) +
 `manifestHash`. R6's report references `packageHash`. R2 stores per build:
 `snapshotHash`, `inputHash`, `compileArtifactHash`, `templateHash`,
 `manifestHash`, `packageHash`.
+
+### Pinned compiler commit
+
+Branch `compiler` is pinned at **`7f488e6`** (moved from `b2c5fb1` once R5
+landed the baseline diff and a working `templates/cht-base`). `TEMPLATE_DIR`
+is `templates/cht-base` **as it exists at that same commit** — check out the
+whole pinned commit (e.g. `git worktree add`), not just `packages/compiler`,
+since the template lives at the repo root on that branch. The stage 3
+convert command also changed: no `-- <formId>` — `cht --local
+--skip-dependency-check --skip-git-check compile-app-settings
+convert-app-forms validate-app-forms` runs project-wide now, so app settings
+and `tasks.js` build too (see `build-image/run-convert.sh`).
 
 ## Local testing
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# R5's check: branch `compiler` @ pinned commit b2c5fb1 (until R5 says
-# otherwise). Runs his reference/check_reference.sh and the cht-conf
-# integration test inside medicmobile/cht-app-ide:v6.6.1 on x86_64.
+# R5's check: branch `compiler` @ pinned commit 7f488e6 (until R5 says
+# otherwise; moved from b2c5fb1 once his baseline-diff + working
+# templates/cht-base landed). Runs his reference/check_reference.sh and the
+# cht-conf integration test inside medicmobile/cht-app-ide:v6.6.1 on x86_64.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-COMPILER_COMMIT="${COMPILER_COMMIT:-b2c5fb1}"
+COMPILER_COMMIT="${COMPILER_COMMIT:-7f488e6}"
 COMPILER_DIR="${COMPILER_DIR:-$(mktemp -d)/compiler-worktree}"
 
 echo "== 22-check-reference-compiler: git worktree add (read-only, pinned to $COMPILER_COMMIT) =="

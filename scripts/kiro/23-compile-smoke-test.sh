@@ -6,7 +6,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-COMPILER_COMMIT="${COMPILER_COMMIT:-b2c5fb1}"
+COMPILER_COMMIT="${COMPILER_COMMIT:-7f488e6}"
 COMPILE_IMAGE="${COMPILE_IMAGE:-node:22.23.4-slim}"
 COMPILER_DIR="${COMPILER_DIR:-$(mktemp -d)/compiler-worktree}"
 OUT_DIR="$(mktemp -d)"

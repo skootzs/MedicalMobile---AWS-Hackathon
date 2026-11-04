@@ -4,8 +4,11 @@
 # to /work/convert.log so the runner can collect it either way.
 #
 # COMPILE_LOGIC owns all cht-conf conversion (agreed with R2): this stage's
-# output package is the complete converted project -- forms/app/*.xml and
-# compiled app_settings.json, on top of what the compiler already wrote.
+# output package is the complete converted project -- forms/app/*.xml,
+# compiled app_settings.json and (when the pathway has a follow-up) tasks.js.
+#
+# No formId / `-- <formId>` here (confirmed with R5 at compiler@7f488e6): all
+# three actions run project-wide, so app settings and tasks.js build too.
 set -u
 
 cd /work || exit 2
@@ -13,12 +16,10 @@ cd /work || exit 2
 # /home/node isn't writable under --read-only (only /out, /work, /tmp are).
 export HOME="${HOME:-/tmp}"
 
-FORM_ID="$(node -e 'console.log(JSON.parse(require("fs").readFileSync("compile-manifest.json","utf8")).formId)')"
-
 {
-  echo "== run-convert: formId=$FORM_ID =="
+  echo "== run-convert =="
   cht --local --skip-dependency-check --skip-git-check \
-    convert-app-forms validate-app-forms compile-app-settings -- "$FORM_ID"
+    compile-app-settings convert-app-forms validate-app-forms
 } > convert.log 2>&1
 exit_code=$?
 
