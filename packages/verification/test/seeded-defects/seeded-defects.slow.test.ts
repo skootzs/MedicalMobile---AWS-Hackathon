@@ -146,29 +146,51 @@ test(`S2 (${LABEL}): a tampered xlsx fails the compileArtifactHash check`, () =>
   }
 });
 
-// S3: coverage fault - remove all danger-sign patients from a COPY of the set.
-test(`S3 (${LABEL}): removing danger-sign patients leaves "severe" uncovered`, () => {
+// S3: coverage fault - remove EVERY patient that produces the target outcome,
+// found by a baseline run (not by name/id), so the target becomes uncovered.
+// The target outcome id is read from the manifest (the urgent-referral
+// outcome), never hard-coded.
+test(`S3 (${LABEL}): removing all patients that reach the target outcome leaves it uncovered`, () => {
   requirePrereqs();
   const { project, patients } = srcFixtures();
+  const manifest = JSON.parse(
+    readFileSync(join(project, 'compile-manifest.json'), 'utf8'),
+  ) as { outcomes: Array<{ id: string; referral?: string }> };
+  const target = manifest.outcomes.find((o) => o.referral === 'urgent')?.id;
+  assert.ok(target, 'manifest should declare an urgent-referral (severe) outcome');
+
+  const baseDir = mkdtempSync(join(tmpdir(), 'seeded-s3base-'));
+  const baseCopy = join(baseDir, 'patients.json');
   const tmpPatients = join(mkdtempSync(join(tmpdir(), 'seeded-patients-')), 'patients.json');
   try {
     const all = JSON.parse(readFileSync(patients, 'utf8')) as Array<Record<string, unknown>>;
-    // Drop any patient that sets a danger sign to true.
-    const dangerSigns = ['not_able_to_drink_or_breastfeed', 'vomits_everything', 'had_convulsions', 'lethargic_or_unconscious', 'convulsing_now'];
-    const kept = all.filter((p) => !dangerSigns.some((s) => p[s] === true));
-    assert.ok(kept.length < all.length, 'expected to remove at least one danger-sign patient');
+
+    // Baseline run on a temp copy: find every patient whose OBSERVED
+    // classification equals the target outcome.
+    writeFileSync(baseCopy, JSON.stringify(all, null, 2) + '\n');
+    const base = run({ CHT_CONFIG_DIR: project, TZ: 'Africa/Nairobi', PATIENTS_FILE: baseCopy });
+    const baseCases = base.report['cases'] as Array<Record<string, unknown>>;
+    const producers = new Set(
+      baseCases
+        .filter((c) => (c['actual'] as Record<string, unknown> | null)?.['classification'] === target)
+        .map((c) => String(c['id'])),
+    );
+    assert.ok(producers.size > 0, `expected some patients to reach ${target} in the baseline`);
+
+    // Remove ALL of them (no golden file), then re-run.
+    const kept = all.filter((p) => !producers.has(String(p['id'])));
+    assert.equal(kept.length, all.length - producers.size);
     writeFileSync(tmpPatients, JSON.stringify(kept, null, 2) + '\n');
 
     const { code, report } = run({ CHT_CONFIG_DIR: project, TZ: 'Africa/Nairobi', PATIENTS_FILE: tmpPatients });
     const cov = report['coverage'] as Record<string, unknown>;
-    const covered = cov['coveredBranchIds'] as string[];
     const uncovered = cov['uncoveredBranchIds'] as string[];
-    assert.ok(!covered.includes('severe_pneumonia_or_very_severe_disease'), 'severe must not be covered');
-    assert.ok(uncovered.includes('severe_pneumonia_or_very_severe_disease'), 'severe must be listed uncovered');
+    assert.ok(uncovered.includes(target!), `${target} must be listed uncovered`);
     assert.equal(report['coverageComplete'], false);
     assert.equal(report['passed'], false);
     assert.equal(code, 1);
   } finally {
+    rmSync(baseDir, { recursive: true, force: true });
     rmSync(dirname(tmpPatients), { recursive: true, force: true });
   }
 });
