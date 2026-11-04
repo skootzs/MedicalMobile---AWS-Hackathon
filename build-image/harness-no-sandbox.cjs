@@ -5,6 +5,8 @@ const Module = require('node:module');
 
 const originalLoad = Module._load;
 const patched = new WeakSet();
+// The bare package name, or the absolute path of its entry file, which R6's verifier uses.
+const HARNESS_ENTRY = /(?:^|[\\/])cht-conf-test-harness(?:[\\/]src[\\/]harness\.js)?$/;
 
 function addNoSandbox(harnessModule) {
   const Harness = harnessModule.default ?? harnessModule;
@@ -21,7 +23,7 @@ function addNoSandbox(harnessModule) {
 
 Module._load = function loadAndPatch(request, ...rest) {
   const loaded = originalLoad.call(this, request, ...rest);
-  if (request === 'cht-conf-test-harness' && !patched.has(loaded)) {
+  if (HARNESS_ENTRY.test(request) && !patched.has(loaded)) {
     addNoSandbox(loaded);
     patched.add(loaded);
   }

@@ -38,12 +38,13 @@ async function verifyPayload(overrides: Record<string, unknown> = {}) {
 const TESTED_DIR_HASH = sha256('tested');
 
 const report = (p: Record<string, unknown>, passed: boolean) => ({
-  schemaVersion: '2.2.0', version: '2.2.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z', passed, coverageComplete: true,
+  schemaVersion: '2.3.0', version: '2.3.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z', asOf: '2026-02-15', passed, coverageComplete: true,
+  evaluator: { used: false, reason: 'none', source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-02-15' },
   toolVersions: { node: 'v20', chtConf: '6.6.1', chtConfTestHarness: '5.0.4', chromiumRevision: '1', python: 'Python 3.11.2' },
   run: { command: ['node', 'run.js'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-02-15' },
-  references: { snapshotId: null, logicModelHash: INPUT_HASH, revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash },
+  references: { snapshotId: null, logicModelHash: sha256('envelope'), revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash, expectedCompileArtifactHash: p.compileArtifactHash },
   compileArtifactHash: p.compileArtifactHash as string, testedDirHash: TESTED_DIR_HASH, patientSetHash: sha256('patients'), goldenCasesHash: null, integrityChecks: [],
-  coverage: { method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null, totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], uncoveredBranchIds: [], uncoveredBranches: [] },
+  coverage: { method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null, totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [] },
   cases: [], disagreements: [],
 });
 
@@ -464,7 +465,7 @@ describe('VERIFY_BUILD', () => {
     assert.equal(job.verificationPassed, true);
     assert.equal(job.coverageComplete, true);
     assert.equal(job.testedDirHash, TESTED_DIR_HASH);
-    assert.equal(job.reportVersion, '2.2.0');
+    assert.equal(job.reportVersion, '2.3.0');
     assert.equal(job.runnerActorId, 'worker-a-verify');
     assert.match(job.reportVersionId, /report\.json$/);
     assert.ok(h.artifacts.objects.has(String(job.reportUri).replace('s3://test-bucket/', '')));
@@ -496,16 +497,16 @@ describe('VERIFY_BUILD', () => {
     assert.equal(await h.run(payload), 'RETRYING');
   });
 
-  it('gives the verifier the checked logic and the inputHash as LOGIC_MODEL_HASH', async () => {
+  it('gives the verifier the checked logic, the envelope hash and the inputHash', async () => {
     const payload: Record<string, unknown> = await verifyPayload();
     const packageHex = String(payload.packageHash);
     h.stages.report = report(payload, true);
     assert.equal(await h.run({ ...payload, packageHash: `sha256:${packageHex}` }), 'SUCCEEDED');
     const input = h.stages.verifyInputs[0]!;
     assert.equal(input.inputHash, INPUT_HASH);
-    assert.notEqual(input.inputHash, payload.logicModelHash);
+    assert.equal(input.logicModelHash, LOGIC_HASH.slice('sha256:'.length));
     assert.equal(input.packageHash, packageHex);
-    assert.equal(input.hasGoldenCases, false);
+    assert.equal(input.goldenCasesHash, undefined);
     assert.deepEqual(h.stages.verifyFiles[0], { 'logic.json': canonicalJson(LOGIC) });
   });
 
@@ -530,7 +531,7 @@ describe('VERIFY_BUILD', () => {
     const payload = await verifyPayload({ goldenCasesUri: h.artifacts.seed('sources/golden.json', golden), goldenCasesHash: `sha256:${sha256(golden)}` });
     h.stages.report = report(payload, true);
     assert.equal(await h.run(payload), 'SUCCEEDED');
-    assert.equal(h.stages.verifyInputs[0]!.hasGoldenCases, true);
+    assert.equal(h.stages.verifyInputs[0]!.goldenCasesHash, sha256(golden));
     assert.equal(h.stages.verifyFiles[0]!['golden-cases.json'], golden);
   });
 
@@ -548,13 +549,16 @@ describe('VERIFY_BUILD', () => {
   });
 
   it('builds the verify container with the contract env and read-only mounts', () => {
-    const base = { image: 'i', projectDir: '/p', inDir: '/n', verifierDir: '/v', outDir: '/o', packageHash: 'pkg', compileArtifactHash: 'art', inputHash: 'input' };
-    const args = verifyArgs({ ...base, hasGoldenCases: false }, 'name');
-    for (const expected of ['PACKAGE_HASH=pkg', 'COMPILE_ARTIFACT_HASH=art', 'LOGIC_MODEL_HASH=input', 'CHT_CONFIG_DIR=/project', 'OUT_DIR=/out', 'TZ=Africa/Nairobi', '/p:/project:ro', '/n:/in:ro', '/v:/verifier:ro']) {
+    const base = { image: 'i', projectDir: '/p', inDir: '/n', verifierDir: '/v', outDir: '/o', packageHash: 'pkg', compileArtifactHash: 'art', logicModelHash: 'envelope', inputHash: 'input' };
+    const args = verifyArgs(base, 'name');
+    for (const expected of ['PACKAGE_HASH=pkg', 'COMPILE_ARTIFACT_HASH=art', 'LOGIC_MODEL_HASH=envelope', 'INPUT_HASH=input', 'CHT_CONFIG_DIR=/project', 'OUT_DIR=/out', 'TZ=Africa/Nairobi', '/p:/project:ro', '/n:/in:ro', '/v:/verifier:ro']) {
       assert.ok(args.includes(expected), expected);
     }
     assert.ok(!args.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
-    assert.ok(verifyArgs({ ...base, hasGoldenCases: true }, 'name').includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
+    assert.ok(!args.some((arg) => arg.startsWith('GOLDEN_CASES_HASH=')));
+    const withGolden = verifyArgs({ ...base, goldenCasesHash: 'golden' }, 'name');
+    assert.ok(withGolden.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
+    assert.ok(withGolden.includes('GOLDEN_CASES_HASH=golden'));
   });
 
   it('a job dir it cannot clean up does not change the outcome', async () => {

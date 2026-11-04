@@ -56,7 +56,7 @@ Use `env_file: /etc/cht-nocode/env` in compose to get the shared values.
 | `BUILD_IMAGE` | runner | Installer (the ECR `build-image` tag) |
 | `COMPILER_DIR`, `COMPILER_COMMIT` | runner | Installer (`7f488e6`) |
 | `TEMPLATE_DIR` | runner | Installer |
-| `VERIFIER_DIR`, `VERIFIER_COMMIT` | runner | Installer (`90fd841`) |
+| `VERIFIER_DIR`, `VERIFIER_COMMIT` | runner | Installer (`e9f70f6`) |
 | `RUNNER_WORK_DIR` | runner | Installer |
 | `CHT_CONF_VERSION` | runner | Optional, defaults to `6.6.1` |
 | `LEASE_SECONDS` | runner | Optional, defaults to `900` |

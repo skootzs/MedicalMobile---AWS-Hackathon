@@ -3,7 +3,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-VERIFIER_COMMIT="${VERIFIER_COMMIT:-90fd841}"
+VERIFIER_COMMIT="${VERIFIER_COMMIT:-e9f70f6}"
 VERIFIER_WORKTREE="${VERIFIER_WORKTREE:-$HOME/cht-nocode/verifier-worktree}"
 
 echo "== 28-build-verifier: building verifier at $VERIFIER_COMMIT =="

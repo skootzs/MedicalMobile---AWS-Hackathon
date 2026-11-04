@@ -548,7 +548,7 @@ export class Worker {
       throw new JobFailure('INPUT_HASH_MISMATCH', 'Package compile-manifest.json does not match the job snapshot', false);
     }
 
-    const hasGoldenCases = Boolean(payload.goldenCasesUri);
+    let goldenCasesHash: string | undefined;
     if (payload.goldenCasesUri) {
       checkOwnBucket(payload.goldenCasesUri, config.bucket, 'goldenCasesUri');
       const golden = await this.#fetch(payload.goldenCasesUri, 'golden cases', 'VERIFY_ERROR');
@@ -556,12 +556,13 @@ export class Worker {
         throw new JobFailure('HASH_MISMATCH', 'Golden cases do not match goldenCasesHash', false);
       }
       writeFileSync(join(inDir, 'golden-cases.json'), golden);
+      goldenCasesHash = sha256(golden);
     }
 
     setTools({ buildImageDigest: await stages.imageDigest(config.buildImage), verifierCommit: config.verifierCommit, chtConf: config.chtConfVersion });
 
     const outDir = this.#writable(join(dir, 'out'));
-    // Bare hex: R6 echoes PACKAGE_HASH into the report, and R2 compares it to its raw hex.
+    // Bare hex: R6 echoes these into the report, and R2 compares them to its raw hex.
     const run = await stages.verify({
       image: config.buildImage,
       projectDir,
@@ -570,8 +571,9 @@ export class Worker {
       outDir,
       packageHash: hexOf(payload.packageHash),
       compileArtifactHash: hexOf(payload.compileArtifactHash),
+      logicModelHash: hexOf(payload.logicModelHash),
       inputHash: expectedInputHash,
-      hasGoldenCases,
+      ...(goldenCasesHash ? { goldenCasesHash } : {}),
     }, signal, config.buildTimeoutSeconds * 1000);
     if (run.timedOut) throw new JobFailure('TIMEOUT', 'Verify stage timed out', true);
 

@@ -10,7 +10,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORKTREE="$1"
-COMMIT="${2:-${VERIFIER_COMMIT:-90fd841}}"
+COMMIT="${2:-${VERIFIER_COMMIT:-e9f70f6}}"
 
 git -C "$REPO_ROOT" fetch origin verification >&2
 git -C "$REPO_ROOT" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true

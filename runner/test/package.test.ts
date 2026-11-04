@@ -129,6 +129,24 @@ describe('container flags', () => {
     assert.deepEqual(JSON.parse(output), ['--existing', '--no-sandbox']);
   });
 
+  it('the image preload also patches a harness loaded by absolute path, and only its entry file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'preload-'));
+    const moduleDir = join(root, 'node_modules/cht-conf-test-harness');
+    mkdirSync(join(moduleDir, 'src'), { recursive: true });
+    writeFileSync(join(moduleDir, 'package.json'), '{"main":"./src/harness.js","version":"5.0.4"}');
+    writeFileSync(join(moduleDir, 'src/harness.js'), `module.exports = class {
+      options = {};
+      start() { return this.options.args; }
+    };`);
+    const script = join(root, 'run.cjs');
+    writeFileSync(script, `require('cht-conf-test-harness/package.json');
+      const Harness = require(require.resolve('cht-conf-test-harness'));
+      console.log(JSON.stringify(new Harness().start()));`);
+    const preload = fileURLToPath(new URL('../../build-image/harness-no-sandbox.cjs', import.meta.url));
+    const output = execFileSync(process.execPath, ['--require', preload, script], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), ['--no-sandbox']);
+  });
+
   it('the image preload fails closed if the harness has no start()', () => {
     const root = mkdtempSync(join(tmpdir(), 'preload-'));
     const moduleDir = join(root, 'node_modules/cht-conf-test-harness');
@@ -141,7 +159,7 @@ describe('container flags', () => {
   });
 
   it('verify adds no capabilities, and /project is read-only', () => {
-    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', inputHash: 'i', hasGoldenCases: false }, 'n');
+    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', logicModelHash: 'l', inputHash: 'i' }, 'n');
     hasAll(args, shared);
     assert.ok(!args.includes('--cap-add'));
     assert.ok(!args.includes('SYS_ADMIN'));

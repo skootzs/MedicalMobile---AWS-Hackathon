@@ -165,7 +165,7 @@ Release approval binds to `packageHash` (exact bytes downloaded) +
 `snapshotHash`, `inputHash`, `compileArtifactHash`, `templateHash`,
 `manifestHash`, `packageHash`.
 
-### Verify stage (R6's verifier @ `90fd841`)
+### Verify stage (R6's verifier @ `e9f70f6`, report 2.3.0)
 
 The verify container runs `node /verifier/dist/run.js` with:
 
@@ -176,22 +176,15 @@ The verify container runs `node /verifier/dist/run.js` with:
 | `TZ` | `Africa/Nairobi` |
 | `PACKAGE_HASH` | the payload's `packageHash`, as bare hex |
 | `COMPILE_ARTIFACT_HASH` | the payload's `compileArtifactHash`, as bare hex |
-| `LOGIC_MODEL_HASH` | **the `inputHash`, see below** |
+| `LOGIC_MODEL_HASH` | R2's envelope hash, as bare hex. R6 checks it against the manifest's `snapshotHash` and echoes it into `references.logicModelHash` |
+| `INPUT_HASH` | the bare model's hash. R6 checks it against the manifest's `inputHash` |
 | `GOLDEN_CASES_FILE` | `/in/golden-cases.json`, only when the job has golden cases |
+| `GOLDEN_CASES_HASH` | that file's hash, only when the job has golden cases |
 
 Read-only mounts: `/project`, `/in` (`logic.json`, plus `golden-cases.json` when present) and
-`/verifier`. `/verifier` has no `node_modules`; the harness comes from the image through
-`NODE_PATH`. Build it with `scripts/build-verifier.sh`.
-
-> **`LOGIC_MODEL_HASH` means two different things.** R6's variable of that name holds the
-> compile manifest's `inputHash`, the hash of the bare LogicModel. Everywhere else in this
-> contract, `logicModelHash` is R2's hash of the snapshot envelope. The two never match, and
-> the runner deliberately passes the `inputHash`, so the verifier's check passes.
->
-> **Open conflict:** R6 also echoes this value into the report's `references.logicModelHash`,
-> and R2 (`verification-results.ts`) fails the report with `REPORT_REFERENCE_MISMATCH` unless
-> that field is null or equals the envelope hash. Renaming R6's variable to `INPUT_HASH` is
-> only enough if R6 also stops echoing it there.
+`/verifier`. `/verifier` has no `node_modules`; the harness comes from the image. Build it with
+`scripts/build-verifier.sh`. The runner's copy of R6's report schema
+(`runner/src/verification-report.schema.json`) must match the pinned commit, so update them together.
 
 ### R2 alignment still needed
 
