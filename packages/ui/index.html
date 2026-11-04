@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration request intake</title>
+<main>
+  <h1>Configuration request intake</h1>
+  <p id="message" role="status" aria-live="polite"></p>
+  <button id="sign-in" type="button">Sign in with Cognito</button>
+  <section id="intake" hidden>
+    <button id="sign-out" type="button">End local session</button>
+    <h2 id="form-title">New request</h2>
+    <form id="request">
+      <p><label>Goal<br><textarea name="goal" required maxlength="4000"></textarea></label></p>
+      <p><label>Affected pathway<br><textarea name="pathway" required maxlength="4000"></textarea></label></p>
+      <p><label>Target users<br><textarea name="targetUsers" required maxlength="4000"></textarea></label></p>
+      <p><label>Acceptance criteria<br><textarea name="acceptanceCriteria" required maxlength="4000"></textarea></label></p>
+      <p><label>Current configuration version<br><select name="baselineVersion" required></select></label></p>
+      <p><label>Public clinical guideline URLs (one per line)<br><textarea name="guidelineUrls"></textarea></label></p>
+      <p><label>Guideline attachment (.txt or .md, up to 256 KiB)<br><input name="attachment" type="file" accept=".txt,.md"></label></p>
+      <button type="submit">Submit revision</button>
+      <button id="new-request" type="button">Start a new request</button>
+    </form>
+    <h2>Your requests</h2>
+    <ul id="requests"></ul>
+    <section id="details" aria-label="Request revision history"></section>
+  </section>
+</main>
+<script type="module" src="/app.js"></script>
+</html>

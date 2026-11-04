@@ -1,0 +1,7 @@
+{
+  "name": "medic-mobile",
+  "private": true,
+  "workspaces": ["packages/ui", "packages/intake"],
+  "scripts": {"start": "npm run start -w packages/intake", "test": "node --test packages/intake/*.test.js"},
+  "engines": {"node": ">=22"}
+}
