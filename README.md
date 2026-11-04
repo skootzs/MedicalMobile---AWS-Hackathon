@@ -1,5 +1,7 @@
 # Configuration request intake
 
+See the [intake implementation guide](docs/intake-implementation-guide.md) for the original phase-one requirements and the phase-two Bedrock screening, preview, confirmation, and handoff plan.
+
 Phase one takes product owners from Cognito sign-in through submission, correction, and revision history. The intake service serves the browser UI and API from the same origin. It stores revision records in DynamoDB and source bytes in private, versioned S3. Guideline attachments support UTF-8 TXT and Markdown up to 256 KiB. URL references are stored without fetching their content.
 
 ## Run locally against AWS
