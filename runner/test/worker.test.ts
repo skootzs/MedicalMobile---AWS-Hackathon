@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { before, beforeEach, describe, it } from 'node:test';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { sha256 } from '../src/hashing.ts';
-import { validatePayload } from '../src/worker.ts';
+import { marshall } from '@aws-sdk/util-dynamodb';
+import { decodeBody, validatePayload } from '../src/worker.ts';
 import { createTable, Harness, INPUT_HASH, LOGIC_HASH, OK } from './helpers.ts';
 
 let db: DynamoDBDocumentClient;
@@ -208,6 +209,23 @@ describe('fails closed', () => {
     await h.seedJob(payload);
     assert.equal(await h.run(payload), 'FAILED');
     assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
+  });
+
+  it('runs a payload delivered as DynamoDB JSON by the outbox Pipe', async () => {
+    const payload = h.payload();
+    await h.seedJob(payload);
+    const body = { M: marshall(payload, { removeUndefinedValues: true }) };
+    assert.equal(body.M.revision!.N, '1');
+    assert.equal(body.M.clinicalApprovalId!.NULL, true);
+    assert.equal(await h.run(body), 'SUCCEEDED');
+  });
+
+  it('decodes each form the jobs queue can carry', () => {
+    assert.deepEqual(decodeBody('{"S":"{\\"jobId\\":\\"a\\"}"}'), { jobId: 'a' });
+    assert.deepEqual(decodeBody('{"jobId":"a","revision":1}'), { jobId: 'a', revision: 1 });
+    assert.deepEqual(decodeBody('{"M":"not a map"}'), { M: 'not a map' });
+    assert.equal(decodeBody('{"S":"not json"}'), undefined);
+    assert.equal(decodeBody('not json'), undefined);
   });
 
   it('accepts payloads still on contract 1.0.0 and rejects unknown versions', () => {

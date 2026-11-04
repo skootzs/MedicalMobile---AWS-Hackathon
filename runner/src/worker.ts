@@ -1,5 +1,6 @@
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { join, posix } from 'node:path';
 import type { RunnerConfig } from './config.ts';
 import { canonicalJson, hexOf, sha256 } from './hashing.ts';
@@ -81,6 +82,28 @@ function errorsText(errors: unknown): string {
   return JSON.stringify(errors).slice(0, 1000);
 }
 
+// The outbox Pipe sends the stream's payload attribute as DynamoDB JSON: {"M":{...}}, or
+// {"S":"<json>"} if a writer stores it as a string. Anything else is already the payload.
+export function decodeBody(body: string): unknown {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object') return parsed;
+  const keys = Object.keys(parsed);
+  if (keys.length !== 1) return parsed;
+  const { M, S } = parsed as { M?: Parameters<typeof unmarshall>[0]; S?: string };
+  try {
+    if (M && typeof M === 'object') return unmarshall(M);
+    if (typeof S === 'string') return JSON.parse(S);
+  } catch {
+    return undefined;
+  }
+  return parsed;
+}
+
 export function validatePayload(raw: unknown): { payload: JobPayload | VerifyBuildPayload } | { error: string } {
   const type = (raw as { jobType?: unknown } | null)?.jobType;
   if (type === 'VERIFY_BUILD') {
@@ -159,12 +182,7 @@ export class Worker {
 
   async handle(message: QueueMessage): Promise<Outcome> {
     const { config, store, queue } = this.#d;
-    let raw: unknown;
-    try {
-      raw = JSON.parse(message.body);
-    } catch {
-      raw = undefined;
-    }
+    const raw = decodeBody(message.body);
     const jobId = (raw as { jobId?: unknown } | undefined)?.jobId;
     const validated = validatePayload(raw);
     if ('error' in validated) {
