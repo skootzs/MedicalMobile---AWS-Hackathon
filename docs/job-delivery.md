@@ -35,7 +35,8 @@ disagree with the table:
   `dynamodb.NewImage.payload` from it and unmarshalls it.
 - **Events Pipe** (Tier 3): DynamoDB Stream → EventBridge Pipe, filtered to
   `MODIFY` on `JOB#` `META` items where `status` changed → the `job-events`
-  queue, sending `{ requestId, jobId, status, attempt }`.
+  queue, sending `{ requestId, jobId, status, attempt }`. `attempt` is a numeric string,
+  because Pipes renders stream values as strings and can't convert them without an enrichment step.
 
 **Fallbacks if Pipes don't work out** (ask R7 before switching): a poller in
 the orchestrator for the outbox (runner idempotency makes duplicate sends

@@ -96,9 +96,12 @@ set_status RUNNING 1
 next_message "$EVENTS_URL" "$PIPE_WAIT_SECONDS"
 [ -n "$BODY" ] || fail "no job event within ${PIPE_WAIT_SECONDS}s, check the pipe's state and role"
 echo "job-events body: $BODY"
-python3 - "$BODY" "$JOB" <<'PY' || fail "job event is not valid JSON {requestId,jobId,status,attempt} with a numeric attempt"
+python3 - "$BODY" "$JOB" <<'PY' || fail "job event is not valid JSON {requestId,jobId,status,attempt}"
 import json, sys
-assert json.loads(sys.argv[1]) == {"requestId": f"req-{sys.argv[2]}", "jobId": sys.argv[2], "status": "RUNNING", "attempt": 1}, sys.argv[1]
+event = json.loads(sys.argv[1])
+# Pipes renders stream values as strings, so attempt is "1". Consumers use Number(attempt).
+assert int(event.pop("attempt")) == 1, sys.argv[1]
+assert event == {"requestId": f"req-{sys.argv[2]}", "jobId": sys.argv[2], "status": "RUNNING"}, sys.argv[1]
 PY
 
 echo "== 30-pipes-smoke: a same-status write must not produce an event =="

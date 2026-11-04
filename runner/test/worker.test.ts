@@ -8,6 +8,7 @@ import { marshall } from '@aws-sdk/util-dynamodb';
 import { decodeBody, validatePayload } from '../src/worker.ts';
 import { verifyArgs } from '../launch-build.ts';
 import { canonicalJson } from '../src/hashing.ts';
+import { validateJobEvent } from '../src/generated/handoffs.ts';
 import { ARTIFACT_HASH, createTable, Harness, INPUT_HASH, LOGIC, LOGIC_HASH, OK } from './helpers.ts';
 
 let db: DynamoDBDocumentClient;
@@ -254,6 +255,14 @@ describe('fails closed', () => {
     assert.equal(decodeBody(JSON.stringify(record({ BOGUS: 'x' }))), undefined);
     // What the old input template produced.
     assert.equal(decodeBody('{M:{jobId:{S:smoke-1},revision:{N:1}}}'), undefined);
+  });
+
+  it('accepts the job event the events Pipe sends', () => {
+    const event = { requestId: 'r', jobId: 'j', status: 'RUNNING' };
+    assert.ok(validateJobEvent({ ...event, attempt: '2' }));
+    assert.ok(validateJobEvent({ ...event, attempt: 2 }));
+    assert.ok(!validateJobEvent({ ...event, attempt: 'two' }));
+    assert.ok(!validateJobEvent({ ...event, attempt: 0 }));
   });
 
   it('accepts payloads still on contract 1.0.0 and rejects unknown versions', () => {

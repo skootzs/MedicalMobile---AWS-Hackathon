@@ -13,8 +13,10 @@ until these are wired up. Current status of each is in
 [job-delivery.md](./job-delivery.md#r2-alignment-still-needed).
 
 1. **Consume `job-events`.** Nothing reads this queue yet. Each message is
-   `{ requestId, jobId, status, attempt }`. Read it, call R2's reconciler (`reconciler.ts`,
-   an in-process service), and delete the message. Without this, R2 never learns a job finished.
+   `{ requestId, jobId, status, attempt }`. `attempt` arrives as a numeric string, such as `"1"`,
+   because Pipes renders stream values as strings, and R2 needs a number, so pass `Number(attempt)`.
+   Read it, call R2's reconciler (`reconciler.ts`, an in-process service), and delete the message.
+   Without this, R2 never learns a job finished.
 2. **Register the runner's service actors with R2.** The runner records itself as
    `cht-runner-compile` and `cht-runner-verify`. R2 needs both in `resolveServiceActor`, with the
    COMPILER and VERIFIER roles, and it needs to supply its `CompilationArtifactVerifier`.
