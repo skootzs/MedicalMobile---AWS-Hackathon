@@ -16,6 +16,11 @@ export interface ApplyCommand {
   requestId: string;
   event: WorkflowCommand;
   snapshots?: readonly Snapshot[];
+  /** Internal application guards; these can reject, never grant permission. */
+  expectedActorId?: string;
+  preconditionFailure?: string;
+  /** Hash of the complete validated application command, including evidence refs. */
+  commandFingerprint?: string;
 }
 export interface ApplyResult {
   outcome: 'ACCEPTED' | 'REJECTED' | 'DUPLICATE';

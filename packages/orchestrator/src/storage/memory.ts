@@ -167,9 +167,16 @@ export class InMemoryOrchestratorStore implements OrchestratorStore {
     };
     if (!actor) return deny('UNAUTHORIZED');
     if (!validJson || !obj(command.event) || Object.hasOwn(command.event, 'actor') ||
-        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots'].includes(k))) return deny('INVALID_COMMAND');
+        Object.keys(command).some(k => !['attemptId', 'requestId', 'event', 'snapshots', 'expectedActorId', 'preconditionFailure', 'commandFingerprint'].includes(k))) return deny('INVALID_COMMAND');
+    if ((command.expectedActorId !== undefined && !id(command.expectedActorId)) ||
+        (command.preconditionFailure !== undefined && !id(command.preconditionFailure)) ||
+        (command.commandFingerprint !== undefined && !/^[a-f0-9]{64}$/.test(command.commandFingerprint))) return deny('INVALID_COMMAND');
+    if (command.expectedActorId !== undefined && actor.id !== command.expectedActorId) return deny('IDENTITY_CHANGED');
     if (!obj(command.event.request) || command.event.request.requestId !== command.requestId) return deny('REQUEST_SCOPE_MISMATCH');
     if (state) this.#assertSnapshots(state, base.snapshots); // Corrupt stored state/evidence blocks writes.
+    const priorReceipt = base.receipts.get(key(command.requestId, command.event.eventId));
+    if (priorReceipt && priorReceipt.commandFingerprint !== command.commandFingerprint) return deny('EVENT_ID_REUSED');
+    if (command.preconditionFailure !== undefined) return deny(command.preconditionFailure);
     const event = { ...command.event, actor } as WorkflowEvent;
     const transition = transitionWorkflow(state, event);
     if (transition.outcome !== 'ACCEPTED') {
@@ -205,7 +212,8 @@ export class InMemoryOrchestratorStore implements OrchestratorStore {
       const processed = next.processedEvents.find(item => item.eventId === event.eventId);
       if (!processed) throw new StorageError('MISSING_EVENT_RECEIPT');
       const receipt: EventReceipt = { request: identity(next), eventId: event.eventId,
-        fingerprint: processed.fingerprint, workflowVersion: next.version, auditId: update.result.auditId };
+        fingerprint: processed.fingerprint, workflowVersion: next.version, auditId: update.result.auditId,
+        ...(command.commandFingerprint === undefined ? {} : { commandFingerprint: command.commandFingerprint }) };
       const candidate: MemoryData = { ...update.data, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
       candidate.workflows.set(command.requestId, structuredClone(next));
       candidate.receipts.set(receiptKey, receipt);

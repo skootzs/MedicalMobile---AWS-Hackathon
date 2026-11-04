@@ -14,4 +14,6 @@ export interface EventReceipt {
   fingerprint: string;
   workflowVersion: number;
   auditId: string;
+  /** Optional for commands predating the application-service boundary. */
+  commandFingerprint?: string;
 }
