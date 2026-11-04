@@ -1,0 +1,27 @@
+{
+  "name": "@cht-nocode/compiler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic compiler from an approved LogicModel to CHT app form configuration",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "cht-nocode-compile": "./src/cli.ts"
+  },
+  "scripts": {
+    "compile": "node src/cli.ts",
+    "test": "node --test test/unit/*.test.ts",
+    "test:integration": "node --test test/integration/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "~5.9.3"
+  }
+}

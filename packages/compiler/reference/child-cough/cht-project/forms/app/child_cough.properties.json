@@ -1,0 +1,11 @@
+{
+  "title": [
+    { "locale": "en", "content": "Child Cough and Fast Breathing (Demo)" }
+  ],
+  "icon": "icon-child",
+  "context": {
+    "person": true,
+    "place": false,
+    "expression": "contact.type === 'person' && (!contact.date_of_birth || ageInYears(contact) < 5)"
+  }
+}
