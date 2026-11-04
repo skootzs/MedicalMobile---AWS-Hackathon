@@ -6,9 +6,13 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./schema": "./src/verification-report.schema.json"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run bundle:data",
-    "bundle:data": "mkdir -p dist/data && cp test/fixtures/patients.json dist/data/patients.json",
+    "build": "tsc -p tsconfig.json && npm run bundle:assets",
+    "bundle:assets": "mkdir -p dist/data && cp test/fixtures/patients.json dist/data/patients.json && cp src/verification-report.schema.json dist/verification-report.schema.json",
     "build:test": "tsc -p tsconfig.test.json",
     "pretest": "npm run build && npm run build:test",
     "test": "node scripts/run-tests.mjs",

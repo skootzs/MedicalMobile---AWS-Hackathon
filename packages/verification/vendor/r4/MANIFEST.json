@@ -1,0 +1,11 @@
+{
+  "note": "Vendored copy of R4 evaluator from a zip, NOT pinned to a commit.",
+  "files": {
+    "packages/checker/check_model.py": "fede2bf9b23f7bf0217a782b7d45167d5cca511a41d64622daed91d5d90b8416",
+    "packages/evaluator/condition_evaluator.py": "a2fc044dd4090180cd9ce6c92bbd0200fce069f71d5640504597353283158b8b",
+    "packages/evaluator/evaluate.py": "cb9f54513c31ae34f8eaa614720ba75462474948b0e13c5d4f0f425fe18c714a",
+    "packages/schema/src/logic-model.schema.json": "38675a59a40f7317aaecaef656f091929ac732d3f406f79847b5f66809a6c691",
+    "packages/schema/validate.py": "f9250d3f2da1ad0c93f8afd54cfb4b986f4fc2faf4ff25b11198480a87573e4a"
+  },
+  "evaluatorHash": "a546a6954f1c6d52f6c217f7ef465ce03b2b68019e78fcbbef95938caf1ed79a"
+}

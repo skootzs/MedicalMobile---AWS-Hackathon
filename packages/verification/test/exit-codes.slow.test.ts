@@ -138,8 +138,10 @@ test('exit 1: valid run with no expected source => passed false, report written'
   }
 });
 
-test('mismatch path: tampered EXPECTED_SNAPSHOT_HASH => exit 1 + failed integrityCheck', () => {
+test('mismatch path: tampered EXPECTED_SNAPSHOT_HASH => exit 1 + failed logicModelHash check (I2 alias)', () => {
   requirePrereqs();
+  // Per I2, EXPECTED_SNAPSHOT_HASH is an alias for LOGIC_MODEL_HASH; both feed
+  // the snapshotHash comparison surfaced as the "logicModelHash" check.
   const { code, outDir } = run({
     CHT_CONFIG_DIR: CONFIG,
     TZ: 'Africa/Nairobi',
@@ -150,8 +152,8 @@ test('mismatch path: tampered EXPECTED_SNAPSHOT_HASH => exit 1 + failed integrit
     assert.equal(code, 1);
     assert.equal(reportExists(outDir), true);
     const rep = JSON.parse(readFileSync(join(outDir, 'report.json'), 'utf8'));
-    const check = rep.integrityChecks.find((c: { name: string }) => c.name === 'expectedSnapshotHash');
-    assert.ok(check, 'expectedSnapshotHash check present');
+    const check = rep.integrityChecks.find((c: { name: string }) => c.name === 'logicModelHash');
+    assert.ok(check, 'logicModelHash check present');
     assert.equal(check.ok, false);
     assert.equal(rep.passed, false);
   } finally {

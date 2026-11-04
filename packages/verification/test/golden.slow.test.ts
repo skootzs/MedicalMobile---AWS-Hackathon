@@ -42,7 +42,10 @@ function runGolden(): { code: number | null; report: Record<string, unknown> } {
   assert.ok(existsSync(golden), `golden file missing at ${golden}`);
   const outDir = mkdtempSync(join(tmpdir(), 'golden-out-'));
   const res = spawnSync(process.execPath, [RUN_JS], {
-    env: { ...process.env, CHT_CONFIG_DIR: project, GOLDEN_CASES_FILE: golden, TZ: 'Africa/Nairobi', OUT_DIR: outDir, PATIENTS_FILE: '' },
+    // PATIENTS_FILE pointed at the golden file would be wrong; set it empty so
+    // only the bundled patient set + golden cases run. CHT_CONF_VERSION makes
+    // toolVersionsKnown deterministic regardless of whether `cht` is on PATH.
+    env: { ...process.env, CHT_CONFIG_DIR: project, GOLDEN_CASES_FILE: golden, TZ: 'Africa/Nairobi', OUT_DIR: outDir, PATIENTS_FILE: '', CHT_CONF_VERSION: '6.6.1' },
     encoding: 'utf8',
   });
   const report = JSON.parse(readFileSync(join(outDir, 'report.json'), 'utf8'));
@@ -70,26 +73,25 @@ test('H: golden run records goldenCasesHash and an info note (not a failing chec
   assert.match(String(info!['detail']), /not clinician-approved/);
 });
 
-test('H5: 22 golden cases -> 20 pass, 2 error (blocked), 0 fail', () => {
+test('J4/H5: 22 golden cases -> 22 pass, 0 error, 0 fail (incomplete via blocked submission)', () => {
   const g = goldenCases(golden().report);
   assert.equal(g.length, 22);
   const counts: Record<string, number> = {};
   for (const c of g) counts[String(c['status'])] = (counts[String(c['status'])] ?? 0) + 1;
-  assert.equal(counts['pass'], 20);
-  assert.equal(counts['error'], 2);
+  assert.equal(counts['pass'], 22);
+  assert.equal(counts['error'] ?? 0, 0);
   assert.equal(counts['fail'] ?? 0, 0);
 });
 
-test('H3: the two incomplete cases are errors with the blocked-submission reason, not "incomplete"', () => {
+test('J2/J4: the two incomplete cases pass via matchedBy form-blocked-submission', () => {
   const g = goldenCases(golden().report);
   const blocked = g.filter((c) => String(c['id']).includes('incomplete'));
   assert.equal(blocked.length, 2);
   for (const c of blocked) {
-    assert.equal(c['status'], 'error');
+    assert.equal(c['status'], 'pass');
+    assert.equal(c['matchedBy'], 'form-blocked-submission');
+    assert.equal(c['blockedSubmission'], true);
     assert.match(String(c['harnessOutput']), /form blocked submission \(required question unanswered\)/);
-    // must NOT be classified as "incomplete"
-    const actual = c['actual'] as Record<string, unknown> | null;
-    assert.notEqual(actual?.['classification'], 'incomplete');
   }
 });
 
@@ -103,8 +105,14 @@ test('H: a passing golden case records derived fields read from the report (fast
   assert.ok('any_general_danger_sign' in actual);
 });
 
-test('H5: exit code is 1 (blocked cases => passed false), with a valid report', () => {
+test('exit code is 1 and passed false: the bundled synth patients have no source (error)', () => {
   const { code, report } = golden();
   assert.equal(code, 1);
   assert.equal(report['passed'], false);
+  // All 22 golden cases pass; the non-pass cases are the bundled synth
+  // patients, which have no expected-outcome source and are therefore 'error'.
+  const cases = report['cases'] as Array<Record<string, unknown>>;
+  const nonGoldenBad = cases.filter((c) => !String(c['id']).startsWith('golden/') && c['status'] !== 'pass');
+  assert.ok(nonGoldenBad.length > 0);
+  assert.ok(nonGoldenBad.every((c) => c['status'] === 'error'));
 });

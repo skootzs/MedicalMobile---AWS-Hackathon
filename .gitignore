@@ -9,3 +9,5 @@ dist-test/
 generated/*
 !generated/.gitkeep
 scripts/kiro/*.log
+__pycache__/
+*.pyc

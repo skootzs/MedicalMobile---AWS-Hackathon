@@ -17,7 +17,7 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { IntegrityCheck, JsonValue, References, RunInfo, VerificationReport } from './report.js';
+import type { EvaluatorInfo, IntegrityCheck, JsonValue, References, RunInfo, VerificationReport } from './report.js';
 import { allToolVersionsKnown, collectToolVersions, PythonTooOldError } from './versions.js';
 import { hashDirectory, sha256, verifyCompileArtifact } from './hashing.js';
 import {
@@ -32,7 +32,13 @@ import {
   type HarnessLike,
 } from './case-executor.js';
 import { mapPatientToPages, type MappablePatient } from './patient-mapper.js';
-import { buildReport, type ExecutedCase, type SourceExpectation } from './report-builder.js';
+import { buildReport, deriveCase, type ExecutedCase, type SourceExpectation } from './report-builder.js';
+import {
+  toEvaluatorAnswers,
+  toExpectedFields,
+  type LogicModelLike,
+} from './evaluator-normalizer.js';
+import { runEvaluatorBridge, evaluatorHash, type BridgeCase } from './evaluator-bridge.js';
 
 const require = createRequire(import.meta.url);
 
@@ -42,6 +48,22 @@ const FIXED_CLOCK = '2026-02-15'; // deterministic clock for age and date calcs
 /** Directory of the compiled runner (dist/), for resolving bundled data. */
 function runnerDir(): string {
   return dirname(fileURLToPath(import.meta.url));
+}
+
+/**
+ * Resolve the logic model (E9): LOGIC_MODEL_FILE, else /in/logic.json, else
+ * ${CHT_CONFIG_DIR}/logic.json. Returns the file and where it came from.
+ */
+function resolveLogicModel(configDir: string): {
+  logicModelFile: string | null;
+  logicModelSource: Env['logicModelSource'];
+} {
+  const env = process.env.LOGIC_MODEL_FILE;
+  if (env && env.length > 0) return { logicModelFile: env, logicModelSource: 'LOGIC_MODEL_FILE' };
+  if (existsSync('/in/logic.json')) return { logicModelFile: '/in/logic.json', logicModelSource: '/in/logic.json' };
+  const inConfig = join(configDir, 'logic.json');
+  if (existsSync(inConfig)) return { logicModelFile: inConfig, logicModelSource: 'CHT_CONFIG_DIR' };
+  return { logicModelFile: null, logicModelSource: null };
 }
 
 /**
@@ -67,6 +89,8 @@ interface Env {
   tz: string;
   patientsFile: string | null;
   goldenCasesFile: string | null;
+  logicModelFile: string | null;
+  logicModelSource: 'LOGIC_MODEL_FILE' | '/in/logic.json' | 'CHT_CONFIG_DIR' | null;
   references: References;
   expectedSnapshotHash: string | null;
 }
@@ -95,7 +119,9 @@ function readEnv(): Env {
     outDir: process.env.OUT_DIR || DEFAULT_OUT,
     tz,
     patientsFile: orNull(process.env.PATIENTS_FILE),
-    goldenCasesFile: orNull(process.env.GOLDEN_CASES_FILE),
+    goldenCasesFile:
+      orNull(process.env.GOLDEN_CASES_FILE) ?? (existsSync('/in/golden-cases.json') ? '/in/golden-cases.json' : null),
+    ...resolveLogicModel(configDir),
     references: {
       snapshotId: orNull(process.env.SNAPSHOT_ID),
       logicModelHash: orNull(process.env.LOGIC_MODEL_HASH),
@@ -103,6 +129,7 @@ function readEnv(): Env {
       clinicalApprovalId: orNull(process.env.CLINICAL_APPROVAL_ID),
       compilationJobId: orNull(process.env.COMPILATION_JOB_ID),
       packageHash: orNull(process.env.PACKAGE_HASH),
+      expectedCompileArtifactHash: orNull(process.env.COMPILE_ARTIFACT_HASH),
     },
     expectedSnapshotHash: orNull(process.env.EXPECTED_SNAPSHOT_HASH),
   };
@@ -124,10 +151,54 @@ function loadPatients(path: string): StoredPatient[] {
   return raw as StoredPatient[];
 }
 
+const HARNESS_MODULE = 'cht-conf-test-harness';
+const BUILD_IMAGE_MODULES = '/build-image/node_modules';
+
+/**
+ * Resolve the harness module path, trying in order:
+ *   1. normal resolution (honours NODE_PATH, since we use require());
+ *   2. HARNESS_MODULE_PATH (a node_modules dir, or the module dir itself);
+ *   3. /build-image/node_modules (R7's baked-in location).
+ * Returns the resolved path, or null if none works. Pure/loggable; does not
+ * load the module.
+ */
+export function resolveHarnessModulePath(
+  resolver: (req: string, paths?: string[]) => string = (req, paths) =>
+    paths ? require.resolve(req, { paths }) : require.resolve(req),
+  env: NodeJS.ProcessEnv = process.env,
+): { path: string; via: string } | null {
+  // Order (E10a): HARNESS_MODULE_PATH, then the baked /build-image copy (it must
+  // win over anything on NODE_PATH), then NODE_PATH, then normal resolution.
+  const nodePathDirs = (env['NODE_PATH'] ?? '').split(':').filter((s) => s.length > 0);
+  const attempts: Array<{ via: string; paths?: string[] }> = [
+    ...(env['HARNESS_MODULE_PATH']
+      ? [{ via: 'HARNESS_MODULE_PATH', paths: [env['HARNESS_MODULE_PATH']] }]
+      : []),
+    { via: BUILD_IMAGE_MODULES, paths: [BUILD_IMAGE_MODULES] },
+    ...(nodePathDirs.length > 0 ? [{ via: 'NODE_PATH', paths: nodePathDirs }] : []),
+    { via: 'normal' },
+  ];
+  for (const a of attempts) {
+    try {
+      return { path: resolver(HARNESS_MODULE, a.paths), via: a.via };
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
 /** Load the real harness. Isolated so tests can inject a fake. */
-function loadHarness(configDir: string, tz: string): HarnessLike {
+function loadHarness(configDir: string, tz: string, log: (line: string) => void): HarnessLike {
   process.env.TZ = tz;
-  const H = require('cht-conf-test-harness') as { default?: unknown } | unknown;
+  const resolved = resolveHarnessModulePath();
+  if (!resolved) {
+    throw new RunnerError(
+      `could not resolve ${HARNESS_MODULE} via normal resolution, NODE_PATH, HARNESS_MODULE_PATH or ${BUILD_IMAGE_MODULES}`,
+    );
+  }
+  log(`harness resolved from ${resolved.path} (via ${resolved.via})`);
+  const H = require(resolved.path) as { default?: unknown } | unknown;
   const Ctor = ((H as { default?: unknown }).default ?? H) as new (o: unknown) => HarnessLike;
   return new Ctor({
     directory: configDir,
@@ -144,6 +215,14 @@ export interface PatientCase {
   input: Record<string, unknown>;
   /** Optional golden expected-outcome source for this case (H). */
   golden?: SourceExpectation | null;
+  /** Raw form-id answers + ageMonths, for the evaluator bridge (E). */
+  rawAnswers?: Record<string, unknown>;
+  /** Age in months (null = no DOB), for the evaluator and the normalizer. */
+  ageMonths?: number | null;
+  /** Evaluator expectation / error / matched rows, filled by the E step. */
+  evaluator?: SourceExpectation | null;
+  evaluatorError?: string | null;
+  matchedRows?: number[];
 }
 
 export interface RunDeps {
@@ -155,6 +234,8 @@ export interface RunDeps {
   patientSetHash: string | null;
   /** sha256 of the golden file bytes, or null when no golden file was supplied. */
   goldenCasesHash?: string | null;
+  /** Evaluator facts for the report (F2). */
+  evaluatorInfo: EvaluatorInfo;
   /** Extra output fields the golden sources declare, for the executor to read. */
   extraOutputFields?: string[];
   /** Info-level integrity note about the golden file (never a failing check). */
@@ -195,34 +276,71 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     detail: artifact.files.map((f) => `${f.path}: ${f.ok ? 'ok' : 'FAIL'} (${f.detail})`).join('; '),
   });
 
-  // LOGIC_MODEL_HASH: if set, must equal manifest.inputHash; if not set,
-  // recorded as "not provided" and NOT ok.
+  // COMPILE_ARTIFACT_HASH (E10c): optional expected value, "sha256:" prefix
+  // stripped; compared to the manifest's artifactHash. Mismatch fails (exit 1);
+  // absent is informational.
   {
-    const provided = env.references.logicModelHash;
-    if (provided === null) {
-      integrityChecks.push({ name: 'logicModelHash', ok: false, detail: 'not provided' });
+    const expected = env.references.expectedCompileArtifactHash;
+    if (expected === null) {
+      integrityChecks.push({ name: 'compileArtifactHashExpected', ok: true, detail: 'not provided' });
     } else {
-      const ok = provided === manifest.inputHash;
+      const got = expected.replace(/^sha256:/, '');
+      const ok = got === manifest.artifactHash;
       integrityChecks.push({
-        name: 'logicModelHash',
+        name: 'compileArtifactHashExpected',
         ok,
         detail: ok
-          ? 'LOGIC_MODEL_HASH matches manifest.inputHash'
-          : `LOGIC_MODEL_HASH ${provided} != manifest.inputHash ${String(manifest.inputHash)}`,
+          ? 'COMPILE_ARTIFACT_HASH matches the compiled artifact hash'
+          : `COMPILE_ARTIFACT_HASH ${got} != compileArtifactHash ${manifest.artifactHash}`,
       });
     }
   }
 
-  // Optional: EXPECTED_SNAPSHOT_HASH must equal manifest.snapshotHash.
-  if (env.expectedSnapshotHash !== null) {
-    const ok = env.expectedSnapshotHash === manifest.snapshotHash;
+  // E9: when the logic model came from CHT_CONFIG_DIR, its canonical-JSON
+  // sha256 should equal manifest.inputHash. R5's canonicalization (packages/
+  // compiler/src/hash.ts canonicalJson) is not vendored here, so we cannot
+  // reproduce the exact bytes; record this as informational.
+  if (env.logicModelSource === 'CHT_CONFIG_DIR') {
     integrityChecks.push({
-      name: 'expectedSnapshotHash',
-      ok,
-      detail: ok
-        ? 'EXPECTED_SNAPSHOT_HASH matches manifest.snapshotHash'
-        : `EXPECTED_SNAPSHOT_HASH ${env.expectedSnapshotHash} != manifest.snapshotHash ${String(manifest.snapshotHash)}`,
+      name: 'logicModelInputHash',
+      ok: true,
+      detail:
+        "informational: logic model from CHT_CONFIG_DIR; cannot confirm sha256(canonical JSON) == manifest.inputHash " +
+        "(R5's canonicalJson is not vendored here)",
     });
+  }
+
+  // snapshotHash check (name: logicModelHash). LOGIC_MODEL_HASH is compared to
+  // manifest.snapshotHash (NOT inputHash); EXPECTED_SNAPSHOT_HASH is an alias.
+  // An optional "sha256:" prefix is stripped on both sides.
+  //
+  // NOTE: this RELAXES the earlier fail-closed behaviour. Previously a
+  // standalone run without LOGIC_MODEL_HASH failed this check (ok:false) by
+  // design. Now, when neither env var is provided, the check is informational
+  // (ok:true, "not provided; R7 cross-checks snapshotHash"), so a standalone
+  // run no longer fails solely for lacking the hash. A PROVIDED value that
+  // mismatches still fails.
+  {
+    const stripSha = (v: string): string => v.replace(/^sha256:/, '');
+    const provided = env.references.logicModelHash ?? env.expectedSnapshotHash;
+    if (provided === null) {
+      integrityChecks.push({
+        name: 'logicModelHash',
+        ok: true,
+        detail: 'not provided; R7 cross-checks snapshotHash',
+      });
+    } else {
+      const got = stripSha(provided);
+      const want = manifest.snapshotHash === null ? null : stripSha(manifest.snapshotHash);
+      const ok = want !== null && got === want;
+      integrityChecks.push({
+        name: 'logicModelHash',
+        ok,
+        detail: ok
+          ? 'provided hash matches manifest.snapshotHash'
+          : `provided hash ${got} != manifest.snapshotHash ${String(want)}`,
+      });
+    }
   }
 
   const testedDirHash = hashDirectory(env.configDir);
@@ -249,10 +367,10 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
         try {
           res = await executor.run({ id: p.id, input: p.input as never });
         } catch (e) {
-          res = { actual: null, harnessOutput: `executor threw: ${String((e as Error).message ?? e)}`, usedPageFallback: false, status: 'error' };
+          res = { actual: null, harnessOutput: `executor threw: ${String((e as Error).message ?? e)}`, usedPageFallback: false, blockedSubmission: false, status: 'error' };
         }
         if (res.usedPageFallback) fallbackIds.push(p.id);
-        log(`case ${p.id}: status=${res.status} fallback=${res.usedPageFallback}`);
+        log(`case ${p.id}: status=${res.status} fallback=${res.usedPageFallback} blocked=${res.blockedSubmission}`);
         // golden comes from GOLDEN_CASES_FILE when present; evaluator is not
         // wired yet. We NEVER synthesise an expected value.
         executed.push({
@@ -262,8 +380,11 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
           kind: p.kind,
           actual: res.actual,
           harnessOutput: res.harnessOutput,
+          blockedSubmission: res.blockedSubmission,
           golden: p.golden ?? null,
-          evaluator: null,
+          evaluator: p.evaluator ?? null,
+          ...(p.evaluatorError ? { evaluatorError: p.evaluatorError } : {}),
+          ...(p.matchedRows ? { matchedRows: p.matchedRows } : {}),
         });
       }
     } finally {
@@ -293,20 +414,40 @@ export async function runVerification(deps: RunDeps): Promise<VerificationReport
     executed,
     classificationField,
   );
+  // J3: branches covered via a form-blocked submission. A case that was
+  // blocked and whose source expected classification X (and therefore passes
+  // via "form-blocked-submission") covers the branch X, if X is a required
+  // branch not already observed.
+  const observed = new Set(coveredBranchIds);
+  const viaBlocked = new Set<string>();
+  for (const c of executed) {
+    if (!c.blockedSubmission) continue;
+    const d = deriveCase(c, classificationField);
+    if (d.matchedBy !== 'form-blocked-submission') continue;
+    const expected = (c.golden ?? c.evaluator)?.expected[classificationField];
+    if (typeof expected === 'string' && resolved.branchIds.includes(expected) && !observed.has(expected)) {
+      viaBlocked.add(expected);
+    }
+  }
+  const coveredViaBlockedSubmission = [...viaBlocked].sort();
+  const stillUncovered = uncoveredBranches.filter((u) => !viaBlocked.has(u.id));
   const coverage = {
     method: 'observed-outcome' as const,
     branchSource: resolved.source,
     sampleWarning: resolved.source === 'sample' ? resolved.warning : null,
     totalBranches: resolved.branchIds.length,
-    coveredBranches: coveredBranchIds.length,
+    coveredBranches: coveredBranchIds.length + coveredViaBlockedSubmission.length,
     coveredBranchIds,
-    uncoveredBranchIds: uncoveredBranches.map((u) => u.id),
-    uncoveredBranches,
+    coveredViaBlockedSubmission,
+    uncoveredBranchIds: stillUncovered.map((u) => u.id),
+    uncoveredBranches: stillUncovered,
   };
   if (resolved.source === 'sample') log(resolved.warning);
 
   const report = buildReport({
     generatedAt: new Date().toISOString(),
+    asOf: FIXED_CLOCK,
+    evaluator: deps.evaluatorInfo,
     toolVersions,
     run,
     references: env.references,
@@ -346,6 +487,10 @@ async function main(): Promise<number> {
   }
 
   try {
+    // Manifest output field names are needed by the evaluator mapping.
+    const manifestForFields = readManifest(env.configDir);
+    const manifestOutputFields = manifestForFields.outputFields ?? {};
+
     // Resolve the patients file: PATIENTS_FILE if set, else the bundled
     // data/patients.json next to the compiled runner (copied at build time).
     // patientSetHash is the sha256 of the chosen file's raw bytes.
@@ -376,6 +521,8 @@ async function main(): Promise<number> {
           ageMonths: p.ageMonths,
           pageAnswers: mapPatientToPages(p as MappablePatient, pages),
         },
+        rawAnswers: p as Record<string, unknown>,
+        ageMonths: (p.ageMonths ?? null) as number | null,
       }));
       log(`loaded ${patients.length} patients from ${patientsFile}`);
     }
@@ -418,17 +565,86 @@ async function main(): Promise<number> {
           kind: 'branch',
           input: { ageMonths, pageAnswers: mapPatientToPages(mappable, pages) },
           golden: source,
+          rawAnswers: input,
+          ageMonths,
         });
       }
       log(`loaded ${golden.length} golden cases from ${env.goldenCasesFile}`);
+    } else {
+      log('no golden cases supplied');
     }
 
-    const harness = loadHarness(env.configDir, env.tz);
+    // Evaluator as an expected-outcome source (E5). Runs once over all patients
+    // when a logic model exists. Model absent: skip (patients keep whatever
+    // source they have; synthetic ones stay 'error: no source'). Model present
+    // but Python/jsonschema missing: the bridge exits 2 -> we exit 2.
+    let evaluatorInfo: EvaluatorInfo = {
+      used: false,
+      reason: 'no logic model',
+      source: null,
+      root: null,
+      evaluatorHash: null,
+      pythonVersion: null,
+      jsonschemaVersion: null,
+      logicModelSource: env.logicModelSource,
+      asOf: FIXED_CLOCK,
+    };
+    if (env.logicModelFile && existsSync(env.logicModelFile)) {
+      const model = JSON.parse(readFileSync(env.logicModelFile, 'utf8')) as LogicModelLike;
+      const outputFieldNames = {
+        classification: manifestOutputFields.classification ?? 'classification',
+        referralUrgent: manifestOutputFields.referralUrgent ?? 'referral_urgent',
+        followUpDays: manifestOutputFields.followUpDays ?? 'follow_up_days',
+        followUpDate: manifestOutputFields.followUpDate ?? 't_follow_up_date',
+      };
+      // Every patient is sent to the evaluator. A patient that answers a
+      // non-visible question is detected by the evaluator itself (it raises a
+      // ValueError), which the bridge returns as ok:false -> status 'error'.
+      // No hidden-answer convention lives in this package (F1).
+      const bridgeCases: BridgeCase[] = patients.map((p) => ({
+        id: p.id,
+        answers: toEvaluatorAnswers((p.rawAnswers ?? {}) as Record<string, JsonValue>, model, { ageMonths: p.ageMonths ?? null }),
+      }));
+      const outcome = runEvaluatorBridge(env.logicModelFile, bridgeCases, FIXED_CLOCK);
+      if (outcome.fatal) {
+        throw new RunnerError(`evaluator required but unavailable: ${outcome.fatalMessage ?? 'exit 2'}`);
+      }
+      evaluatorInfo = {
+        used: true,
+        reason: null,
+        source: (outcome.evaluatorSource as EvaluatorInfo['source']) ?? null,
+        root: outcome.evaluatorRoot ?? null,
+        evaluatorHash: outcome.evaluatorRoot ? evaluatorHash(outcome.evaluatorRoot) : null,
+        pythonVersion: outcome.pythonVersion ?? null,
+        jsonschemaVersion: outcome.jsonschemaVersion ?? null,
+        logicModelSource: env.logicModelSource,
+        asOf: FIXED_CLOCK,
+      };
+      const byId = new Map(outcome.results.map((r) => [r.id, r]));
+      for (const p of patients) {
+        const r = byId.get(p.id);
+        if (!r) continue;
+        if (r.ok) {
+          const expected = toExpectedFields(r, outputFieldNames);
+          p.evaluator = { expected, fields: Object.keys(expected) };
+          p.matchedRows = r.matchedRows;
+        } else {
+          p.evaluatorError = r.error;
+        }
+      }
+      for (const k of Object.values(outputFieldNames)) extraOutputFields.add(k);
+      log(`evaluator ran over ${bridgeCases.length} cases (root=${evaluatorInfo.root}, source=${evaluatorInfo.source})`);
+    } else {
+      log('evaluator skipped: no logic model');
+    }
+
+    const harness = loadHarness(env.configDir, env.tz, log);
     const report = await runVerification({
       env,
       harness,
       goldenCasesHash,
       goldenInfo,
+      evaluatorInfo,
       extraOutputFields: [...extraOutputFields],
       executorFactory: (h, formId, rowsPath, outputFields) =>
         new PatientExecutor({

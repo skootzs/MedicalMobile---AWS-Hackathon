@@ -73,6 +73,17 @@ export type { BuildReportArgs, ExecutedCase, SourceExpectation } from './report-
 export { buildReport, buildDisagreements, declaredFields, deriveCase, evaluateSource } from './report-builder.js';
 
 export type { PatientCase, RunDeps } from './run.js';
-export { runVerification, sanitizeCommand } from './run.js';
+export { runVerification, sanitizeCommand, resolveHarnessModulePath } from './run.js';
+
+export type { LogicModelLike, OutputFieldNames, EvaluatorResult } from './evaluator-normalizer.js';
+export {
+  ageContextId,
+  monthsBetween,
+  toEvaluatorAnswers,
+  toExpectedFields,
+} from './evaluator-normalizer.js';
+
+export type { BridgeCase, BridgeResult, BridgeOutcome } from './evaluator-bridge.js';
+export { runEvaluatorBridge } from './evaluator-bridge.js';
 
 export { allToolVersionsKnown } from './versions.js';

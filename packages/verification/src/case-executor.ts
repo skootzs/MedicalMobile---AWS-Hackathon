@@ -45,6 +45,11 @@ export interface ExecutionResult {
   /** True if the full page arrays were rejected and [[]] was used instead. */
   usedPageFallback: boolean;
   /**
+   * True when submission was blocked by a required-but-unanswered visible
+   * question (enketo.constraint.required), as opposed to any other failure.
+   */
+  blockedSubmission: boolean;
+  /**
    * 'ok'        - submitted (with or without fallback);
    * 'error'     - failed for a reason other than page-count fallback.
    * A fallback alone is never 'error'.
@@ -226,6 +231,7 @@ export class PatientExecutor implements CaseExecutor {
         actual: null,
         harnessOutput: 'input.pageAnswers must be an array of per-page answer arrays',
         usedPageFallback: false,
+        blockedSubmission: false,
         status: 'error',
       };
     }
@@ -244,11 +250,11 @@ export class PatientExecutor implements CaseExecutor {
     try {
       result = await this.opts.harness.fillForm(loadArg, ...(pageAnswers as unknown[]));
     } catch (e) {
-      return { actual: null, harnessOutput: `fillForm threw: ${String((e as Error).message ?? e)}`, usedPageFallback: false, status: 'error' };
+      return { actual: null, harnessOutput: `fillForm threw: ${String((e as Error).message ?? e)}`, usedPageFallback: false, blockedSubmission: false, status: 'error' };
     }
 
     if (result.report && this.otherErrors(result)!.length === 0) {
-      return { actual: await this.pick(result), harnessOutput: null, usedPageFallback: false, status: 'ok' };
+      return { actual: await this.pick(result), harnessOutput: null, usedPageFallback: false, blockedSubmission: false, status: 'ok' };
     }
 
     // Fallback only when the sole problem is page visibility (option B).
@@ -265,7 +271,7 @@ export class PatientExecutor implements CaseExecutor {
         try {
           fb = await this.opts.harness.fillForm(loadArg, ...attempt);
         } catch (e) {
-          return { actual: null, harnessOutput: `fallback fillForm threw: ${String((e as Error).message ?? e)}`, usedPageFallback: true, status: 'error' };
+          return { actual: null, harnessOutput: `fallback fillForm threw: ${String((e as Error).message ?? e)}`, usedPageFallback: true, blockedSubmission: false, status: 'error' };
         }
         const fbOther = this.otherErrors(fb)!;
         if (fb.report && fbOther.length === 0) {
@@ -273,6 +279,7 @@ export class PatientExecutor implements CaseExecutor {
             actual: await this.pick(fb),
             harnessOutput: `page-count fallback: full arrays had hidden pages; submitted after truncating to ${n} page array(s)${n === 0 ? ' ([[]])' : ''}`,
             usedPageFallback: true,
+            blockedSubmission: false,
             status: 'ok',
           };
         }
@@ -282,6 +289,7 @@ export class PatientExecutor implements CaseExecutor {
             actual: fb.report ? await this.pick(fb) : null,
             harnessOutput: `fallback (truncate to ${n}) failed with non-visibility error: ${JSON.stringify(fbOther)}`,
             usedPageFallback: true,
+            blockedSubmission: false,
             status: 'error',
           };
         }
@@ -291,6 +299,7 @@ export class PatientExecutor implements CaseExecutor {
         actual: null,
         harnessOutput: 'page-count fallback exhausted: form did not submit even with [[]]',
         usedPageFallback: true,
+        blockedSubmission: false,
         status: 'error',
       };
     }
@@ -308,6 +317,7 @@ export class PatientExecutor implements CaseExecutor {
       actual: result.report ? await this.pick(result) : null,
       harnessOutput,
       usedPageFallback: false,
+      blockedSubmission: blockedByRequired,
       status: 'error',
     };
   }

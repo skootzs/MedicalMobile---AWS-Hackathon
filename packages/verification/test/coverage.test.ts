@@ -91,13 +91,15 @@ const toolVersions: ToolVersions = {
 const run: RunInfo = { command: ['node'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-02-15' };
 const references: References = {
   snapshotId: null, logicModelHash: null, revision: null,
-  clinicalApprovalId: null, compilationJobId: null, packageHash: null,
+  clinicalApprovalId: null, compilationJobId: null, packageHash: null, expectedCompileArtifactHash: null,
 };
 const HASH = '0'.repeat(64);
 
 function reportWithCoverage(coverage: Coverage) {
   return buildReport({
     generatedAt: new Date().toISOString(),
+    asOf: '2026-02-15',
+    evaluator: { used: false, reason: 'test', source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-02-15' },
     toolVersions, run, references,
     compileArtifactHash: HASH, testedDirHash: HASH, patientSetHash: HASH, goldenCasesHash: null,
     coverage,
@@ -113,7 +115,7 @@ test('2b-1(a): coverageComplete false when branchSource is sample, even if all s
     method: 'observed-outcome', branchSource: 'sample',
     sampleWarning: 'unconfirmed sample data',
     totalBranches: 2, coveredBranches: 2,
-    coveredBranchIds: ['b1', 'b2'], uncoveredBranchIds: [], uncoveredBranches: [],
+    coveredBranchIds: ['b1', 'b2'], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [],
   };
   assert.equal(reportWithCoverage(coverage).coverageComplete, false);
 });
@@ -122,7 +124,7 @@ test('2b-1(b): coverageComplete false when the required set is empty', () => {
   const coverage: Coverage = {
     method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null,
     totalBranches: 0, coveredBranches: 0,
-    coveredBranchIds: [], uncoveredBranchIds: [], uncoveredBranches: [],
+    coveredBranchIds: [], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [],
   };
   assert.equal(reportWithCoverage(coverage).coverageComplete, false);
 });
@@ -131,7 +133,7 @@ test('2b-1(c): coverageComplete false when any branch is uncovered', () => {
   const coverage: Coverage = {
     method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null,
     totalBranches: 2, coveredBranches: 1,
-    coveredBranchIds: ['b1'], uncoveredBranchIds: ['b2'],
+    coveredBranchIds: ['b1'], coveredViaBlockedSubmission: [], uncoveredBranchIds: ['b2'],
     uncoveredBranches: [{ id: 'b2', reason: 'no executed case reached it' }],
   };
   assert.equal(reportWithCoverage(coverage).coverageComplete, false);
@@ -141,7 +143,7 @@ test('2b-1: coverageComplete true only for manifest source, non-empty, all cover
   const coverage: Coverage = {
     method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null,
     totalBranches: 2, coveredBranches: 2,
-    coveredBranchIds: ['b1', 'b2'], uncoveredBranchIds: [], uncoveredBranches: [],
+    coveredBranchIds: ['b1', 'b2'], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [],
   };
   // buildReport with no cases still forces passed false, but coverageComplete itself is true here.
   assert.equal(reportWithCoverage(coverage).coverageComplete, true);
@@ -150,11 +152,13 @@ test('2b-1: coverageComplete true only for manifest source, non-empty, all cover
 test('2b-2: pageFallbacks detail reports N of M cases', () => {
   const rep = buildReport({
     generatedAt: new Date().toISOString(),
+    asOf: '2026-02-15',
+    evaluator: { used: false, reason: 'test', source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-02-15' },
     toolVersions, run, references,
     compileArtifactHash: HASH, testedDirHash: HASH, patientSetHash: HASH, goldenCasesHash: null,
     coverage: {
       method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null,
-      totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], uncoveredBranchIds: [], uncoveredBranches: [],
+      totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [],
     },
     classificationField: 'classification',
     pageFallbackCaseIds: ['a', 'b'],
