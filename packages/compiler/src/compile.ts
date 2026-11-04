@@ -1,6 +1,15 @@
 import { ErrorList, type CompileError } from './errors.ts';
 import { buildFormProperties, type FormProperties } from './form-properties.ts';
 import { canonicalJson, sha256 } from './hash.ts';
+import {
+  buildTasks,
+  DEFAULT_TASK_WINDOW,
+  TASKS_FILE,
+  TRANSLATIONS_FILE,
+  translationsFile,
+  type GeneratedTasks,
+  type TaskWindow,
+} from './tasks.ts';
 import { xlsFormToXlsx, type XlsForm, type XlsFormRow } from './xlsform-adapter.ts';
 import {
   compileCondition,
@@ -22,6 +31,8 @@ export interface CompileOptions {
   watermark?: string;
   /** Icon key; must exist in the target project's resources.json. */
   icon?: string;
+  /** Days before and after the follow-up date that the follow-up task is shown. Default 0 before, 2 after. */
+  taskWindow?: TaskWindow;
 }
 
 export interface GeneratedFile {
@@ -51,6 +62,10 @@ export interface CompileManifest {
   };
   decisionTable: { id: string; hitPolicy: 'unique' | 'first'; rows: number; otherwise: string };
   outcomes: { id: string; referral: 'urgent' | 'none'; followUpDays: number | null }[];
+  /** The follow-up task written to tasks.js; null when no outcome has a follow-up. */
+  tasks: GeneratedTasks['summary'] | null;
+  /** Keys added to translations/messages-en.properties. */
+  translations: Record<string, string>;
   openAmbiguities: { id: string; text: string }[];
 }
 
@@ -218,6 +233,13 @@ export function compileLogicModel(input: unknown, options: CompileOptions = {}):
   if (!ICON.test(icon)) errors.add('INVALID_VALUE', 'options.icon', `${JSON.stringify(icon)} is not a valid icon key`);
   if (options.snapshotHash !== undefined && !SNAPSHOT_HASH.test(options.snapshotHash)) {
     errors.add('INVALID_VALUE', 'options.snapshotHash', 'Expected 8-128 characters from A-Z, a-z, 0-9, :, _ or -');
+  }
+  const taskWindow = options.taskWindow ?? DEFAULT_TASK_WINDOW;
+  for (const side of ['start', 'end'] as const) {
+    const days = taskWindow[side];
+    if (!Number.isInteger(days) || days < 0 || days > 60) {
+      errors.add('INVALID_VALUE', `options.taskWindow.${side}`, 'Expected a whole number of days from 0 to 60');
+    }
   }
 
   // Sources
@@ -495,10 +517,22 @@ export function compileLogicModel(input: unknown, options: CompileOptions = {}):
     version: `v1_${inputHash.slice(0, 12)}`,
   });
   const properties = buildFormProperties(title, LANGUAGE, icon);
+  const tasks = buildTasks({
+    formId, title, icon, inputHash, window: taskWindow,
+    windowSource: options.taskWindow === undefined ? 'default' : 'option',
+    followUpOutcomes: outcomes.filter((o) => o.followUpDays !== null).map((o) => o.id),
+  });
 
+  const enc = (s: string) => new TextEncoder().encode(s);
   const files = [
     { path: `forms/app/${formId}.xlsx`, bytes: xlsFormToXlsx(xlsForm) },
-    { path: `forms/app/${formId}.properties.json`, bytes: new TextEncoder().encode(`${JSON.stringify(properties, null, 2)}\n`) },
+    { path: `forms/app/${formId}.properties.json`, bytes: enc(`${JSON.stringify(properties, null, 2)}\n`) },
+    ...(tasks
+      ? [
+          { path: TASKS_FILE, bytes: enc(tasks.tasksJs) },
+          { path: TRANSLATIONS_FILE, bytes: enc(translationsFile(tasks.translations)) },
+        ]
+      : []),
   ].map((f) => ({ ...f, sha256: sha256(f.bytes) }));
   const artifactHash = sha256(
     [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).map((f) => `${f.path}\t${f.sha256}\n`).join(''),
@@ -526,6 +560,8 @@ export function compileLogicModel(input: unknown, options: CompileOptions = {}):
     },
     decisionTable: { id: t.id, hitPolicy: t.hitPolicy, rows: t.rows.length, otherwise: t.otherwise },
     outcomes: outcomes.map((o) => ({ id: o.id, referral: o.referral, followUpDays: o.followUpDays })),
+    tasks: tasks ? tasks.summary : null,
+    translations: tasks ? tasks.translations : {},
     openAmbiguities,
   };
 
