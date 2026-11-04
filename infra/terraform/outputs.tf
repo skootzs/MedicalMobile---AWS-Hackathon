@@ -49,3 +49,11 @@ output "bedrock_guardrail_id" {
 output "bedrock_guardrail_version" {
   value = aws_bedrock_guardrail_version.pii.version
 }
+
+output "job_events_queue_url" {
+  value = aws_sqs_queue.job_events.url
+}
+
+output "job_events_dlq_url" {
+  value = aws_sqs_queue.job_events_dlq.url
+}

@@ -18,6 +18,8 @@ umask 077
   echo "DDB_TABLE=$(tf dynamodb_table_name)"
   echo "JOBS_QUEUE_URL=$(tf jobs_queue_url)"
   echo "JOBS_DLQ_URL=$(tf jobs_dlq_url)"
+  echo "JOB_EVENTS_QUEUE_URL=$(tf job_events_queue_url)"
+  echo "JOB_EVENTS_DLQ_URL=$(tf job_events_dlq_url)"
   echo "COGNITO_USER_POOL_ID=$(tf cognito_user_pool_id)"
   echo "COGNITO_CLIENT_ID=$(tf cognito_user_pool_client_id)"
   echo "CHT_SECRET_NAME=$(tf cht_secret_name)"

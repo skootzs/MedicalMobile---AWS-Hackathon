@@ -1,0 +1,46 @@
+# Minimal CI for R7's code. No AWS credentials: runner tests use DynamoDB Local,
+# and Terraform validates with -backend=false.
+name: CI
+
+on:
+  push:
+    branches: [main, r7-infra]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    runs-on: ubuntu-latest
+    services:
+      dynamodb-local:
+        image: amazon/dynamodb-local:2.5.3
+        ports:
+          - 8000:8000
+    env:
+      DYNAMODB_LOCAL_ENDPOINT: http://localhost:8000
+    defaults:
+      run:
+        working-directory: runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm test
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

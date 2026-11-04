@@ -55,7 +55,7 @@ export class FakeArtifacts implements Artifacts {
     if (!found) throw new Error(`NoSuchKey ${key}`);
     return found;
   }
-  async put(key: string, body: string | Buffer) { return this.seed(key, body); }
+  async put(key: string, body: string | Buffer) { return { uri: this.seed(key, body), versionId: `v-${key}` }; }
 }
 
 // Plays the compiler and cht-conf contract without containers. Override per test.
@@ -124,7 +124,7 @@ export class Harness {
     return {
       region: 'us-west-2', table: TABLE, bucket: BUCKET, jobsQueueUrl: 'q', workerId: 'worker-a', leaseSeconds: 900,
       buildTimeoutSeconds: 600, maxReceiveCount: 3, retryVisibilitySeconds: 30, compileImage: 'compile:1', buildImage: 'build:1',
-      compilerDir: '/c', compilerCommit: '7f488e6', templateDir: '/t', verifierDir: '/v', verifierCommit: 'abc', workRoot: this.workRoot,
+      compilerDir: '/c', compilerCommit: '7f488e6', templateDir: '/t', verifierDir: '/v', verifierCommit: 'abc', chtConfVersion: '6.6.1', workRoot: this.workRoot,
       ...overrides,
     };
   }

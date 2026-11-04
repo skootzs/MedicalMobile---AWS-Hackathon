@@ -15,6 +15,7 @@ export interface RunnerConfig {
   templateDir: string;
   verifierDir: string;
   verifierCommit: string;
+  chtConfVersion: string;
   workRoot: string;
 }
 
@@ -48,6 +49,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     templateDir: required(env, 'TEMPLATE_DIR'),
     verifierDir: required(env, 'VERIFIER_DIR'),
     verifierCommit: required(env, 'VERIFIER_COMMIT'),
+    // Matches the pin in build-image/Dockerfile.
+    chtConfVersion: env.CHT_CONF_VERSION || '6.6.1',
     workRoot: required(env, 'RUNNER_WORK_DIR'),
   };
 }

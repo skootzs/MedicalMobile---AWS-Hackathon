@@ -28,8 +28,8 @@ const artifacts: Artifacts = {
     return Buffer.from(await found.Body!.transformToByteArray());
   },
   async put(key, body) {
-    await s3.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }));
-    return `s3://${config.bucket}/${key}`;
+    const stored = await s3.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }));
+    return { uri: `s3://${config.bucket}/${key}`, ...(stored.VersionId ? { versionId: stored.VersionId } : {}) };
   },
 };
 

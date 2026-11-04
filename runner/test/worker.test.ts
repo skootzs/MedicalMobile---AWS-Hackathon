@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { before, beforeEach, describe, it } from 'node:test';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { sha256 } from '../src/hashing.ts';
-import { validatePayload } from '../src/worker.ts';
+import { marshall } from '@aws-sdk/util-dynamodb';
+import { decodeBody, validatePayload } from '../src/worker.ts';
 import { createTable, Harness, INPUT_HASH, LOGIC_HASH, OK } from './helpers.ts';
 
 let db: DynamoDBDocumentClient;
@@ -46,6 +47,16 @@ describe('COMPILE_LOGIC happy path', () => {
     assert.equal(job.toolVersions.compilerCommit, '7f488e6');
     assert.equal(job.toolVersions.compileImageDigest, 'compile:1@sha256:test');
     assert.equal(job.leaseOwner, undefined);
+    assert.equal(job.runnerActorId, 'worker-a-compile');
+    assert.equal(job.toolVersions.compiler, '7f488e6');
+    assert.equal(job.toolVersions.chtConf, '6.6.1');
+    assert.equal(job.compilerExitCode, 0);
+    assert.equal(job.chtConfStatus, 'PASSED');
+    assert.match(job.packageVersionId, /project\.tgz$/);
+    assert.match(job.manifestVersionId, /manifest\.json$/);
+    assert.match(job.compileReportUri, /compile-manifest\.json$/);
+    assert.match(job.compileReportVersionId, /compile-manifest\.json$/);
+    assert.equal(sha256(await h.artifacts.get(job.compileReportUri)), job.compileReportHash);
     assert.equal(sha256((await h.artifacts.get(job.packageUri))), job.packageHash);
     assert.deepEqual((await h.audits(payload.requestId)).sort(), ['job_started', 'job_succeeded']);
     assert.equal(h.queue.deleted.length, 1);
@@ -181,7 +192,9 @@ describe('fails closed', () => {
     const payload = h.payload();
     await h.seedJob(payload);
     assert.equal(await h.run({ ...payload, surprise: true }), 'FAILED');
-    assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
+    const job = await h.job(payload.jobId);
+    assert.equal(job.errorCode, 'INVALID_PAYLOAD');
+    assert.equal(job.runnerActorId, 'worker-a-compile');
     assert.equal(h.queue.deleted.length, 1);
   });
 
@@ -189,8 +202,15 @@ describe('fails closed', () => {
     const payload = h.payload();
     await h.seedJob(payload);
     await h.store().take({ jobId: payload.jobId, requestId: payload.requestId, messageId: 'x', receiveCount: 1, workerId: 'owner', leaseSeconds: 900 });
-    await h.run({ ...payload, surprise: true });
+    assert.equal(await h.run({ ...payload, surprise: true }), 'LEFT_ON_QUEUE');
     assert.equal((await h.job(payload.jobId)).status, 'RUNNING');
+    assert.deepEqual(h.queue.deleted, []);
+  });
+
+  it('an invalid payload whose failure cannot be recorded is not deleted', async () => {
+    const payload = h.payload();
+    assert.equal(await h.run({ ...payload, surprise: true }), 'LEFT_ON_QUEUE');
+    assert.deepEqual(h.queue.deleted, []);
   });
 
   it('a snapshot outside the artifact bucket is rejected', async () => {
@@ -198,6 +218,34 @@ describe('fails closed', () => {
     await h.seedJob(payload);
     assert.equal(await h.run(payload), 'FAILED');
     assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
+  });
+
+  it('runs a payload delivered as DynamoDB JSON by the outbox Pipe', async () => {
+    const payload = h.payload();
+    await h.seedJob(payload);
+    const body = { M: marshall(payload, { removeUndefinedValues: true }) };
+    assert.equal(body.M.revision!.N, '1');
+    assert.equal(body.M.clinicalApprovalId!.NULL, true);
+    assert.equal(await h.run(body), 'SUCCEEDED');
+  });
+
+  it('decodes each form the jobs queue can carry', () => {
+    assert.deepEqual(decodeBody('{"S":"{\\"jobId\\":\\"a\\"}"}'), { jobId: 'a' });
+    assert.deepEqual(decodeBody('{"jobId":"a","revision":1}'), { jobId: 'a', revision: 1 });
+    assert.deepEqual(decodeBody('{"M":"not a map"}'), { M: 'not a map' });
+    assert.equal(decodeBody('{"S":"not json"}'), undefined);
+    assert.equal(decodeBody('not json'), undefined);
+  });
+
+  it('accepts payloads still on contract 1.0.0 and rejects unknown versions', () => {
+    assert.ok('payload' in validatePayload(h.payload({ contractVersion: '1.0.0' })));
+    assert.ok('error' in validatePayload(h.payload({ contractVersion: '9.9.9' })));
+  });
+
+  it('golden case fields must come together', () => {
+    assert.ok('payload' in validatePayload(h.payload({ goldenCasesUri: 's3://b/g.json', goldenCasesHash: 'sha256:g' })));
+    assert.ok('error' in validatePayload(h.payload({ goldenCasesUri: 's3://b/g.json' })));
+    assert.ok('error' in validatePayload(h.payload({ goldenCasesHash: 'sha256:g' })));
   });
 
   it('COMPILE_LOGIC without a mode is invalid', () => {
@@ -228,8 +276,29 @@ describe('exit codes and retries', () => {
     assert.equal(job.errorCode, 'MODEL_REJECTED');
     assert.equal(job.retryable, false);
     assert.deepEqual(job.compileErrors, errors);
+    assert.equal(job.compilerExitCode, 1);
+    assert.equal(job.chtConfStatus, 'NOT_RUN');
+    assert.equal(job.failureKind, 'COMPILER_REJECTED');
     assert.equal(h.queue.deleted.length, 1);
     assert.deepEqual(h.stages.calls, ['compile']);
+  });
+
+  it('records R2 failure details when the last delivery ends each kind of failure', async () => {
+    const cases: [string, Partial<typeof OK>, string, number | null, string, string][] = [
+      ['compile', { exitCode: 2 }, 'COMPILE_INFRA_ERROR', 2, 'NOT_RUN', 'COMPILER_USAGE_OR_FILE_ERROR'],
+      ['compile', { exitCode: 137 }, 'COMPILE_INFRA_ERROR', null, 'NOT_RUN', 'RUNNER_FAILED'],
+      ['compile', { timedOut: true }, 'TIMEOUT', null, 'NOT_RUN', 'TIMED_OUT'],
+      ['convert', { exitCode: 1 }, 'CONVERT_FAILED', 0, 'FAILED', 'CHT_CONVERSION_FAILED'],
+    ];
+    for (const [stage, result, code, exit, cht, kind] of cases) {
+      const payload = h.payload();
+      await h.seedJob(payload);
+      h.stages.compileResult = stage === 'compile' ? { ...OK, ...result } : OK;
+      h.stages.convertResult = stage === 'convert' ? { ...OK, ...result } : OK;
+      assert.equal(await h.run(payload, 3), 'FAILED');
+      const job = await h.job(payload.jobId);
+      assert.deepEqual([job.errorCode, job.compilerExitCode, job.chtConfStatus, job.failureKind], [code, exit, cht, kind]);
+    }
   });
 
   it('exit 1 without the compiler error JSON is infrastructure, not a model rejection', async () => {
@@ -378,6 +447,8 @@ describe('VERIFY_BUILD', () => {
     assert.equal(job.coverageComplete, true);
     assert.equal(job.testedDirHash, 'tested');
     assert.equal(job.reportVersion, '2.0.0');
+    assert.equal(job.runnerActorId, 'worker-a-verify');
+    assert.match(job.reportVersionId, /report\.json$/);
     assert.ok(h.artifacts.objects.has(String(job.reportUri).replace('s3://test-bucket/', '')));
   });
 
