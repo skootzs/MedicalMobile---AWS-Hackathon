@@ -18,7 +18,7 @@
  *       python too old, missing inputs, or the harness could not start).
  */
 
-export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.2.0';
+export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.3.0';
 
 /** Any JSON-serialisable value. Used where the shape belongs to a teammate. */
 export type JsonValue =
@@ -77,6 +77,30 @@ export interface ToolVersions {
   python: string;
 }
 
+/**
+ * Facts about the evaluator run, recorded in the report (not only on stderr).
+ * When `used` is false, only `used` and `reason` are meaningful.
+ */
+export interface EvaluatorInfo {
+  used: boolean;
+  /** Why the evaluator did not run (e.g. "no logic model"); null when used. */
+  reason: string | null;
+  /** Where the evaluator code came from. Null when not used. */
+  source: 'env' | 'repo' | 'vendored-zip-unpinned' | null;
+  /** Absolute root added to sys.path. Null when not used. */
+  root: string | null;
+  /** sha256 over the five evaluator source files actually used. Null if unused. */
+  evaluatorHash: string | null;
+  /** Python interpreter version, e.g. "3.12.16". Null when not used. */
+  pythonVersion: string | null;
+  /** jsonschema version via importlib.metadata. Null when not used. */
+  jsonschemaVersion: string | null;
+  /** Where the logic model was read from. */
+  logicModelSource: 'LOGIC_MODEL_FILE' | '/in/logic.json' | 'CHT_CONFIG_DIR' | null;
+  /** The as-of date used for evaluation (YYYY-MM-DD). */
+  asOf: string;
+}
+
 /** An uncovered branch and why it was not reached. */
 export interface UncoveredBranch {
   id: string;
@@ -97,8 +121,15 @@ export interface Coverage {
   sampleWarning: string | null;
   totalBranches: number;
   coveredBranches: number;
-  /** Ids of hit branches, in required-set order. */
+  /** Ids of hit branches (observed outcome), in required-set order. */
   coveredBranchIds: string[];
+  /**
+   * Branch ids covered via a form-blocked submission rather than an observed
+   * outcome: a case expected this branch (e.g. "incomplete") and the form
+   * refused to submit for a required-but-unanswered question. Counts toward
+   * coverageComplete alongside coveredBranchIds.
+   */
+  coveredViaBlockedSubmission: string[];
   /** Ids of unhit branches (kept for back-compatibility and quick scanning). */
   uncoveredBranchIds: string[];
   /** Unhit branches with a reason each. */
@@ -124,6 +155,8 @@ export interface References {
   compilationJobId: string | null;
   /** Package hash from the orchestrator. Echoed only, never verified. */
   packageHash: string | null;
+  /** Expected compile artifact hash (COMPILE_ARTIFACT_HASH), echoed; checked separately. */
+  expectedCompileArtifactHash: string | null;
 }
 
 /**
@@ -168,6 +201,21 @@ export interface VerificationCase {
   evaluator: ExpectedResult | null;
   /** Derived from actual vs both results; see CaseStatus. */
   status: CaseStatus;
+  /**
+   * How a pass was reached when not the ordinary outcome match. Currently only
+   * "form-blocked-submission": the form refused to submit because a required
+   * question was unanswered, and the source expected classification
+   * "incomplete". Omitted otherwise.
+   */
+  matchedBy?: 'form-blocked-submission';
+  /** True when submission was blocked by a required-but-unanswered question. */
+  blockedSubmission?: boolean;
+  /** Which expected-outcome source(s) backed this case. */
+  expectedSource?: 'evaluator' | 'golden' | 'both';
+  /** Decision-table row indexes the evaluator matched; evaluator cases only. */
+  matchedRows?: number[];
+  /** Intersection of golden/evaluator declared fields compared for disagreement (K1). */
+  comparedFields?: string[];
   /** Human-readable reason for any non-pass status; null on pass. */
   failureDetail: string | null;
   /** Raw harness output kept as failure evidence; null if none was captured. */
@@ -223,6 +271,10 @@ export interface VerificationReport {
   packageHash: string | null;
   /** ISO 8601 UTC timestamp. */
   generatedAt: string;
+  /** The fixed clock / as-of date used for age and follow-up calcs (YYYY-MM-DD). */
+  asOf: string;
+  /** Facts about the evaluator run (F2). */
+  evaluator: EvaluatorInfo;
   /**
    * Overall gate result. Computed by the report builder, never set by hand.
    * False if ANY of the following hold:

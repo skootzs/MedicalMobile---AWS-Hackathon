@@ -9,10 +9,11 @@
  * expected outcomes.
  */
 import { fileURLToPath } from 'node:url';
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { loadBranches, loadThresholds } from './data.js';
 import { generatePatients, serializePatients } from './patients.js';
+import { generateFromLogicModel, loadLogicModel } from './logic-model.js';
 
 export function writePatientsFile(thresholdsPath: string, branchesPath: string, outPath: string): number {
   const thresholds = loadThresholds(thresholdsPath);
@@ -22,15 +23,30 @@ export function writePatientsFile(thresholdsPath: string, branchesPath: string, 
   return patients.length;
 }
 
+/** Generate from a logic model and write deterministically. */
+export function writeFromLogicModel(logicModelPath: string, outPath: string): number {
+  const { patients, boundaries } = generateFromLogicModel(loadLogicModel(logicModelPath));
+  writeFileSync(outPath, serializePatients(patients));
+  process.stderr.write(`derived boundaries from ${logicModelPath}: ${JSON.stringify(boundaries)}\n`);
+  return patients.length;
+}
+
 function main(argv: string[]): void {
   const here = dirname(fileURLToPath(import.meta.url));
   const dataDir = resolve(here, '..', 'data');
-  const [thresholds, branches, out] = argv;
-  const thresholdsPath = thresholds ?? join(dataDir, 'thresholds.json');
-  const branchesPath = branches ?? join(dataDir, 'branches.json');
-  const outPath = out ?? join(dataDir, 'patients.json');
-  const count = writePatientsFile(thresholdsPath, branchesPath, outPath);
-  process.stderr.write(`wrote ${count} patients to ${outPath}\n`);
+  const out = argv[0] ?? join(dataDir, 'patients.json');
+  // Prefer a logic model (L2): LOGIC_MODEL_FILE, else /in/logic.json if present,
+  // else fall back to the sample data with its "unconfirmed" warning (L3).
+  const logicModelPath =
+    process.env['LOGIC_MODEL_FILE'] ?? (existsSync('/in/logic.json') ? '/in/logic.json' : null);
+  if (logicModelPath && existsSync(logicModelPath)) {
+    const count = writeFromLogicModel(logicModelPath, out);
+    process.stderr.write(`wrote ${count} patients (from logic model) to ${out}\n`);
+    return;
+  }
+  process.stderr.write('no logic model available; falling back to sample thresholds/branches (unconfirmed)\n');
+  const count = writePatientsFile(join(dataDir, 'thresholds.json'), join(dataDir, 'branches.json'), out);
+  process.stderr.write(`wrote ${count} patients (from sample data) to ${out}\n`);
 }
 
 const invokedDirectly =

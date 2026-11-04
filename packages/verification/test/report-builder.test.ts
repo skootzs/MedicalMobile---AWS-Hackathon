@@ -126,13 +126,15 @@ const toolVersions: ToolVersions = {
 const run: RunInfo = { command: ['node'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-02-15' };
 const references: References = {
   snapshotId: null, logicModelHash: null, revision: null,
-  clinicalApprovalId: null, compilationJobId: null, packageHash: null,
+  clinicalApprovalId: null, compilationJobId: null, packageHash: null, expectedCompileArtifactHash: null,
 };
 const H = '0'.repeat(64);
 
 function baseArgs() {
   return {
     generatedAt: new Date().toISOString(),
+    asOf: '2026-02-15',
+    evaluator: { used: false, reason: 'test', source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-02-15' },
     toolVersions, run, references,
     compileArtifactHash: H, testedDirHash: H, patientSetHash: H, goldenCasesHash: null,
     coverage: {
@@ -142,6 +144,7 @@ function baseArgs() {
       totalBranches: 0,
       coveredBranches: 0,
       coveredBranchIds: [] as string[],
+      coveredViaBlockedSubmission: [] as string[],
       uncoveredBranchIds: [] as string[],
       uncoveredBranches: [] as { id: string; reason: string }[],
     },
@@ -174,6 +177,7 @@ test('incomplete coverage makes passed false', () => {
       totalBranches: 1,
       coveredBranches: 0,
       coveredBranchIds: [] as string[],
+      coveredViaBlockedSubmission: [] as string[],
       uncoveredBranchIds: ['b1'],
       uncoveredBranches: [{ id: 'b1', reason: 'no executed case reached it' }],
     },
@@ -214,4 +218,101 @@ test('G1: report.version equals schemaVersion and packageHash mirrors references
 test('G1: packageHash is null when references.packageHash is null', () => {
   const rep = buildReport({ ...baseArgs(), cases: [] });
   assert.equal(rep.packageHash, null);
+});
+
+// --- Item J2: form-blocked-submission status rule ---
+
+function blockedCase(golden: SourceExpectation | null): ExecutedCase {
+  return {
+    id: 'b1', input: {}, branchId: null, kind: 'exceptional',
+    actual: null, harnessOutput: 'form blocked submission (required question unanswered)',
+    blockedSubmission: true, golden, evaluator: null,
+  };
+}
+
+test('J2: blocked + source expects incomplete => pass, matchedBy form-blocked-submission', () => {
+  const d = deriveCase(blockedCase({ expected: { classification: 'incomplete' } }), 'classification');
+  assert.equal(d.status, 'pass');
+  assert.equal(d.matchedBy, 'form-blocked-submission');
+});
+
+test('J2: blocked + source expects something else => fail', () => {
+  const d = deriveCase(blockedCase({ expected: { classification: 'pneumonia' } }), 'classification');
+  assert.equal(d.status, 'fail');
+  assert.match(d.detail ?? '', /blocked submission/);
+});
+
+test('J2: blocked + no source => error', () => {
+  const d = deriveCase(blockedCase(null), 'classification');
+  assert.equal(d.status, 'error');
+});
+
+test('J2: ordinary (non-blocked) outcomes are unchanged', () => {
+  const ok = deriveCase(
+    { id: 'o', input: {}, branchId: null, kind: 'branch', actual: { classification: 'pneumonia' }, harnessOutput: null, golden: { expected: { classification: 'pneumonia' } }, evaluator: null },
+    'classification',
+  );
+  assert.equal(ok.status, 'pass');
+  assert.equal(ok.matchedBy, undefined);
+});
+
+// --- Item E4/E6: evaluator as an expected-outcome source ---
+
+function evalCase(over: Partial<ExecutedCase>): ExecutedCase {
+  return {
+    id: 'e1', input: {}, branchId: null, kind: 'branch',
+    actual: { classification: 'pneumonia', in_scope: 'yes' },
+    harnessOutput: null, golden: null, evaluator: null, ...over,
+  };
+}
+
+test('E: evaluator-only match => pass, source "evaluator"', () => {
+  const d = deriveCase(evalCase({ evaluator: { expected: { classification: 'pneumonia' } } }), 'classification');
+  assert.equal(d.status, 'pass');
+  assert.equal(d.expectedSource, 'evaluator');
+});
+
+test('E: evaluator mismatch => fail', () => {
+  const d = deriveCase(evalCase({ evaluator: { expected: { classification: 'cough_or_cold' } } }), 'classification');
+  assert.equal(d.status, 'fail');
+});
+
+test('E: evaluator error => error with the message', () => {
+  const d = deriveCase(evalCase({ evaluator: null, evaluatorError: 'ValueError: bad' }), 'classification');
+  assert.equal(d.status, 'error');
+  assert.match(d.detail ?? '', /evaluator error: ValueError: bad/);
+  assert.equal(d.expectedSource, 'evaluator');
+});
+
+test('E: golden vs evaluator disagree => disagree (and would make passed false)', () => {
+  const d = deriveCase(
+    evalCase({
+      golden: { expected: { classification: 'pneumonia' } },
+      evaluator: { expected: { classification: 'cough_or_cold' } },
+    }),
+    'classification',
+  );
+  assert.equal(d.status, 'disagree');
+  assert.equal(d.expectedSource, 'both');
+});
+
+test('E: golden and evaluator agree, actual matches => pass, source "both"', () => {
+  const d = deriveCase(
+    evalCase({
+      golden: { expected: { classification: 'pneumonia' } },
+      evaluator: { expected: { classification: 'pneumonia' } },
+    }),
+    'classification',
+  );
+  assert.equal(d.status, 'pass');
+  assert.equal(d.expectedSource, 'both');
+});
+
+test('E: evaluator expects incomplete + blocked submission => pass via form-blocked-submission', () => {
+  const d = deriveCase(
+    evalCase({ actual: null, blockedSubmission: true, evaluator: { expected: { classification: 'incomplete' } } }),
+    'classification',
+  );
+  assert.equal(d.status, 'pass');
+  assert.equal(d.matchedBy, 'form-blocked-submission');
 });

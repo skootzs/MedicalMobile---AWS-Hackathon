@@ -25,7 +25,10 @@ export {
 
 export type { GenerateOptions, PatientInput, PatientKind } from './patients.js';
 export { generatePatients, serializePatients } from './patients.js';
-export { writePatientsFile } from './write-patients.js';
+export { writePatientsFile, writeFromLogicModel } from './write-patients.js';
+
+export type { LogicModel, LogicModelPatientSet } from './logic-model.js';
+export { collectNumericBoundaries, generateFromLogicModel, loadLogicModel } from './logic-model.js';
 
 export type { CoverageResult } from './coverage.js';
 export { computeCoverage } from './coverage.js';
