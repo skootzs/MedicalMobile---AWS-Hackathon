@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +38,7 @@ export const LOGIC = { schemaVersion: 'test', questions: [{ id: 'b', type: 'bool
 export const ENVELOPE = Buffer.from(canonicalJson({ kind: 'LOGIC_MODEL', revision: 1, content: LOGIC }));
 export const LOGIC_HASH = `sha256:${sha256(ENVELOPE)}`;
 export const INPUT_HASH = sha256(canonicalJson(LOGIC));
+export const ARTIFACT_HASH = sha256('art');
 
 export class FakeQueue implements Queue {
   deleted: string[] = [];
@@ -66,6 +67,8 @@ export class FakeStages implements Stages {
   compileResult: StageResult = OK;
   convertResult: StageResult = OK;
   verifyResult: StageResult = OK;
+  verifyInputs: Parameters<Stages['verify']>[0][] = [];
+  verifyFiles: Record<string, string>[] = [];
   writeConvertLog = true;
   report: unknown = undefined;
   onCompile: (() => void) | undefined;
@@ -80,7 +83,7 @@ export class FakeStages implements Stages {
     writeFileSync(join(input.outDir, 'forms/app/f.xlsx'), 'xlsx');
     writeFileSync(join(input.outDir, 'compile-rows.json'), '[]');
     writeFileSync(join(input.outDir, 'compile-manifest.json'), JSON.stringify({
-      formId: 'f', snapshotHash: input.snapshotHash, inputHash: sha256(logic), artifactHash: 'art', template: { hash: 'tpl' }, ...this.manifestOverride,
+      formId: 'f', snapshotHash: input.snapshotHash, inputHash: sha256(logic), artifactHash: ARTIFACT_HASH, template: { hash: 'tpl' }, ...this.manifestOverride,
     }));
     if (input.baselineDir) writeFileSync(join(input.outDir, 'compile-diff.json'), '{"identical":true}');
     return this.compileResult;
@@ -97,6 +100,8 @@ export class FakeStages implements Stages {
   }
   async verify(input: Parameters<Stages['verify']>[0]) {
     this.calls.push('verify');
+    this.verifyInputs.push(input);
+    this.verifyFiles.push(Object.fromEntries(readdirSync(input.inDir).map((name) => [name, readFileSync(join(input.inDir, name), 'utf8')])));
     if (!existsSync(join(input.projectDir, 'app_settings.json'))) throw new Error('package was not unpacked');
     if (this.report !== undefined) writeFileSync(join(input.outDir, 'report.json'), JSON.stringify(this.report));
     return this.verifyResult;

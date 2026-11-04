@@ -88,15 +88,15 @@ next_message "$JOBS_URL" 30
 
 echo "== 30-pipes-smoke: events Pipe =="
 aws dynamodb put-item --table-name "$TABLE" --item "{
-  \"pk\":{\"S\":\"JOB#$JOB\"},\"sk\":{\"S\":\"META\"},\"jobId\":{\"S\":\"$JOB\"},
+  \"pk\":{\"S\":\"JOB#$JOB\"},\"sk\":{\"S\":\"META\"},\"jobId\":{\"S\":\"$JOB\"},\"requestId\":{\"S\":\"req-$JOB\"},
   \"status\":{\"S\":\"PENDING\"},\"attempt\":{\"N\":\"1\"},\"leaseUntil\":{\"N\":\"0\"}}"
 set_status RUNNING 1
 next_message "$EVENTS_URL" "$PIPE_WAIT_SECONDS"
 [ -n "$BODY" ] || fail "no job event within ${PIPE_WAIT_SECONDS}s, check the pipe's state and role"
 echo "job-events body: $BODY"
-python3 - "$BODY" "$JOB" <<'PY' || fail "job event is not {jobId,status,attempt}"
+python3 - "$BODY" "$JOB" <<'PY' || fail "job event is not {requestId,jobId,status,attempt}"
 import json, sys
-assert json.loads(sys.argv[1]) == {"jobId": sys.argv[2], "status": "RUNNING", "attempt": 1}, sys.argv[1]
+assert json.loads(sys.argv[1]) == {"requestId": f"req-{sys.argv[2]}", "jobId": sys.argv[2], "status": "RUNNING", "attempt": 1}, sys.argv[1]
 PY
 
 echo "== 30-pipes-smoke: a same-status write must not produce an event =="

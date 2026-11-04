@@ -10,6 +10,9 @@ COMPILER_COMMIT="${COMPILER_COMMIT:-7f488e6}"
 COMPILE_IMAGE="${COMPILE_IMAGE:-node:22.23.4-slim}"
 COMPILER_DIR="${COMPILER_DIR:-$(mktemp -d)/compiler-worktree}"
 OUT_DIR="$(mktemp -d)"
+# mktemp dirs are mode 700, but containers run as uid 1000. Writable mounts need
+# 0777 and read-only mounts need a+rX.
+chmod 0777 "$OUT_DIR"
 
 echo "== 23-compile-smoke-test: git worktree add (read-only, pinned to $COMPILER_COMMIT) =="
 git -C "$REPO_ROOT" fetch origin compiler
@@ -19,6 +22,7 @@ trap 'git -C "$REPO_ROOT" worktree remove --force "$COMPILER_DIR" 2>/dev/null ||
 COMPILER_SRC="$COMPILER_DIR/packages/compiler"
 FIXTURE="$COMPILER_SRC/test/fixtures/child-cough.logic.json"
 [ -f "$FIXTURE" ] || { echo "RESULT: FAIL fixture not found at $FIXTURE"; exit 1; }
+chmod -R a+rX "$COMPILER_SRC"
 
 LOG_FILE="$(mktemp)"
 echo "== 23-compile-smoke-test: node src/cli.ts, inside $COMPILE_IMAGE, --network none, read-only =="

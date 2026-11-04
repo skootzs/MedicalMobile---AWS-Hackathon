@@ -15,6 +15,9 @@ BUILD_IMAGE_TAG="${BUILD_IMAGE_TAG:-cht-nocode/build-image:latest}"
 COMPILER_DIR="${COMPILER_DIR:-$(mktemp -d)/compiler-worktree}"
 OUT_DIR="$(mktemp -d)"
 WORK_DIR="$(mktemp -d)"
+# mktemp dirs are mode 700, but containers run as uid 1000. Writable mounts need
+# 0777 and read-only mounts need a+rX.
+chmod 0777 "$OUT_DIR" "$WORK_DIR"
 RESULT_LOG="${RESULT_LOG:-$REPO_ROOT/scripts/kiro/fixture-e2e-last-run.log}"
 
 exec > >(tee "$RESULT_LOG") 2>&1
@@ -38,6 +41,7 @@ for f in "$FIXTURE" "$HARNESS_SPEC"; do
   [ -f "$f" ] || { echo "RESULT: FAIL not found: $f"; exit 1; }
 done
 [ -d "$TEMPLATE_DIR" ] || { echo "RESULT: FAIL template dir not found: $TEMPLATE_DIR"; exit 1; }
+chmod -R a+rX "$COMPILER_SRC" "$TEMPLATE_DIR"
 
 echo
 echo "== stage 1/4: compile ($COMPILE_IMAGE, --template templates/cht-base, --network none) =="

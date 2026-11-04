@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { before, beforeEach, describe, it } from 'node:test';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { sha256 } from '../src/hashing.ts';
 import { marshall } from '@aws-sdk/util-dynamodb';
 import { decodeBody, validatePayload } from '../src/worker.ts';
-import { createTable, Harness, INPUT_HASH, LOGIC_HASH, OK } from './helpers.ts';
+import { verifyArgs } from '../launch-build.ts';
+import { canonicalJson } from '../src/hashing.ts';
+import { ARTIFACT_HASH, createTable, Harness, INPUT_HASH, LOGIC, LOGIC_HASH, OK } from './helpers.ts';
 
 let db: DynamoDBDocumentClient;
 let h: Harness;
@@ -31,8 +35,16 @@ async function verifyPayload(overrides: Record<string, unknown> = {}) {
   return payload;
 }
 
+const TESTED_DIR_HASH = sha256('tested');
+
 const report = (p: Record<string, unknown>, passed: boolean) => ({
-  version: '2.0.0', passed, coverageComplete: true, testedDirHash: 'tested', packageHash: p.packageHash, compileArtifactHash: p.compileArtifactHash,
+  schemaVersion: '2.2.0', version: '2.2.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z', passed, coverageComplete: true,
+  toolVersions: { node: 'v20', chtConf: '6.6.1', chtConfTestHarness: '5.0.4', chromiumRevision: '1', python: 'Python 3.11.2' },
+  run: { command: ['node', 'run.js'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-02-15' },
+  references: { snapshotId: null, logicModelHash: INPUT_HASH, revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash },
+  compileArtifactHash: p.compileArtifactHash as string, testedDirHash: TESTED_DIR_HASH, patientSetHash: sha256('patients'), goldenCasesHash: null, integrityChecks: [],
+  coverage: { method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null, totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], uncoveredBranchIds: [], uncoveredBranches: [] },
+  cases: [], disagreements: [],
 });
 
 describe('COMPILE_LOGIC happy path', () => {
@@ -42,7 +54,7 @@ describe('COMPILE_LOGIC happy path', () => {
     assert.equal(job.status, 'SUCCEEDED');
     assert.equal(job.inputHash, INPUT_HASH);
     assert.equal(job.snapshotHash, LOGIC_HASH);
-    assert.equal(job.compileArtifactHash, 'art');
+    assert.equal(job.compileArtifactHash, ARTIFACT_HASH);
     assert.equal(job.templateHash, 'tpl');
     assert.equal(job.toolVersions.compilerCommit, '7f488e6');
     assert.equal(job.toolVersions.compileImageDigest, 'compile:1@sha256:test');
@@ -445,8 +457,8 @@ describe('VERIFY_BUILD', () => {
     const job = await h.job(payload.jobId);
     assert.equal(job.verificationPassed, true);
     assert.equal(job.coverageComplete, true);
-    assert.equal(job.testedDirHash, 'tested');
-    assert.equal(job.reportVersion, '2.0.0');
+    assert.equal(job.testedDirHash, TESTED_DIR_HASH);
+    assert.equal(job.reportVersion, '2.2.0');
     assert.equal(job.runnerActorId, 'worker-a-verify');
     assert.match(job.reportVersionId, /report\.json$/);
     assert.ok(h.artifacts.objects.has(String(job.reportUri).replace('s3://test-bucket/', '')));
@@ -478,10 +490,90 @@ describe('VERIFY_BUILD', () => {
     assert.equal(await h.run(payload), 'RETRYING');
   });
 
+  it('gives the verifier the checked logic and the inputHash as LOGIC_MODEL_HASH', async () => {
+    const payload: Record<string, unknown> = await verifyPayload();
+    const packageHex = String(payload.packageHash);
+    h.stages.report = report(payload, true);
+    assert.equal(await h.run({ ...payload, packageHash: `sha256:${packageHex}` }), 'SUCCEEDED');
+    const input = h.stages.verifyInputs[0]!;
+    assert.equal(input.inputHash, INPUT_HASH);
+    assert.notEqual(input.inputHash, payload.logicModelHash);
+    assert.equal(input.packageHash, packageHex);
+    assert.equal(input.hasGoldenCases, false);
+    assert.deepEqual(h.stages.verifyFiles[0], { 'logic.json': canonicalJson(LOGIC) });
+  });
+
+  it('a snapshot that does not match the job fails HASH_MISMATCH before the verifier', async () => {
+    const payload = await verifyPayload({ logicModelHash: `sha256:${'a'.repeat(64)}` });
+    assert.equal(await h.run(payload), 'FAILED');
+    assert.equal((await h.job(payload.jobId)).errorCode, 'HASH_MISMATCH');
+    assert.deepEqual(h.stages.calls, []);
+  });
+
+  it('a snapshot whose logic differs from the package fails INPUT_HASH_MISMATCH', async () => {
+    const envelope = Buffer.from(canonicalJson({ kind: 'LOGIC_MODEL', revision: 1, content: { ...LOGIC, a: 2 } }));
+    const hash = `sha256:${sha256(envelope)}`;
+    const payload = await verifyPayload({ logicModelHash: hash, snapshotUri: h.artifacts.seed(`snapshots/${hash}.json`, envelope) });
+    assert.equal(await h.run(payload), 'FAILED');
+    assert.equal((await h.job(payload.jobId)).errorCode, 'INPUT_HASH_MISMATCH');
+    assert.deepEqual(h.stages.calls, []);
+  });
+
+  it('checks and mounts golden cases only when the job has them', async () => {
+    const golden = '[{"id":"g"}]';
+    const payload = await verifyPayload({ goldenCasesUri: h.artifacts.seed('sources/golden.json', golden), goldenCasesHash: `sha256:${sha256(golden)}` });
+    h.stages.report = report(payload, true);
+    assert.equal(await h.run(payload), 'SUCCEEDED');
+    assert.equal(h.stages.verifyInputs[0]!.hasGoldenCases, true);
+    assert.equal(h.stages.verifyFiles[0]!['golden-cases.json'], golden);
+  });
+
+  it('golden cases with the wrong hash fail HASH_MISMATCH', async () => {
+    const payload = await verifyPayload({ goldenCasesUri: h.artifacts.seed('sources/golden.json', 'x'), goldenCasesHash: sha256('y') });
+    assert.equal(await h.run(payload), 'FAILED');
+    assert.equal((await h.job(payload.jobId)).errorCode, 'HASH_MISMATCH');
+    assert.deepEqual(h.stages.calls, []);
+  });
+
+  it('golden cases outside the artifact bucket are rejected', async () => {
+    const payload = await verifyPayload({ goldenCasesUri: 's3://someone-else/golden.json', goldenCasesHash: sha256('y') });
+    assert.equal(await h.run(payload), 'FAILED');
+    assert.equal((await h.job(payload.jobId)).errorCode, 'INVALID_PAYLOAD');
+  });
+
+  it('builds the verify container with the contract env and read-only mounts', () => {
+    const base = { image: 'i', projectDir: '/p', inDir: '/n', verifierDir: '/v', outDir: '/o', packageHash: 'pkg', compileArtifactHash: 'art', inputHash: 'input' };
+    const args = verifyArgs({ ...base, hasGoldenCases: false }, 'name');
+    for (const expected of ['PACKAGE_HASH=pkg', 'COMPILE_ARTIFACT_HASH=art', 'LOGIC_MODEL_HASH=input', 'CHT_CONFIG_DIR=/project', 'OUT_DIR=/out', 'TZ=Africa/Nairobi', '/p:/project:ro', '/n:/in:ro', '/v:/verifier:ro']) {
+      assert.ok(args.includes(expected), expected);
+    }
+    assert.ok(!args.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
+    assert.ok(verifyArgs({ ...base, hasGoldenCases: true }, 'name').includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
+  });
+
+  it('a job dir it cannot clean up does not change the outcome', async () => {
+    const payload = await verifyPayload();
+    h.stages.report = report(payload, true);
+    const fakeVerify = h.stages.verify.bind(h.stages);
+    let locked = '';
+    h.stages.verify = async (input) => {
+      locked = join(input.outDir, 'locked');
+      mkdirSync(locked);
+      writeFileSync(join(locked, 'file'), 'x');
+      chmodSync(locked, 0o555);
+      return fakeVerify(input);
+    };
+    try {
+      assert.equal(await h.run(payload), 'SUCCEEDED');
+    } finally {
+      chmodSync(locked, 0o755);
+    }
+  });
+
   const crossChecks: [string, (r: ReturnType<typeof report>) => void][] = [
     ['report.passed disagreeing with the exit code', (r) => { r.passed = false; }],
     ['a different report.packageHash', (r) => { r.packageHash = 'other'; }],
-    ['a different report.compileArtifactHash', (r) => { r.compileArtifactHash = 'other'; }],
+    ['a different report.compileArtifactHash', (r) => { r.compileArtifactHash = sha256('other'); }],
   ];
   for (const [name, tamper] of crossChecks) {
     it(`${name} is terminal VERIFY_ERROR`, async () => {

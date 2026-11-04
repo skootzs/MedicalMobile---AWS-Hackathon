@@ -1,5 +1,6 @@
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { join, posix } from 'node:path';
 import type { RunnerConfig } from './config.ts';
@@ -158,24 +159,24 @@ export function classifyConvert(result: StageResult, hasConvertLog: boolean): Jo
   return new JobFailure('CONVERT_FAILED', `cht-conf rejected the generated project (exit ${result.exitCode})`, false, { ...CONVERT_FAILED_FIELDS, failureKind: 'CHT_CONVERSION_FAILED' });
 }
 
+// The fields the runner reads. The schema is R6's verification-report.schema.json, copied
+// verbatim from the pinned verifier commit (VERIFIER_COMMIT); update them together.
 interface VerificationReport {
   version: string;
   passed: boolean;
   coverageComplete: boolean;
   testedDirHash: string;
-  packageHash: string;
+  packageHash: string | null;
   compileArtifactHash: string;
 }
 
-// TODO(R6): replace with VerificationReport v2.0.0's published schema; it isn't on any
-// branch yet. These are only the fields the runner reads and cross-checks.
+const validateReport = new Ajv2020({ strict: false, validateFormats: false, allErrors: true })
+  .compile(JSON.parse(readFileSync(new URL('./verification-report.schema.json', import.meta.url), 'utf8')) as object);
+
 function parseReport(bytes: Buffer): VerificationReport | undefined {
   try {
-    const report = JSON.parse(bytes.toString('utf8')) as Partial<VerificationReport>;
-    const strings = [report.version, report.testedDirHash, report.packageHash, report.compileArtifactHash];
-    if (strings.some((value) => typeof value !== 'string' || !value)) return undefined;
-    if (typeof report.passed !== 'boolean' || typeof report.coverageComplete !== 'boolean') return undefined;
-    return report as VerificationReport;
+    const report: unknown = JSON.parse(bytes.toString('utf8'));
+    return validateReport(report) ? report as VerificationReport : undefined;
   } catch {
     return undefined;
   }
@@ -328,7 +329,13 @@ export class Worker {
       });
     } finally {
       clearInterval(beat);
-      rmSync(dir, { recursive: true, force: true });
+      // Containers may leave uid 1000 files this user can't remove. The result is already
+      // recorded, so a failed cleanup must not change the job's outcome.
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch (err) {
+        this.#log('error', 'Could not clean the attempt directory', { dir, error: String(err) });
+      }
     }
   }
 
@@ -393,18 +400,11 @@ export class Worker {
     return baselineDir;
   }
 
-  async #compileLogic(
-    payload: JobPayload,
-    dir: string,
-    lease: LeaseRef,
-    signal: AbortSignal,
-    setTools: (tools: JobResult['toolVersions']) => void,
-  ): Promise<Partial<JobResult>> {
-    const { config, artifacts, stages } = this.#d;
-    const timeoutMs = config.buildTimeoutSeconds * 1000;
-    checkOwnBucket(payload.snapshotUri, config.bucket, 'snapshotUri');
-
-    const envelopeBytes = await this.#fetch(payload.snapshotUri, 'snapshot', 'COMPILE_INFRA_ERROR');
+  // Checks the stored snapshot against the job, and writes the bytes the compiler hashes
+  // as inputHash to <dir>/in/logic.json. Both job types use this.
+  async #prepareLogic(payload: JobPayload, dir: string, fetchErrorCode: JobErrorCode): Promise<{ inDir: string; expectedInputHash: string }> {
+    checkOwnBucket(payload.snapshotUri, this.#d.config.bucket, 'snapshotUri');
+    const envelopeBytes = await this.#fetch(payload.snapshotUri, 'snapshot', fetchErrorCode);
     if (sha256(envelopeBytes) !== hexOf(payload.logicModelHash)) {
       throw new JobFailure('HASH_MISMATCH', 'Snapshot bytes do not match logicModelHash', false);
     }
@@ -416,12 +416,23 @@ export class Worker {
     }
     if (!content || typeof content !== 'object') throw new JobFailure('HASH_MISMATCH', 'Snapshot has no content object', false);
     const logicBytes = canonicalJson(content);
-    const expectedInputHash = sha256(logicBytes);
-
     const inDir = join(dir, 'in');
     mkdirSync(inDir);
     chmodSync(inDir, 0o755);
     writeFileSync(join(inDir, 'logic.json'), logicBytes);
+    return { inDir, expectedInputHash: sha256(logicBytes) };
+  }
+
+  async #compileLogic(
+    payload: JobPayload,
+    dir: string,
+    lease: LeaseRef,
+    signal: AbortSignal,
+    setTools: (tools: JobResult['toolVersions']) => void,
+  ): Promise<Partial<JobResult>> {
+    const { config, artifacts, stages } = this.#d;
+    const timeoutMs = config.buildTimeoutSeconds * 1000;
+    const { inDir, expectedInputHash } = await this.#prepareLogic(payload, dir, 'COMPILE_INFRA_ERROR');
     const baselineDir = payload.baselineUri ? await this.#prepareBaseline(payload.baselineUri, dir) : undefined;
 
     setTools({
@@ -532,10 +543,42 @@ export class Worker {
     execFileSync('tar', ['-xzf', tgzPath, '-C', projectDir, '--no-same-owner']);
     execFileSync('chmod', ['-R', 'a+rX', projectDir]);
 
+    const { inDir, expectedInputHash } = await this.#prepareLogic(payload, dir, 'VERIFY_ERROR');
+    let manifest: { inputHash?: unknown; snapshotHash?: unknown };
+    try {
+      manifest = JSON.parse(readFileSync(join(projectDir, 'compile-manifest.json'), 'utf8')) as typeof manifest;
+    } catch (err) {
+      throw new JobFailure('INPUT_HASH_MISMATCH', `Package has no readable compile-manifest.json: ${String(err).slice(0, 200)}`, false);
+    }
+    if (manifest.inputHash !== expectedInputHash || typeof manifest.snapshotHash !== 'string' || hexOf(manifest.snapshotHash) !== hexOf(payload.logicModelHash)) {
+      throw new JobFailure('INPUT_HASH_MISMATCH', 'Package compile-manifest.json does not match the job snapshot', false);
+    }
+
+    const hasGoldenCases = Boolean(payload.goldenCasesUri);
+    if (payload.goldenCasesUri) {
+      checkOwnBucket(payload.goldenCasesUri, config.bucket, 'goldenCasesUri');
+      const golden = await this.#fetch(payload.goldenCasesUri, 'golden cases', 'VERIFY_ERROR');
+      if (sha256(golden) !== hexOf(payload.goldenCasesHash ?? '')) {
+        throw new JobFailure('HASH_MISMATCH', 'Golden cases do not match goldenCasesHash', false);
+      }
+      writeFileSync(join(inDir, 'golden-cases.json'), golden);
+    }
+
     setTools({ buildImageDigest: await stages.imageDigest(config.buildImage), verifierCommit: config.verifierCommit, chtConf: config.chtConfVersion });
 
     const outDir = this.#writable(join(dir, 'out'));
-    const run = await stages.verify({ image: config.buildImage, projectDir, verifierDir: config.verifierDir, outDir }, signal, config.buildTimeoutSeconds * 1000);
+    // Bare hex: R6 echoes PACKAGE_HASH into the report, and R2 compares it to its raw hex.
+    const run = await stages.verify({
+      image: config.buildImage,
+      projectDir,
+      inDir,
+      verifierDir: config.verifierDir,
+      outDir,
+      packageHash: hexOf(payload.packageHash),
+      compileArtifactHash: hexOf(payload.compileArtifactHash),
+      inputHash: expectedInputHash,
+      hasGoldenCases,
+    }, signal, config.buildTimeoutSeconds * 1000);
     if (run.timedOut) throw new JobFailure('TIMEOUT', 'Verify stage timed out', true);
 
     const prefix = this.#prefix(payload, lease.attempt);
@@ -549,7 +592,7 @@ export class Worker {
       throw new JobFailure('VERIFY_ERROR', `Verifier exited ${run.exitCode} without a valid report`, true, { logUri });
     }
     const mismatch = report.passed !== (run.exitCode === 0) ? 'report.passed disagrees with the exit code'
-      : hexOf(report.packageHash) !== hexOf(payload.packageHash) ? 'report.packageHash does not match the job'
+      : hexOf(report.packageHash ?? '') !== hexOf(payload.packageHash) ? 'report.packageHash does not match the job'
       : hexOf(report.compileArtifactHash) !== hexOf(payload.compileArtifactHash) ? 'report.compileArtifactHash does not match the job'
       : undefined;
     if (mismatch) throw new JobFailure('VERIFY_ERROR', mismatch, false, { logUri });
