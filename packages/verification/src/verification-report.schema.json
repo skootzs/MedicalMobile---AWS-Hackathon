@@ -2,28 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/cht-nocode/verification/verification-report.schema.json",
   "title": "VerificationReport",
-  "description": "Output of one synthetic-patient verification run against one built CHT configuration directory. Mirrors src/report.ts. passed and each case status are computed by the report builder, never set by hand.",
+  "description": "Output of one synthetic-patient verification run against one built CHT configuration directory. Mirrors src/report.ts. passed and each case status are computed by the report builder, never set by hand. Runner exit codes: 0 passed, 1 verification failed with a valid report, 2 runner error with no valid report.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schemaVersion",
     "generatedAt",
-    "snapshotId",
     "passed",
     "coverageComplete",
     "toolVersions",
     "run",
-    "artifactHash",
+    "references",
+    "compileArtifactHash",
+    "testedDirHash",
     "patientSetHash",
     "goldenCasesHash",
+    "integrityChecks",
     "coverage",
     "cases",
     "disagreements"
   ],
   "properties": {
-    "schemaVersion": { "const": "1.0.0" },
+    "schemaVersion": { "const": "2.0.0" },
     "generatedAt": { "type": "string", "format": "date-time" },
-    "snapshotId": { "type": ["string", "null"], "minLength": 1 },
     "passed": { "type": "boolean" },
     "coverageComplete": { "type": "boolean" },
     "toolVersions": {
@@ -52,9 +53,27 @@
         "seed": { "type": ["string", "null"] }
       }
     },
-    "artifactHash": { "$ref": "#/$defs/sha256" },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshotId", "logicModelHash", "revision", "clinicalApprovalId", "compilationJobId", "packageHash"],
+      "properties": {
+        "snapshotId": { "type": ["string", "null"], "minLength": 1 },
+        "logicModelHash": { "type": ["string", "null"], "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "clinicalApprovalId": { "type": ["string", "null"], "minLength": 1 },
+        "compilationJobId": { "type": ["string", "null"], "minLength": 1 },
+        "packageHash": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "compileArtifactHash": { "$ref": "#/$defs/sha256" },
+    "testedDirHash": { "$ref": "#/$defs/sha256" },
     "patientSetHash": { "$ref": "#/$defs/sha256" },
-    "goldenCasesHash": { "$ref": "#/$defs/sha256" },
+    "goldenCasesHash": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "integrityChecks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/integrityCheck" }
+    },
     "coverage": {
       "type": "object",
       "additionalProperties": false,
@@ -80,6 +99,16 @@
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "integrityCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "ok", "detail"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "ok": { "type": "boolean" },
+        "detail": { "type": "string" }
+      }
+    },
     "expectedResult": {
       "type": ["object", "null"],
       "additionalProperties": false,

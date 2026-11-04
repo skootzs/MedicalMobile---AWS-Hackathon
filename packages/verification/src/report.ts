@@ -8,9 +8,17 @@
  *
  * This file only defines shapes. It computes nothing and holds no
  * expected clinical outcomes.
+ *
+ * Runner exit codes (the runner always tries to write report.json first):
+ *   0 - passed: a valid report.json was written and report.passed is true.
+ *   1 - verification failed: a valid report.json was written and
+ *       report.passed is false (failed cases, disagreements, errors,
+ *       incomplete coverage, empty cases, or a failed integrity check).
+ *   2 - runner error: no valid report.json could be produced (for example
+ *       python too old, missing inputs, or the harness could not start).
  */
 
-export const VERIFICATION_REPORT_SCHEMA_VERSION = '1.0.0';
+export const VERIFICATION_REPORT_SCHEMA_VERSION = '2.0.0';
 
 /** Any JSON-serialisable value. Used where the shape belongs to a teammate. */
 export type JsonValue =
@@ -73,6 +81,39 @@ export interface Coverage {
   totalBranches: number;
   coveredBranches: number;
   uncoveredBranchIds: string[];
+}
+
+/**
+ * Identifiers supplied by the orchestrator and echoed into the report for
+ * traceability. All nullable. The runner does NOT verify any of these against
+ * anything; it only records what it was given. (EXPECTED_SNAPSHOT_HASH, when
+ * set, is checked separately and surfaces as an integrityCheck, not here.)
+ */
+export interface References {
+  /** Approved logic snapshot the config was built from. */
+  snapshotId: string | null;
+  /** Hash of the approved logic model, from the orchestrator. */
+  logicModelHash: string | null;
+  /** Source revision (e.g. git sha) the build came from. */
+  revision: string | null;
+  /** Clinical approval record this build was approved under. */
+  clinicalApprovalId: string | null;
+  /** Compilation job that produced the tested directory. */
+  compilationJobId: string | null;
+  /** Package hash from the orchestrator. Echoed only, never verified. */
+  packageHash: string | null;
+}
+
+/**
+ * A deterministic integrity check the runner ran against the tested build.
+ * `ok` false on any check forces report.passed to false.
+ */
+export interface IntegrityCheck {
+  /** Stable identifier, e.g. "compileArtifactHash" or "expectedSnapshotHash". */
+  name: string;
+  ok: boolean;
+  /** What was checked and why it passed or failed. */
+  detail: string;
 }
 
 /** How the run was invoked, so it can be reproduced. */
@@ -148,23 +189,43 @@ export interface VerificationReport {
   schemaVersion: typeof VERIFICATION_REPORT_SCHEMA_VERSION;
   /** ISO 8601 UTC timestamp. */
   generatedAt: string;
-  /** Approved logic snapshot the config was built from; null if not known. */
-  snapshotId: string | null;
   /**
    * Overall gate result. Computed by the report builder, never set by hand.
-   * False if any case is fail, disagree or error, OR coverageComplete is false.
+   * False if ANY of the following hold:
+   *   - cases is empty;
+   *   - any case is fail, disagree or error;
+   *   - coverageComplete is false;
+   *   - any integrityChecks entry has ok false.
    */
   passed: boolean;
   /** True only if every branch has at least one case (no uncovered branch). */
   coverageComplete: boolean;
   toolVersions: ToolVersions;
   run: RunInfo;
-  /** Lowercase hex sha256 over the tested config directory's files. */
-  artifactHash: string;
+  /** Orchestrator-supplied identifiers, echoed for traceability, not verified. */
+  references: References;
+  /**
+   * Recomputed compiler artifactHash over the two generated files
+   * (forms/app/<formId>.xlsx and .properties.json), using R5's algorithm:
+   * lowercase hex sha256 of the sorted-by-path lines `path<TAB>fileSha256<LF>`
+   * (trailing LF on every line), joined with no separator. Excludes the .xml.
+   */
+  compileArtifactHash: string;
+  /**
+   * Lowercase hex sha256 over the WHOLE tested directory, including the .xml.
+   * Built from the sorted lines `path<TAB>fileSha256<LF>` for every file in
+   * the directory (paths relative, forward slashes), joined with no separator.
+   */
+  testedDirHash: string;
   /** Lowercase hex sha256 of the synthetic patient set that was run. */
   patientSetHash: string;
-  /** Lowercase hex sha256 of the golden cases file that was used. */
-  goldenCasesHash: string;
+  /**
+   * Lowercase hex sha256 of the golden cases file that was used, or null when
+   * no golden file was supplied. Never hash empty input as a stand-in.
+   */
+  goldenCasesHash: string | null;
+  /** Deterministic integrity checks; any ok:false forces passed:false. */
+  integrityChecks: IntegrityCheck[];
   coverage: Coverage;
   cases: VerificationCase[];
   disagreements: Disagreement[];
