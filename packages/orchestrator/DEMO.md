@@ -8,10 +8,33 @@ production composition root (`src/bootstrap.ts` + `src/main.ts`).
   a real local-filesystem durable object store, with LOCAL/DEMO identities so
   the workflow can be demonstrated end to end. It never falls back to in-memory
   storage.
-- **AWS mode** (`MODE=aws`): requires real DynamoDB config and verified Cognito
-  identity, and fails closed. S3 object storage and Cognito JWT verification are
-  later milestones, so AWS mode intentionally refuses to boot until they land —
-  it never fabricates cloud writes or trusts an unverified token.
+- **AWS mode** (`MODE=aws`): real DynamoDB, real immutable S3 object storage,
+  and real verified Cognito (access-token) authentication. No in-memory
+  fallback, no local disk, no demo identities. Startup fails closed on missing
+  or invalid config. An unauthenticated `GET /health` liveness probe is served
+  in both modes (`{status,mode}` only — no workflow data).
+
+### AWS mode (Milestone 2)
+
+```sh
+cd packages/orchestrator
+MODE=aws \
+AWS_REGION=us-west-2 \
+DDB_TABLE=cht-nocode \
+ARTIFACT_BUCKET=<terraform output artifact_bucket> \
+COGNITO_USER_POOL_ID=<terraform output cognito_user_pool_id> \
+COGNITO_CLIENT_ID=<terraform output cognito_user_pool_client_id> \
+HOST=0.0.0.0 PORT=8080 \
+npm start
+```
+
+AWS mode verifies Cognito **access tokens** (signature, issuer, user pool,
+client id, `token_use=access`, expiry) via `aws-jwt-verify`, derives roles from
+the verified `cognito:groups` claim, and enforces request-level access from
+authoritative DynamoDB state (owner, or the reviewer whose queue currently holds
+the request). Nothing is trusted from the request body. It needs AWS credentials
+(the EC2 instance role from R7's `iam.tf`) to reach DynamoDB/S3; the JWKS is
+fetched from the user pool on the first request.
 
 > The demo identities in `src/demo-identity.ts` are **test/local-only** and are
 > never wired for AWS mode. They map fixed bearer tokens to the SAME

@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveCognitoActor, isVerifiedCognitoClaims, pendingCognitoAuthentication, cognitoCanAccessRequest } from '../src/cognito-auth.ts';
+import { resolveCognitoActor, isVerifiedCognitoClaims, cognitoCanAccessRequest } from '../src/cognito-auth.ts';
+import type { WorkflowState } from '../src/workflow.ts';
+
+const workflow = (over: Partial<WorkflowState>): WorkflowState => ({
+  status: 'WAITING_FOR_SCREENING', version: 1, ownerId: 'owner-1', brief: {} as never,
+  contributorIds: [], screening: null, confirmation: null, routing: null, logic: null, checks: null,
+  clinicalApproval: null, compilationId: null, compilerId: null, artifact: null, verificationId: null,
+  verification: null, releaseApproval: null, stoppedAt: null, processedEvents: [], ...over,
+});
+const getWorkflowReturning = (state: WorkflowState | null) => async () => state;
 
 test('maps each R7 Cognito group to its workflow role', () => {
   assert.deepEqual(resolveCognitoActor({ sub: 'u1', groups: ['po'] }), { id: 'u1', roles: ['PO'] });
@@ -31,13 +40,35 @@ test('rejects anything that is not verified claims', () => {
   assert.equal(isVerifiedCognitoClaims({ sub: 'u' }), false);
 });
 
-test('pending AWS authentication fails closed: no token is ever trusted', async () => {
-  assert.equal(await pendingCognitoAuthentication.authenticate({ headers: { authorization: 'Bearer anything' }, raw: {} as never }), null);
-  assert.equal(await pendingCognitoAuthentication.canAccessRequest({ context: { sub: 'u', groups: ['po'] } }, 'demo-1'), false);
+test('request access is authoritative: the owner may access their request', async () => {
+  const state = workflow({ ownerId: 'u-po', status: 'WAITING_FOR_SCREENING' });
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(state), { sub: 'u-po', groups: ['po'] }, 'req-1'), true);
 });
 
-test('cognitoCanAccessRequest grants only verified, recognized identities', () => {
-  assert.equal(cognitoCanAccessRequest({ context: { sub: 'u', groups: ['po'] } }, 'demo-1'), true);
-  assert.equal(cognitoCanAccessRequest({ context: { sub: 'u', groups: ['nope'] } }, 'demo-1'), false);
-  assert.equal(cognitoCanAccessRequest({ context: 'po' }, 'demo-1'), false);
+test('request access: a non-owner PO cannot access someone else\'s request', async () => {
+  const state = workflow({ ownerId: 'someone-else', status: 'WAITING_FOR_SCREENING' });
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(state), { sub: 'u-po', groups: ['po'] }, 'req-1'), false);
+});
+
+test('request access: a clinician may access a request pending clinical approval', async () => {
+  const pending = workflow({ ownerId: 'someone-else', status: 'WAITING_FOR_CLINICAL_APPROVAL' });
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(pending), { sub: 'u-clin', groups: ['clinician'] }, 'req-1'), true);
+  // ...but NOT one that is not yet at the clinician's queue stage.
+  const notYet = workflow({ ownerId: 'someone-else', status: 'WAITING_FOR_SCREENING' });
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(notYet), { sub: 'u-clin', groups: ['clinician'] }, 'req-1'), false);
+});
+
+test('request access: release approver only at the release stage', async () => {
+  const release = workflow({ ownerId: 'x', status: 'WAITING_FOR_RELEASE_APPROVAL' });
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(release), { sub: 'u-rel', groups: ['release_approver'] }, 'req-1'), true);
+  const clinical = workflow({ ownerId: 'x', status: 'WAITING_FOR_CLINICAL_APPROVAL' });
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(clinical), { sub: 'u-rel', groups: ['release_approver'] }, 'req-1'), false);
+});
+
+test('request access fails closed: unknown request, unverified context, or store error', async () => {
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(null), { sub: 'u', groups: ['po'] }, 'req-1'), false);
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(workflow({})), 'po', 'req-1'), false);
+  assert.equal(await cognitoCanAccessRequest(getWorkflowReturning(workflow({})), { sub: 'u', groups: ['nope'] }, 'req-1'), false);
+  const throwing = async () => { throw new Error('store down'); };
+  assert.equal(await cognitoCanAccessRequest(throwing, { sub: 'u', groups: ['po'] }, 'req-1'), false);
 });

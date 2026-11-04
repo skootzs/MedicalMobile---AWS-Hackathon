@@ -4,10 +4,10 @@
  *   MODE=local  -> real DynamoDB adapter against DynamoDB Local + durable local
  *                  object provider, with the LOCAL/DEMO identity provider so the
  *                  existing workflow can be demonstrated end to end.
- *   MODE=aws    -> real DynamoDB + (pending) S3 and verified Cognito identity.
- *                  Boots fail-closed: S3 and JWT verification are later
- *                  milestones, so AWS mode currently refuses to start rather
- *                  than fabricate cloud writes or trust an unverified token.
+ *   MODE=aws    -> real DynamoDB, real immutable S3 object storage, and real
+ *                  verified Cognito (access-token) authentication. No in-memory
+ *                  fallback, no local disk, no demo identities. Startup fails
+ *                  closed on any missing/invalid config.
  *
  * Start:  npm start           (reads env; see README / .env for keys)
  * Stop:   Ctrl-C / SIGTERM    (graceful shutdown)
@@ -45,7 +45,7 @@ async function run(): Promise<void> {
     if (config.mode === 'local') {
       process.stdout.write('[orchestrator] LOCAL DEMO identities active (not production auth).\n');
     } else {
-      process.stdout.write('[orchestrator] AWS mode: protected endpoints require verified Cognito (pending JWT verification).\n');
+      process.stdout.write('[orchestrator] AWS mode: protected endpoints require a verified Cognito access token.\n');
     }
   } catch (error) {
     process.stderr.write(`[orchestrator] failed to start: ${(error as Error).message}\n`);

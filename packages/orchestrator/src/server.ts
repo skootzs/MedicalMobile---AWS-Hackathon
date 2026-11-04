@@ -23,6 +23,11 @@ export interface LocalApiDependencies {
   routing?: RoutingService;
   /** No default mock: omitted authentication always denies access. */
   authentication?: AuthenticationBoundary;
+  /**
+   * Register an unauthenticated GET /health liveness probe. Off by default so
+   * the test harness is unchanged. Exposes only {status,mode}; no workflow data.
+   */
+  health?: { mode: string };
 }
 export interface LocalApi {
   inject: FastifyInstance['inject'];
@@ -41,8 +46,17 @@ export function buildApp(deps: LocalApiDependencies): FastifyInstance {
     ajv: { customOptions: { coerceTypes: false, useDefaults: false, removeAdditional: false } } });
   const authentication = deps.authentication ?? denyAllAuthentication;
   const principals = new WeakMap<FastifyRequest, VerifiedPrincipal>();
+  // Unauthenticated liveness probe (opt-in). Registered before the auth hook's
+  // effect by exempting it there; returns no workflow data.
+  if (deps.health) {
+    const health = deps.health;
+    app.get('/health', { schema: { response: { 200: { type: 'object', additionalProperties: false,
+      required: ['status', 'mode'], properties: { status: { type: 'string' }, mode: { type: 'string' } } } } } },
+      async () => ({ status: 'ok', mode: health.mode }));
+  }
   app.addHook('onRequest', async (request, reply) => {
     reply.header('cache-control', 'no-store');
+    if (deps.health && request.method === 'GET' && request.routeOptions.url === '/health') return;
     try {
       const principal = await authentication.authenticate(request);
       if (!principal || principal.context === null || principal.context === undefined) {
@@ -52,6 +66,7 @@ export function buildApp(deps: LocalApiDependencies): FastifyInstance {
     } catch { return unavailable(reply); }
   });
   app.addHook('preHandler', async (request, reply) => {
+    if (deps.health && request.method === 'GET' && request.routeOptions.url === '/health') return;
     const principal = principals.get(request);
     if (!principal) return apiError(reply, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required.');
     // Queue has no path resource: ReviewService authorizes category and each item.

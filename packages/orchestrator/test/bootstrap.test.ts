@@ -40,9 +40,13 @@ test('AWS mode uses verified-Cognito auth and rejects every unverified request (
   } finally { await server.close(); }
 });
 
-test('AWS mode S3 object storage is not fabricated: boot fails closed without an injected provider', () => {
-  assert.throws(() => bootstrap({ config: awsConfig, documentClient: explodingClient }),
-    /AWS-mode durable object storage \(S3\) is not implemented yet/);
+test('AWS mode ignores any supplied demo identity and uses verified Cognito', async () => {
+  // Even if a caller mistakenly passes a demo identity, AWS mode does not use it.
+  const server = bootstrap({ config: awsConfig, identity: createDemoIdentity(), documentClient: explodingClient, objects: explodingObjects });
+  try {
+    const res = await server.app.inject({ method: 'GET', url: '/api/requests/req-1', headers: demoHeaders('demo-po') });
+    assert.equal(res.statusCode, 401, res.body); // demo token is not a valid Cognito JWT
+  } finally { await server.close(); }
 });
 
 test('local demo identity rejects unknown tokens before any storage access', async () => {
@@ -70,4 +74,22 @@ test('the bootstrapped app exposes listen() (unlike the test harness)', () => {
   assert.equal(typeof server.app.listen, 'function');
   assert.equal(typeof server.close, 'function');
   return server.close();
+});
+
+test('an unauthenticated /health probe works in both modes and exposes no workflow data', async () => {
+  const local = bootstrap({ config: localConfig, identity: createDemoIdentity(), documentClient: explodingClient, objects: explodingObjects });
+  try {
+    const res = await local.app.inject({ method: 'GET', url: '/health' });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.deepEqual(res.json(), { status: 'ok', mode: 'local' });
+  } finally { await local.close(); }
+
+  const aws = bootstrap({ config: awsConfig, documentClient: explodingClient, objects: explodingObjects });
+  try {
+    const res = await aws.app.inject({ method: 'GET', url: '/health' });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.deepEqual(res.json(), { status: 'ok', mode: 'aws' });
+    // Any real endpoint still requires auth.
+    assert.equal((await aws.app.inject({ method: 'GET', url: '/api/requests/req-1' })).statusCode, 401);
+  } finally { await aws.close(); }
 });
