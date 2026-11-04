@@ -19,7 +19,8 @@ export CHT_CONF_VERSION="${CHT_CONF_VERSION:-6.6.1}"
 export CHT_CONFIG_DIR OUT_DIR
 
 # The verifier writes verification.log itself, so its console output goes elsewhere first.
-node "$VERIFIER_ENTRYPOINT" > "$STAGE_LOG" 2>&1
+# The preload adds Chromium's --no-sandbox, since the stage has no capabilities for its sandbox.
+node --require /harness-no-sandbox.cjs "$VERIFIER_ENTRYPOINT" > "$STAGE_LOG" 2>&1
 exit_code=$?
 
 {

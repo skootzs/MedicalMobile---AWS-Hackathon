@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Real Worker and real containers for COMPILE_LOGIC then VERIFY_BUILD, with and without
 # golden cases, against DynamoDB Local. Uses no AWS credentials or live resources.
-#
-# Expect a Chromium failure until a sandbox fix from 27-chromium-sandbox-matrix.sh is in
-# the runner's verify flags.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

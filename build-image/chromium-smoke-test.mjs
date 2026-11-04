@@ -1,6 +1,6 @@
 // Build-time only: confirms Chromium actually launches in this image.
-// Not used at job run time -- the harness controls its own launch flags
-// there (stage 6 uses --cap-add SYS_ADMIN instead of --no-sandbox).
+// Not used at job run time: stage 6 starts Chromium through the harness, with
+// --no-sandbox added by harness-no-sandbox.cjs.
 import PCR from 'puppeteer-chromium-resolver';
 import puppeteer from 'puppeteer-core';
 
