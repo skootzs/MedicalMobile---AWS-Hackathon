@@ -405,3 +405,159 @@ Next: finalize R4's contract, then define a snapshot repository with immutable w
 hash verification on load, and atomic workflow/event/audit updates. Test it with a
 local fake before adding authenticated approval APIs. No database, API, AWS adapter,
 Strands Box, or real review job has been added here.
+
+## Provisional storage and audit contracts (R2)
+
+`src/storage/requests.ts` defines the replaceable async `OrchestratorStore`:
+
+- `apply(command, principal)` is the only write operation. A command includes the
+  request ID, a server-assigned `attemptId`, an actor-free workflow event, and any
+  new immutable snapshots needed by that transition.
+- `getWorkflow` loads the current state/version. Versioned request content is kept
+  in immutable preview snapshots; this fake does not store a separate historical
+  workflow state for every version.
+- `getSnapshot` and `listSnapshots` retrieve verified immutable snapshot history.
+- `getReceipt`, `listEvidence`, and `listAudit` expose copied historical records.
+
+There is no public `setState`, `putApproval`, snapshot-overwrite, or audit-update
+method. `artifacts.ts` defines accepted evidence history for screening, PO
+confirmation, R4 checks, clinical decisions, compiled artifact references,
+verification evidence, and release decisions. A reviewer rejection/return is an
+accepted decision event but does not become an approval. Only artifact/report references are stored. The adapter adds no patient/profile,
+credential, name, or email fields and does not retain principal context.
+Pseudonymous actor IDs and required decision notes remain in records. Only public
+or fictional workflow data belongs here; no automatic PHI detector is implemented.
+
+### How it interacts with the workflow
+
+```text
+Internal backend command + principal context
+  -> resolve actor through injected trusted-backend boundary
+  -> read the latest stored workflow version
+  -> transitionWorkflow(currentState, eventWithResolvedActor)
+  -> verify required preview / LogicModel snapshots and immutable evidence IDs
+  -> atomically publish state + snapshots + evidence + receipt + audit
+  -> return ACCEPTED / REJECTED / DUPLICATE (or throw on storage failure)
+```
+
+The adapter calls the existing pure transition function rather than accepting a
+caller-supplied next state. All existing routing, role separation, revision, clinical
+approval, verification, and release guards remain there. `NOT_READY` cannot advance
+state or create SD work. No review jobs, compilation, URLs, or other external actions
+are triggered by a committed route or transition.
+
+The event's `expectedVersion` is the conditional-update guard; submission expects
+version 0, each accepted transition increments it once, and rejected/duplicate
+attempts leave it unchanged. After awaiting actor resolution, the fake reads the
+latest version and performs all remaining work synchronously without another await.
+It builds replacement Maps and publishes them with one pointer assignment. Two
+concurrent continuations therefore cannot both consume the same version in this
+single JavaScript process. That is **not** a distributed database transaction.
+
+### Snapshot and evidence integrity
+
+The adapter reconstructs snapshots through `createSnapshot` and the injected schema
+validator, compares hashes and policy versions, and verifies the requested storage
+slot on write and load. Stored bytes are immutable canonical JSON strings; loads
+also reject byte changes that JSON parsing alone could discard, such as duplicate keys. A preview must contain
+exactly the workflow brief's content (excluding its identity fields), and its hash
+must match the brief. A current model needs an existing matching LogicModel
+snapshot linked to that exact preview. There is no acceptance of invented model
+hashes simply because they have 64 hexadecimal digits.
+
+Preview slots are `(requestId, REQUEST_PREVIEW, revision)`. LogicModel slots also
+include the originating preview identity because the existing workflow restarts
+LogicModel revision numbering at 1 after a request revision. R4 must confirm this
+scope before shared integration. A different snapshot cannot replace an occupied
+slot; supplying identical bytes is harmless. Bundled snapshots must belong to the
+same request and the resulting current preview/model, so a transition cannot insert
+unrelated or orphan snapshot history.
+
+Workflow and receipt reads reverify their referenced preview. Workflow reads also
+check the current LogicModel; historical evidence reads verify referenced preview
+and model snapshots. Artifact and verification records contain version-bound IDs and
+hash references only. This milestone cannot prove actual artifact/report bytes or
+real test execution: those remain R5/R6/backend responsibilities. Audit reads return
+historical diagnostics, including rejected attempts whose claimed references may
+intentionally be missing or invalid.
+
+Current state is returned as a deep copy. Loaded snapshots are rebuilt and frozen.
+Evidence, receipts and audits are copied on return, so mutating a returned object
+cannot change stored records. Old evidence and approvals remain in history after
+revisions, while the current state's applicable approvals are invalidated by the
+workflow. Reusing an immutable evidence ID for another event is rejected.
+
+### Idempotency, audit and rollback
+
+`eventId` identifies a workflow command; `attemptId` identifies an application
+attempt/audit entry. Both are scoped to the request:
+
+- An accepted event stores one receipt containing the workflow fingerprint,
+  resulting version, request identity, and original audit ID.
+- Repeating the same attempt with identical content and resolved actor returns the
+  original result with `replayed: true`, without another write. Its original
+  ACCEPTED response does not mean a second transition occurred.
+- The same event under a fresh attempt returns `DUPLICATE` and appends a duplicate
+  audit entry without another state advancement, snapshot, evidence record or receipt.
+  Snapshot attachments on non-accepted events are not written.
+- Changing event content under an accepted event ID is rejected and audited.
+  Changing content under an existing attempt ID throws `ATTEMPT_ID_REUSED`; its
+  existing audit is never overwritten. A new attempt ID is required for new work.
+- Workflow rejections, unauthorized attempts, and snapshot/evidence conflicts append
+  only a rejection audit when a valid request/attempt scope and functioning storage
+  are available. They do not change workflow state, evidence, receipts or snapshots.
+
+`audit.ts` defines append-only records extending the workflow's proposed audit with
+an audit ID, per-request sequence and backend timestamp. A backend clock is used,
+not a browser timestamp. No update/delete audit operation is exposed. The fake keeps
+attempt fingerprints privately for replay detection; these are not snapshot hashes.
+
+All writes are staged before commit. If the clock or final commit fails, none of
+that transaction's state, evidence, snapshots, receipt or audit is saved. Snapshot
+schema/hash failures also cannot leave partly saved content. A rejection audit can
+be the deliberate sole result of a blocked operation; that is not a partially saved
+accepted transition. Some failures cannot be audited here: missing request/attempt
+IDs, uncloneable commands, attempt-ID collisions, corrupted stored snapshots, or a
+failed audit/commit operation. A future backend needs a separate operational failure
+log for these cases and must never report success when its transaction failed.
+
+### Trust boundary and fake limitations
+
+`InMemoryOrchestratorStore` requires `resolveActor(principal, requestId)` and
+`validateSnapshot`. There is no default trusted actor. The event cannot carry an
+`actor`; the adapter injects the resolved backend identity and then applies workflow
+role/independence guards. It rejects caller-supplied next-state or approval fields
+on the command envelope. Principal context is not retained. An unresolved identity
+gets a rejection result without a workflow version disclosure.
+
+The resolver is a **dependency boundary, not implemented authentication**. Tests
+map fictional strings to mock actors. Never expose that mapping as HTTP auth.
+Production must authenticate sessions/service callers, enforce request-level access,
+validate callback provenance and R4 schemas, and resolve real authorized roles.
+Reads are internal repository methods and must also sit behind backend authorization.
+An authorized module's callback still needs server verification that its referenced
+checks/artifacts/reports really exist and are authoritative. A database adapter alone
+cannot establish clinical truth or trustworthy provenance.
+
+The fake is process-local, volatile, unbounded, and intended for fictional tests.
+Restarting loses all data; separate instances do not coordinate. It has no durable
+persistence, distributed locks/transactions, encryption configuration, pagination,
+production retention, or real access controls. Optional `testFaults` hooks simulate
+commit failures/corrupt read bytes solely for tests; they are not part of the
+`OrchestratorStore` interface and must not be exposed in production.
+
+### Pending Role 4 Integration — storage
+
+Confirm shared event/evidence schemas, schema-version dispatch for historical
+snapshots, preview/model revision scope, immutable evidence ID uniqueness, and
+hash coverage before adopting these contracts outside this package. The current
+snapshot adapter remains shape-only. Existing router/workflow/snapshot modules and
+all their original tests are preserved.
+
+Next: review this milestone, then add an application command service for clinician
+and release decisions that loads the exact snapshots/evidence, resolves authenticated
+actors, and calls `apply` with expected versions. Test that service locally before
+adding Fastify handlers. Coordinate a durable adapter with R7 that preserves atomic
+conditional updates across state, receipts, evidence and append-only audit; never
+run downstream work until the transaction succeeds. No cloud, API, Cognito,
+DynamoDB, S3, Strands Box, deployment or database implementation is added here.
