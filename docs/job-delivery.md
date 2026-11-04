@@ -48,8 +48,8 @@ Implemented in `runner/src/worker.ts` and `runner/src/store.ts`.
 1. **Receive** from `jobs` (long polling) and validate against
    `packages/schema/src/handoffs.ts`. An invalid payload fails the job
    `INVALID_PAYLOAD`, but only if the job is still `PENDING`, so a garbled message
-   can't kill a running job. A message with no usable `jobId` stays on the queue and
-   reaches the DLQ.
+   can't kill a running job. The message is deleted only once that failure is recorded.
+   Otherwise, or if there's no usable `jobId`, it stays on the queue and reaches the DLQ.
 2. **Take the job** in one `TransactWriteItems`: put a receipt, update
    `JOB#<jobId>/META` to `RUNNING` with `leaseOwner`/`leaseUntil`/`attempt + 1`
    (condition: `PENDING`, or `RUNNING` with an expired lease), put an audit event.
@@ -112,8 +112,12 @@ hash chain for that build
 (`logicModelHash`/`snapshotHash`/`inputHash`/`compileArtifactHash`/
 `templateHash`/`manifestHash`/`packageHash`), `toolVersions` (image digests,
 compiler/verifier commits, model ID), `startedAt`/`finishedAt`,
-`errorCode`/`errorMessage` (both `null` on success), and `logUri`. A
-`VERIFY_BUILD` result additionally carries `reportUri`/`reportHash`/
+`errorCode`/`errorMessage` (both `null` on success), and `logUri`. The runner also writes
+`runnerActorId` to META: `<WORKER_ID>-compile` or `<WORKER_ID>-verify`. A `COMPILE_LOGIC`
+result carries `packageVersionId`/`manifestVersionId`, the compile report
+(`compileReportUri`/`compileReportHash`/`compileReportVersionId`, which is
+`compile-manifest.json`), and `compilerExitCode`/`chtConfStatus`/`failureKind`. A
+`VERIFY_BUILD` result additionally carries `reportUri`/`reportVersionId`/`reportHash`/
 `verificationPassed`/`coverageComplete`/`testedDirHash`/`reportVersion`. When
 the job had a `baselineUri`, it also carries `compileDiffUri` (the uploaded
 `compile-diff.json`).
@@ -185,16 +189,29 @@ The two hashes stay separate. `LOGIC_MODEL_HASH` is the snapshot envelope, which
 R2 compares in `references.logicModelHash`. `INPUT_HASH` is the bare LogicModel, which is
 what `compile-manifest.json` stores as `inputHash`. The runner passes each as bare hex.
 
-### R2 alignment still needed
+### R2 alignment
 
-Branch `feature/task-2-orchestrator` @ `19e75e1` doesn't match this contract yet. Until
-one side changes, real R2 jobs won't run:
+On `integrate/compiler` these rows already match the runner:
 
-| | R2 today | Runner / `handoffs.ts` |
+| Item | What this branch does |
+|---|---|
+| Initial `JOB#/META` status | `PENDING`. The runner takes the job |
+| `OUTBOX.payload` | The published `JobPayload` or `VerifyBuildPayload`, validated before the write |
+| Verify `snapshotUri` | The compilation job's real snapshot object URI |
+| `references.logicModelHash` | The runner passes the envelope hash as `LOGIC_MODEL_HASH` and the bare model as `INPUT_HASH` |
+| Result fields | R2 reads the 1.1.0 fields, including version IDs, `compilerExitCode`, `chtConfStatus`, and `failureKind` |
+| `checkReportHash` | The digest of the accepted checker report |
+| Report schema | 2.3.0 |
+
+Still open before a hosted job finishes end to end:
+
+| Item | Contract | Next step |
 |---|---|---|
-| Initial `JOB#/META` status | `requested` | `PENDING` |
-| Job payload | `CompilationJobIntent`, with `logicModelUri`, `snapshotReference` and more | `JobPayload`, with `snapshotUri`, `checkReportHash`, `contractVersion`, closed schema |
-| Terminal statuses it reads | also `TIMED_OUT`, `EXHAUSTED` | `SUCCEEDED`, `FAILED` |
+| `job-events` | Pipe sends `{ requestId, jobId, status, attempt }` | A consumer must call `JobCompletionReconciler`. The reconciler is in-process and does not poll the queue |
+| Service actors | Runner records `cht-runner-compile` and `cht-runner-verify` | Register both in `resolveServiceActor`, with the COMPILER and VERIFIER roles |
+| Golden cases | Optional `goldenCasesUri` and `goldenCasesHash` | R2 adds them when it has golden cases. Without them, the verifier runs without golden cases |
+
+Already aligned: approval records, `sha256:` prefix handling, and `TIMED_OUT` and `EXHAUSTED`, which R2 can read but the runner never writes.
 
 ### Pinned compiler commit
 

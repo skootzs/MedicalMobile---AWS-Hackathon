@@ -8,7 +8,7 @@ Wants=network-online.target
 # uid 1000 matches the --user 1000:1000 the stage containers run as.
 User=ubuntu
 SupplementaryGroups=docker
-WorkingDirectory=/opt/cht-nocode/runner
+WorkingDirectory=/opt/cht-nocode/current/runner
 EnvironmentFile=/etc/cht-nocode/env
 EnvironmentFile=/etc/cht-nocode/runner.env
 ExecStart=/usr/bin/node src/main.ts

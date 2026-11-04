@@ -44,7 +44,7 @@ data "aws_iam_policy_document" "app_host" {
   # restricted to the known prefixes.
   statement {
     sid       = "S3ReadBucket"
-    actions   = ["s3:GetObject", "s3:ListBucket"]
+    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:ListBucket"]
     resources = [aws_s3_bucket.artifacts.arn, "${aws_s3_bucket.artifacts.arn}/*"]
   }
 
@@ -106,6 +106,7 @@ data "aws_iam_policy_document" "app_host" {
       "ecr:BatchCheckLayerAvailability",
       "ecr:GetDownloadUrlForLayer",
       "ecr:BatchGetImage",
+      "ecr:DescribeImages",
     ]
     resources = [for r in aws_ecr_repository.repos : r.arn]
   }

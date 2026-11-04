@@ -26,13 +26,17 @@ for group in $groups; do
   password="$(openssl rand -base64 18)Aa1!"
 
   echo "== ${group} =="
-  aws cognito-idp admin-create-user \
-    --user-pool-id "$COGNITO_USER_POOL_ID" \
-    --username "$email" \
-    --user-attributes Name=email,Value="$email" Name=email_verified,Value=true \
-    --temporary-password "$password" \
-    --message-action SUPPRESS \
-    >/dev/null
+  created=no
+  if ! aws cognito-idp admin-get-user --user-pool-id "$COGNITO_USER_POOL_ID" --username "$email" >/dev/null 2>&1; then
+    aws cognito-idp admin-create-user \
+      --user-pool-id "$COGNITO_USER_POOL_ID" \
+      --username "$email" \
+      --user-attributes Name=email,Value="$email" Name=email_verified,Value=true \
+      --temporary-password "$password" \
+      --message-action SUPPRESS \
+      >/dev/null
+    created=yes
+  fi
 
   aws cognito-idp admin-add-user-to-group \
     --user-pool-id "$COGNITO_USER_POOL_ID" \
@@ -40,8 +44,12 @@ for group in $groups; do
     --group-name "$group"
 
   echo "  username: $email"
-  echo "  temporary password: $password"
-  echo "  (change required on first sign-in; not stored anywhere)"
+  if [ "$created" = yes ]; then
+    echo "  temporary password: $password"
+    echo "  (change required on first sign-in; not stored anywhere)"
+  else
+    echo "  already exists; password unchanged"
+  fi
 done
 
 echo "RESULT: PASS - seeded ${groups// /, }"

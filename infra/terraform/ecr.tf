@@ -6,6 +6,7 @@ resource "aws_ecr_repository" "repos" {
   for_each             = toset(local.ecr_repo_names)
   name                 = "cht-nocode/${each.value}"
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true # images can be rebuilt; lets scripts/teardown.sh finish
 
   image_scanning_configuration {
     scan_on_push = true
