@@ -125,14 +125,14 @@ All of these are top-level calculates in the submitted report (`/data/...`). The
 
 Rules for unanswered values: a condition on an unanswered value is unknown, not false. A decision row matches only when its condition is definitely true. So a partly filled form classifies as the `otherwise` outcome (`incomplete` in the fixture), never as a milder outcome. See `docs/logic-model-v1-proposal.md`.
 
-Suggested harness cases for the fixture: each of the four rows, both age bands either side of each threshold (49/50 breaths at 2–11 months, 39/40 at 12–59 months), age 1 and 60 months (out of scope), and no date of birth (age unknown).
+Those cases are written in `fixtures/child-cough/golden-cases.json` (22 cases): every outcome, ages 1, 2, 11, 12, 59 and 60 months plus a missing date of birth, 49/50 breaths under 12 months, 39/40 breaths from 12 months up, each general danger sign, stridor, chest indrawing, and two partly answered forms. `expected` holds the strings the submitted report stores (`yes`, `no`, `''`, and follow-up days as `'3'` or `'5'`). `t_follow_up_date` is left out because it depends on the day the form is opened. The same logic model is at `fixtures/child-cough/logic.json`. Every case is marked `not-clinician-approved`. `npm test` checks them against the fixture rules. Role 6 compares `expected` with the harness output; Role 4's evaluator is a separate source.
 
 ## Tests
 
 ```sh
 npm install                 # dev dependencies only
 npm run typecheck           # tsc, no emit
-npm test                    # 98 unit tests: XPath, validation, xlsx writer, template copy, tasks, diff
+npm test                    # unit tests: XPath, validation, xlsx writer, template copy, tasks, diff, golden cases
 CHT_BIN=/path/to/cht SHIV_ROOT=/tmp/shiv npm run test:integration
 ```
 
@@ -142,7 +142,7 @@ CHT_BIN=/path/to/cht SHIV_ROOT=/tmp/shiv npm run test:integration
 CHT_PROJECT=/path/to/output TZ=Africa/Nairobi npx mocha child-cough.spec.cjs --timeout 120000
 ```
 
-Its expected values are written by hand for the fixture. Pipeline verification takes its expected outcomes from Role 4's evaluator instead.
+Its expected values are written by hand for the fixture. The broader set, including the boundaries this spec does not open in a browser, is `fixtures/child-cough/golden-cases.json`. Pipeline verification compares the harness output with that file and, separately, with Role 4's evaluator.
 
 The integration test compiles `test/fixtures/child-cough.logic.json`, runs real cht-conf conversion and validation, checks the XForm fields, checks that the questions match the handwritten reference (`reference/child-cough/`), and checks that a second build gives an identical XForm. If cht-conf cannot be run, it reports **skipped**, not passed. Set `REQUIRE_CHT=1` in CI so that a missing cht-conf fails.
 

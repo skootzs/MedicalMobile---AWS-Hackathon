@@ -55,7 +55,7 @@ All operands are ids; the right-hand side is always a literal.
 - `and` is false if any part is false; `or` is true if any part is true; otherwise unknown. This is three-valued (Kleene) logic.
 - A derived value is a calculate holding `'yes'`, `'no'` or `''` (unknown).
 - A decision row matches only when its condition is **definitely true**. Rows are tried in order; if none match, the result is `otherwise`.
-- Role 4's evaluator should follow the same rules; we should share fixtures that include unanswered inputs.
+- Role 4's evaluator should follow the same rules. The shared fixture is `fixtures/child-cough/logic.json` (same bytes as `../test/fixtures/child-cough.logic.json`). `fixtures/child-cough/golden-cases.json` gives the expected report values, including two partly answered forms (`incomplete-breaths-missing`, `incomplete-cough-unanswered`). Those expectations are technical and not clinician-approved.
 
 ## Changes since the first draft
 
