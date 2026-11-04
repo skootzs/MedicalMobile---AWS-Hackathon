@@ -35,9 +35,24 @@ long-lived keys.
 **Known limits:**
 
 - **Shared instance role:** the orchestrator, UI and runner all share one role on the app host. Per-service roles would need ECS.
-- **Port 443 egress only:** Ubuntu's default apt mirrors use port 80, so `apt` can't reach them. If a
-  new host's first-boot install fails because of this, `31-deploy-runner.sh` reports it.
-- **Runner logs:** they stay in journald on the host, so the CloudWatch error alarm doesn't see them.
+- **CHT host egress:** it still allows port 443 only, so `apt` can't reach Ubuntu's mirrors there.
+
+## App host egress: ports 443 and 80
+
+**Decision:** the app host's security group allows outbound TCP 80 as well as 443. There's still no
+inbound rule.
+
+Ubuntu's default apt mirrors use plain HTTP, so with 443 alone the first-boot install of Docker and Node
+couldn't run. apt verifies package signatures, so HTTP doesn't weaken what gets installed. The cost is
+that anything on the host can now make outbound HTTP requests, which matters little on a host with no
+inbound access and only our own workloads.
+
+## Runner logs in CloudWatch
+
+**Decision:** the systemd unit appends the runner's output to `/var/log/cht-nocode/runner.log`, and the
+CloudWatch agent ships that file to `/cht-nocode/app`, in a `runner-<instance-id>` stream. That's the log
+group the error alarm watches, so `level=error` from the runner now raises it. The installer sets up the
+agent and log rotation.
 
 ## Runner on the host, delivered as an image
 
