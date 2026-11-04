@@ -85,7 +85,7 @@ data "aws_iam_policy_document" "app_host" {
       "sqs:ChangeMessageVisibility",
       "sqs:GetQueueAttributes",
     ]
-    resources = [aws_sqs_queue.jobs.arn, aws_sqs_queue.jobs_dlq.arn]
+    resources = [aws_sqs_queue.jobs.arn, aws_sqs_queue.jobs_dlq.arn, aws_sqs_queue.job_events.arn, aws_sqs_queue.job_events_dlq.arn]
   }
 
   statement {
