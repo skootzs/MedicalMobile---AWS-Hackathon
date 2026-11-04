@@ -3,6 +3,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/kiro/lib-dynamodb-local.sh
+source "$REPO_ROOT/scripts/kiro/lib-dynamodb-local.sh"
 COMPILER_COMMIT="${COMPILER_COMMIT:-7f488e6}"
 COMPILE_IMAGE="${COMPILE_IMAGE:-node:22.23.4-slim}"
 BUILD_IMAGE_TAG="${BUILD_IMAGE_TAG:-cht-nocode/build-image:latest}"
@@ -14,7 +16,7 @@ chmod 0755 "$WORK_PARENT"
 
 cleanup() {
   git -C "$REPO_ROOT" worktree remove --force "$COMPILER_ROOT" 2>/dev/null || true
-  docker compose -f "$REPO_ROOT/docker-compose.test.yml" down -v >/dev/null 2>&1 || true
+  stop_dynamodb_local "$REPO_ROOT"
 }
 trap cleanup EXIT
 
@@ -26,8 +28,7 @@ git -C "$REPO_ROOT" worktree add --detach "$COMPILER_ROOT" "$COMPILER_COMMIT"
 chmod -R a+rX "$COMPILER_ROOT"
 
 echo "== 26-runner-e2e: DynamoDB Local =="
-docker compose -f "$REPO_ROOT/docker-compose.test.yml" up -d
-sleep 3
+start_dynamodb_local "$REPO_ROOT"
 
 cd "$REPO_ROOT/runner"
 echo "== 26-runner-e2e: npm ci =="

@@ -56,8 +56,7 @@ USER node
 RUN npm ci --ignore-scripts
 RUN npm rebuild puppeteer-chromium-resolver
 
-# Build-time launch checks. --no-sandbox applies here only because docker build
-# has no SYS_ADMIN; stage 6 runs the sandbox with --cap-add SYS_ADMIN.
+# Build-time launch check. Stage 6 also uses --no-sandbox, through harness-no-sandbox.cjs.
 COPY chromium-smoke-test.mjs ./
 RUN node chromium-smoke-test.mjs
 # TODO(R7): also start the real harness here; harness-bake.cjs failed under emulation.
@@ -69,3 +68,4 @@ WORKDIR /workdir
 
 COPY --chown=node:node run-convert.sh /run-convert.sh
 COPY --chown=node:node run-verify.sh /run-verify.sh
+COPY --chown=node:node harness-no-sandbox.cjs /harness-no-sandbox.cjs

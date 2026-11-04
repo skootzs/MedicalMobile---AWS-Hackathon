@@ -68,7 +68,8 @@ export function convertArgs(input: ConvertStageInput, name: string): string[] {
 
 export function verifyArgs(input: VerifyStageInput, name: string): string[] {
   return [
-    'run', '--name', name, ...BASE_FLAGS, '--cap-add', 'SYS_ADMIN',
+    // No added capabilities: run-verify.sh launches Chromium with --no-sandbox. See docs/decisions.md.
+    'run', '--name', name, ...BASE_FLAGS,
     '-e', 'TZ=Africa/Nairobi', '-e', 'npm_config_cache=/tmp/npm',
     '-e', 'CHT_CONFIG_DIR=/project', '-e', 'OUT_DIR=/out',
     '-e', `PACKAGE_HASH=${input.packageHash}`,

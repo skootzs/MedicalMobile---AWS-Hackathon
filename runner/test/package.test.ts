@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, utimesSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { compileArgs, convertArgs, verifyArgs } from '../launch-build.ts';
 import { canonicalJson, sha256 } from '../src/hashing.ts';
 import { buildManifest, deterministicTgz, listProjectFiles } from '../src/package.ts';
@@ -107,10 +108,40 @@ describe('container flags', () => {
     hasAll(args, ['sh', '/run-convert.sh']);
   });
 
-  it('only verify adds SYS_ADMIN, and /project is read-only', () => {
+  it('the image preload adds --no-sandbox to any harness that starts', () => {
+    const root = mkdtempSync(join(tmpdir(), 'preload-'));
+    const moduleDir = join(root, 'node_modules/cht-conf-test-harness');
+    mkdirSync(moduleDir, { recursive: true });
+    writeFileSync(join(moduleDir, 'index.js'), `module.exports = class {
+      options = { args: ['--existing'] };
+      start() { return this.options.args; }
+    };`);
+    const script = join(root, 'run.cjs');
+    writeFileSync(script, `const Harness = require('cht-conf-test-harness');
+      const harness = new Harness();
+      harness.start();
+      console.log(JSON.stringify(harness.start()));`);
+    const preload = fileURLToPath(new URL('../../build-image/harness-no-sandbox.cjs', import.meta.url));
+    const output = execFileSync(process.execPath, ['--require', preload, script], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), ['--existing', '--no-sandbox']);
+  });
+
+  it('the image preload fails closed if the harness has no start()', () => {
+    const root = mkdtempSync(join(tmpdir(), 'preload-'));
+    const moduleDir = join(root, 'node_modules/cht-conf-test-harness');
+    mkdirSync(moduleDir, { recursive: true });
+    writeFileSync(join(moduleDir, 'index.js'), 'module.exports = class {};');
+    const script = join(root, 'run.cjs');
+    writeFileSync(script, "require('cht-conf-test-harness');");
+    const preload = fileURLToPath(new URL('../../build-image/harness-no-sandbox.cjs', import.meta.url));
+    assert.throws(() => execFileSync(process.execPath, ['--require', preload, script], { stdio: 'pipe' }));
+  });
+
+  it('verify adds no capabilities, and /project is read-only', () => {
     const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', inputHash: 'i', hasGoldenCases: false }, 'n');
     hasAll(args, shared);
-    hasAll(args, ['--cap-add', 'SYS_ADMIN']);
+    assert.ok(!args.includes('--cap-add'));
+    assert.ok(!args.includes('SYS_ADMIN'));
     assert.ok(args.includes('/p:/project:ro'));
     assert.ok(args.includes('/v:/verifier:ro'));
   });

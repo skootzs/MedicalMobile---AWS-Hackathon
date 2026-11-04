@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Real Worker and real containers for COMPILE_LOGIC then VERIFY_BUILD, with and without
 # golden cases, against DynamoDB Local. Uses no AWS credentials or live resources.
-#
-# Expect a Chromium failure until a sandbox fix from 27-chromium-sandbox-matrix.sh is in
-# the runner's verify flags.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/kiro/lib-dynamodb-local.sh
+source "$REPO_ROOT/scripts/kiro/lib-dynamodb-local.sh"
 COMPILER_COMMIT="${COMPILER_COMMIT:-7f488e6}"
 # R5 added the child-cough golden cases after the compiler pin.
 GOLDEN_COMMIT="${GOLDEN_COMMIT:-2f7fb75}"
@@ -21,7 +20,7 @@ chmod 0755 "$WORK_PARENT"
 
 cleanup() {
   git -C "$REPO_ROOT" worktree remove --force "$COMPILER_ROOT" 2>/dev/null || true
-  docker compose -f "$REPO_ROOT/docker-compose.test.yml" down -v >/dev/null 2>&1 || true
+  stop_dynamodb_local "$REPO_ROOT"
 }
 trap cleanup EXIT
 
@@ -38,8 +37,7 @@ GOLDEN_FILE="$WORK_PARENT/golden-cases.json"
 git -C "$REPO_ROOT" show "$GOLDEN_COMMIT:fixtures/child-cough/golden-cases.json" > "$GOLDEN_FILE"
 
 echo "== 29-verify-stage-e2e: DynamoDB Local =="
-docker compose -f "$REPO_ROOT/docker-compose.test.yml" up -d
-sleep 3
+start_dynamodb_local "$REPO_ROOT"
 
 cd "$REPO_ROOT/runner"
 npm ci --no-audit --no-fund

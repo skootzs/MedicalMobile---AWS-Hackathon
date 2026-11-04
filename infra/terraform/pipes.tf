@@ -1,5 +1,4 @@
-# DynamoDB stream -> SQS delivery. Target input is built with a template, and there's no
-# enrichment step, so a Map attribute arrives as DynamoDB JSON. The runner decodes it.
+# DynamoDB stream -> SQS delivery.
 
 data "aws_iam_policy_document" "pipes_assume_role" {
   statement {
@@ -73,10 +72,8 @@ resource "aws_pipes_pipe" "outbox" {
     }
   }
 
-  target_parameters {
-    input_template = "<$.dynamodb.NewImage.payload>"
-  }
-
+  # No input template: one that renders a map produced unquoted, invalid JSON. The message
+  # body is the whole stream record, and the runner reads dynamodb.NewImage.payload from it.
   depends_on = [aws_iam_role_policy.pipe_outbox]
 }
 

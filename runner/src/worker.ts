@@ -96,26 +96,20 @@ function errorsText(errors: unknown): string {
   return JSON.stringify(errors).slice(0, 1000);
 }
 
-// The outbox Pipe sends the stream's payload attribute as DynamoDB JSON: {"M":{...}}, or
-// {"S":"<json>"} if a writer stores it as a string. Anything else is already the payload.
+// The outbox Pipe sends the whole DynamoDB stream record, possibly as a batch of one. The
+// payload attribute is a Map, or a JSON string if a writer stores it that way. A body that
+// isn't a stream record is already the payload.
 export function decodeBody(body: string): unknown {
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(body);
+    const parsed: unknown = JSON.parse(body);
+    const record = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] as unknown : parsed;
+    const attribute = (record as { dynamodb?: { NewImage?: { payload?: unknown } } } | null)?.dynamodb?.NewImage?.payload;
+    if (attribute === undefined) return record;
+    const { payload } = unmarshall({ payload: attribute } as unknown as Parameters<typeof unmarshall>[0]) as { payload: unknown };
+    return typeof payload === 'string' ? JSON.parse(payload) as unknown : payload;
   } catch {
     return undefined;
   }
-  if (!parsed || typeof parsed !== 'object') return parsed;
-  const keys = Object.keys(parsed);
-  if (keys.length !== 1) return parsed;
-  const { M, S } = parsed as { M?: Parameters<typeof unmarshall>[0]; S?: string };
-  try {
-    if (M && typeof M === 'object') return unmarshall(M);
-    if (typeof S === 'string') return JSON.parse(S);
-  } catch {
-    return undefined;
-  }
-  return parsed;
 }
 
 export function validatePayload(raw: unknown): { payload: JobPayload | VerifyBuildPayload } | { error: string } {

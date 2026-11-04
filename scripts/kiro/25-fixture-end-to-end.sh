@@ -82,9 +82,9 @@ fi
 echo
 echo "== stage 4/4: harness (test/harness/child-cough.spec.cjs, inside $BUILD_IMAGE_TAG) =="
 if ! docker run --rm --platform linux/amd64 --network none --read-only \
-  --cap-drop ALL --cap-add SYS_ADMIN --tmpfs /tmp --user 1000:1000 \
+  --cap-drop ALL --tmpfs /tmp --user 1000:1000 \
   -e CHT_PROJECT=/project -e TZ=Africa/Nairobi -e npm_config_cache=/tmp/npm \
-  -e NODE_PATH=/build-image/node_modules \
+  -e NODE_PATH=/build-image/node_modules -e NODE_OPTIONS=--require=/harness-no-sandbox.cjs \
   -v "$WORK_DIR:/project:ro" \
   -v "$HARNESS_SPEC:/harness/child-cough.spec.cjs:ro" \
   -w /harness \
