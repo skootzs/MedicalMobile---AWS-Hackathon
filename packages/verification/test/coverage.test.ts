@@ -104,6 +104,7 @@ function reportWithCoverage(coverage: Coverage) {
     compileArtifactHash: HASH, testedDirHash: HASH, patientSetHash: HASH, goldenCasesHash: null,
     coverage,
     classificationField: 'classification',
+    followUpDateField: 't_follow_up_date',
     pageFallbackCaseIds: [],
     integrityChecks: [],
     cases: [],
@@ -161,6 +162,7 @@ test('2b-2: pageFallbacks detail reports N of M cases', () => {
       totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [],
     },
     classificationField: 'classification',
+    followUpDateField: 't_follow_up_date',
     pageFallbackCaseIds: ['a', 'b'],
     integrityChecks: [],
     cases: [
