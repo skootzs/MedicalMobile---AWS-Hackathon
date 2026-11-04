@@ -65,9 +65,11 @@ async function verify(extra: Record<string, unknown>) {
 
   assert.equal(job.reportVersion, '2.3.0');
   assert.equal(check('logicModelHash')?.ok, true, check('logicModelHash')?.detail);
+  assert.equal(check('inputHash')?.ok, true, check('inputHash')?.detail);
   assert.equal(check('compileArtifactHash')?.ok, true, check('compileArtifactHash')?.detail);
   assert.equal(check('toolVersionsKnown')?.ok, true, check('toolVersionsKnown')?.detail);
-  assert.equal(report.references.logicModelHash, compiled.inputHash);
+  assert.equal(report.references.logicModelHash, hash);
+  assert.notEqual(report.references.logicModelHash, compiled.inputHash);
   assert.equal(report.packageHash, compiled.packageHash);
   assert.ok(report.cases.length > 0, 'the verifier ran no cases');
   return report;
@@ -80,6 +82,7 @@ assert.ok(!plain.cases.some((item: { id: string }) => item.id.startsWith('golden
 const golden = readFileSync(GOLDEN_FILE);
 const withGolden = await verify({ goldenCasesUri: h.artifacts.seed('sources/golden-cases.json', golden), goldenCasesHash: `sha256:${sha256(golden)}` });
 assert.equal(withGolden.goldenCasesHash, sha256(golden));
+assert.equal((withGolden.integrityChecks as { name: string; ok: boolean }[]).find((item) => item.name === 'goldenCasesHashExpected')?.ok, true);
 assert.ok(withGolden.cases.some((item: { id: string }) => item.id.startsWith('golden/')));
 
 console.log(`VERIFY_E2E_OK passed=${String(plain.passed)} withGoldenPassed=${String(withGolden.passed)}`);

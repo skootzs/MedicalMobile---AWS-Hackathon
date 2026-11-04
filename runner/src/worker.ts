@@ -570,8 +570,10 @@ export class Worker {
       outDir,
       packageHash: hexOf(payload.packageHash),
       compileArtifactHash: hexOf(payload.compileArtifactHash),
+      logicModelHash: hexOf(payload.logicModelHash),
       inputHash: expectedInputHash,
       hasGoldenCases,
+      goldenCasesHash: hasGoldenCases ? hexOf(payload.goldenCasesHash ?? '') : undefined,
     }, signal, config.buildTimeoutSeconds * 1000);
     if (run.timedOut) throw new JobFailure('TIMEOUT', 'Verify stage timed out', true);
 

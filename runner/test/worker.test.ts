@@ -499,16 +499,18 @@ describe('VERIFY_BUILD', () => {
     assert.equal(await h.run(payload), 'RETRYING');
   });
 
-  it('gives the verifier the checked logic and the inputHash as LOGIC_MODEL_HASH', async () => {
+  it('gives the verifier the envelope hash and the bare inputHash separately', async () => {
     const payload: Record<string, unknown> = await verifyPayload();
     const packageHex = String(payload.packageHash);
     h.stages.report = report(payload, true);
     assert.equal(await h.run({ ...payload, packageHash: `sha256:${packageHex}` }), 'SUCCEEDED');
     const input = h.stages.verifyInputs[0]!;
     assert.equal(input.inputHash, INPUT_HASH);
-    assert.notEqual(input.inputHash, payload.logicModelHash);
+    assert.equal(input.logicModelHash, String(payload.logicModelHash).replace(/^sha256:/, ''));
+    assert.notEqual(input.inputHash, input.logicModelHash);
     assert.equal(input.packageHash, packageHex);
     assert.equal(input.hasGoldenCases, false);
+    assert.equal(input.goldenCasesHash, undefined);
     assert.deepEqual(h.stages.verifyFiles[0], { 'logic.json': canonicalJson(LOGIC) });
   });
 
@@ -534,6 +536,7 @@ describe('VERIFY_BUILD', () => {
     h.stages.report = report(payload, true);
     assert.equal(await h.run(payload), 'SUCCEEDED');
     assert.equal(h.stages.verifyInputs[0]!.hasGoldenCases, true);
+    assert.equal(h.stages.verifyInputs[0]!.goldenCasesHash, sha256(golden));
     assert.equal(h.stages.verifyFiles[0]!['golden-cases.json'], golden);
   });
 
@@ -551,13 +554,16 @@ describe('VERIFY_BUILD', () => {
   });
 
   it('builds the verify container with the contract env and read-only mounts', () => {
-    const base = { image: 'i', projectDir: '/p', inDir: '/n', verifierDir: '/v', outDir: '/o', packageHash: 'pkg', compileArtifactHash: 'art', inputHash: 'input' };
+    const base = { image: 'i', projectDir: '/p', inDir: '/n', verifierDir: '/v', outDir: '/o', packageHash: 'pkg', compileArtifactHash: 'art', logicModelHash: 'envelope', inputHash: 'input' };
     const args = verifyArgs({ ...base, hasGoldenCases: false }, 'name');
-    for (const expected of ['PACKAGE_HASH=pkg', 'COMPILE_ARTIFACT_HASH=art', 'LOGIC_MODEL_HASH=input', 'CHT_CONFIG_DIR=/project', 'OUT_DIR=/out', 'TZ=Africa/Nairobi', '/p:/project:ro', '/n:/in:ro', '/v:/verifier:ro']) {
+    for (const expected of ['PACKAGE_HASH=pkg', 'COMPILE_ARTIFACT_HASH=art', 'LOGIC_MODEL_HASH=envelope', 'INPUT_HASH=input', 'CHT_CONFIG_DIR=/project', 'OUT_DIR=/out', 'TZ=Africa/Nairobi', '/p:/project:ro', '/n:/in:ro', '/v:/verifier:ro']) {
       assert.ok(args.includes(expected), expected);
     }
     assert.ok(!args.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
-    assert.ok(verifyArgs({ ...base, hasGoldenCases: true }, 'name').includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
+    assert.ok(!args.includes('GOLDEN_CASES_HASH=golden'));
+    const withGolden = verifyArgs({ ...base, hasGoldenCases: true, goldenCasesHash: 'golden' }, 'name');
+    assert.ok(withGolden.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
+    assert.ok(withGolden.includes('GOLDEN_CASES_HASH=golden'));
   });
 
   it('a job dir it cannot clean up does not change the outcome', async () => {

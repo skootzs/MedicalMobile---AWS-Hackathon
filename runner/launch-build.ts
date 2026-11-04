@@ -34,8 +34,13 @@ export interface VerifyStageInput {
   outDir: string;
   packageHash: string;
   compileArtifactHash: string;
+  /** Bare hex of the snapshot envelope. Passed as LOGIC_MODEL_HASH and checked against manifest.snapshotHash. */
+  logicModelHash: string;
+  /** Bare hex of the LogicModel. Passed as INPUT_HASH and checked against manifest.inputHash. */
   inputHash: string;
   hasGoldenCases: boolean;
+  /** Bare hex of the golden file, passed as GOLDEN_CASES_HASH when the job has golden cases. */
+  goldenCasesHash?: string;
 }
 
 const BASE_FLAGS = ['--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--tmpfs', '/tmp', '--user', '1000:1000'];
@@ -74,10 +79,12 @@ export function verifyArgs(input: VerifyStageInput, name: string): string[] {
     '-e', 'CHT_CONFIG_DIR=/project', '-e', 'OUT_DIR=/out',
     '-e', `PACKAGE_HASH=${input.packageHash}`,
     '-e', `COMPILE_ARTIFACT_HASH=${input.compileArtifactHash}`,
-    // Not R2's logicModelHash: R6's variable of this name is checked against the compile
-    // manifest's inputHash, the hash of the bare model. See docs/job-delivery.md.
-    '-e', `LOGIC_MODEL_HASH=${input.inputHash}`,
+    // Envelope hash, echoed into references.logicModelHash. R2 compares that field to its raw hex.
+    '-e', `LOGIC_MODEL_HASH=${input.logicModelHash}`,
+    // Bare model hash. R6 checks this against compile-manifest.json inputHash.
+    '-e', `INPUT_HASH=${input.inputHash}`,
     ...(input.hasGoldenCases ? ['-e', 'GOLDEN_CASES_FILE=/in/golden-cases.json'] : []),
+    ...(input.goldenCasesHash ? ['-e', `GOLDEN_CASES_HASH=${input.goldenCasesHash}`] : []),
     '-v', `${input.projectDir}:/project:ro`,
     '-v', `${input.inDir}:/in:ro`,
     '-v', `${input.verifierDir}:/verifier:ro`,

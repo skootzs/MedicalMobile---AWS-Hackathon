@@ -138,7 +138,7 @@ describe('container flags', () => {
   });
 
   it('verify adds no capabilities, and /project is read-only', () => {
-    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', inputHash: 'i', hasGoldenCases: false }, 'n');
+    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', logicModelHash: 'e', inputHash: 'i', hasGoldenCases: false }, 'n');
     hasAll(args, shared);
     assert.ok(!args.includes('--cap-add'));
     assert.ok(!args.includes('SYS_ADMIN'));

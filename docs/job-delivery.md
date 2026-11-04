@@ -172,22 +172,18 @@ The verify container runs `node /verifier/dist/run.js` with:
 | `TZ` | `Africa/Nairobi` |
 | `PACKAGE_HASH` | the payload's `packageHash`, as bare hex |
 | `COMPILE_ARTIFACT_HASH` | the payload's `compileArtifactHash`, as bare hex |
-| `LOGIC_MODEL_HASH` | **the `inputHash`, see below** |
+| `LOGIC_MODEL_HASH` | the payload's envelope `logicModelHash`, as bare hex. Checked against `manifest.snapshotHash` and echoed into `references.logicModelHash` |
+| `INPUT_HASH` | the runner's hash of `/in/logic.json`, as bare hex. Checked against `manifest.inputHash` |
 | `GOLDEN_CASES_FILE` | `/in/golden-cases.json`, only when the job has golden cases |
+| `GOLDEN_CASES_HASH` | the payload's `goldenCasesHash`, as bare hex, only when the job has golden cases |
 
 Read-only mounts: `/project`, `/in` (`logic.json`, plus `golden-cases.json` when present) and
 `/verifier`. `/verifier` has no `node_modules`; the harness comes from the image through
 `NODE_PATH`. Build it with `scripts/build-verifier.sh`.
 
-> **`LOGIC_MODEL_HASH` means two different things.** R6's variable of that name holds the
-> compile manifest's `inputHash`, the hash of the bare LogicModel. Everywhere else in this
-> contract, `logicModelHash` is R2's hash of the snapshot envelope. The two never match, and
-> the runner deliberately passes the `inputHash`, so the verifier's check passes.
->
-> **Open conflict:** R6 also echoes this value into the report's `references.logicModelHash`,
-> and R2 (`verification-results.ts`) fails the report with `REPORT_REFERENCE_MISMATCH` unless
-> that field is null or equals the envelope hash. Renaming R6's variable to `INPUT_HASH` is
-> only enough if R6 also stops echoing it there.
+The two hashes stay separate. `LOGIC_MODEL_HASH` is the snapshot envelope, which is what
+R2 compares in `references.logicModelHash`. `INPUT_HASH` is the bare LogicModel, which is
+what `compile-manifest.json` stores as `inputHash`. The runner passes each as bare hex.
 
 ### R2 alignment still needed
 
