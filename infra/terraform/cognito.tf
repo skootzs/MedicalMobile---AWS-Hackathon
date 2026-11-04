@@ -15,6 +15,7 @@ resource "aws_cognito_user_pool_client" "intake" {
   allowed_oauth_scopes                 = ["openid"]
   supported_identity_providers         = ["COGNITO"]
   callback_urls                        = [var.intake_callback_url]
+  logout_urls                          = ["${trimsuffix(var.intake_callback_url, "/")}/signed-out"]
   prevent_user_existence_errors        = "ENABLED"
 }
 

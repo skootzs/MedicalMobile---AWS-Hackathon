@@ -1,30 +1,79 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Configuration request intake</title>
+<title>Request intake · Medic</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/" aria-label="Medic home"><span class="brand-mark" aria-hidden="true">m</span>medic<span class="brand-divider"></span><span class="workspace">Configuration workspace</span></a>
+  <span class="environment">Request intake</span>
+  <nav id="account-actions" class="account-actions" aria-label="Account" hidden>
+    <span id="signed-in-name" class="signed-in-name"></span>
+    <button id="profile" class="secondary" type="button" aria-haspopup="dialog">Profile</button>
+    <button id="sign-out" class="secondary" type="button">Log out</button>
+  </nav>
+</header>
+<dialog id="profile-dialog" aria-labelledby="profile-title">
+  <h2 id="profile-title">Your profile</h2>
+  <dl class="profile-fields">
+    <dt>Username</dt><dd id="profile-username"></dd>
+    <dt>Privilege level</dt><dd id="profile-roles"></dd>
+    <dt>User ID</dt><dd id="profile-id"></dd>
+  </dl>
+  <p class="small">Product owners can submit requests and view or correct their own requests.</p>
+  <form method="dialog"><button class="primary" type="submit">Close</button></form>
+</dialog>
 <main>
-  <h1>Configuration request intake</h1>
+  <div id="page-heading" class="page-heading"><div><p class="eyebrow">BUILD BETTER CARE</p><h1 id="page-title">Small changes. Better workflows.</h1><p id="page-intro" class="intro">Turn your team's needs into a clear configuration request.</p></div><span class="phase-label">01 / Request intake</span></div>
   <p id="message" role="status" aria-live="polite"></p>
-  <button id="sign-in" type="button">Sign in with Cognito</button>
-  <section id="intake" hidden>
-    <button id="sign-out" type="button">End local session</button>
-    <h2 id="form-title">New request</h2>
-    <form id="request">
-      <p><label>Goal<br><textarea name="goal" required maxlength="4000"></textarea></label></p>
-      <p><label>Affected pathway<br><textarea name="pathway" required maxlength="4000"></textarea></label></p>
-      <p><label>Target users<br><textarea name="targetUsers" required maxlength="4000"></textarea></label></p>
-      <p><label>Acceptance criteria<br><textarea name="acceptanceCriteria" required maxlength="4000"></textarea></label></p>
-      <p><label>Current configuration version<br><select name="baselineVersion" required></select></label></p>
-      <p><label>Public clinical guideline URLs (one per line)<br><textarea name="guidelineUrls"></textarea></label></p>
-      <p><label>Guideline attachment (.txt or .md, up to 256 KiB)<br><input name="attachment" type="file" accept=".txt,.md"></label></p>
-      <button type="submit">Submit revision</button>
-      <button id="new-request" type="button">Start a new request</button>
-    </form>
-    <h2>Your requests</h2>
-    <ul id="requests"></ul>
-    <section id="details" aria-label="Request revision history"></section>
+  <section id="signed-out" class="welcome panel" aria-labelledby="signed-out-title" hidden>
+    <div>
+      <p class="eyebrow">SESSION ENDED</p>
+      <h1 id="signed-out-title">You’re signed out.</h1>
+      <p>Your session has ended. Returning to the sign-in page in 5 seconds.</p>
+      <button id="sign-in-again" class="primary" type="button">Sign in again</button>
+    </div>
   </section>
+  <section id="welcome" class="welcome panel">
+    <div><p class="eyebrow">YOUR NEXT IMPROVEMENT STARTS HERE</p><h2>A clearer path from idea to request.</h2><p>Describe what needs to change, add the guidelines behind it, and keep every revision in one place.</p><button id="sign-in" class="primary" type="button">Sign in to get started <span aria-hidden="true">↗</span></button><p class="small">Use your organization's account. Product owner access is required.</p></div>
+    <ol class="welcome-steps"><li><span>01</span><div><h3>Describe the change</h3><p>Share the goal, pathway, and people affected.</p></div></li><li><span>02</span><div><h3>Add the context</h3><p>Select a baseline and attach supporting guidelines.</p></div></li><li><span>03</span><div><h3>Keep a clear record</h3><p>Track submission status and refine your request.</p></div></li></ol>
+  </section>
+  <section id="intake" hidden>
+    <div class="workspace-toolbar"><p><span class="session-dot"></span> Product owner workspace</p></div>
+    <nav class="workspace-nav" aria-label="Requests">
+      <a id="nav-requests" href="/requests">Your requests</a>
+      <a id="nav-new" href="/requests/new">New request</a>
+    </nav>
+    <section id="new-request-page" class="panel form-panel" aria-labelledby="form-title" hidden>
+    <div class="panel-heading"><div><p class="eyebrow">REQUEST DETAILS</p><h2 id="form-title">New request</h2></div><span class="small">* Required</span></div>
+    <section id="correction-notice" class="correction-notice" aria-labelledby="correction-title" tabindex="-1" hidden>
+      <p class="eyebrow">BEFORE YOU RESUBMIT</p>
+      <h3 id="correction-title">Changes needed</h3>
+      <p id="correction-context" class="small"></p>
+      <ul id="correction-items"></ul>
+      <p class="small">Uploads are optional. If you want to include a guideline attachment in this revision, select it again.</p>
+    </section>
+    <form id="request">
+      <fieldset><legend><span>01</span> Describe the change</legend><p class="section-help">Be specific about what should happen and why it matters.</p>
+      <label for="goal">Goal <span>*</span></label><p id="goal-help" class="field-help">What outcome should this change achieve?</p><textarea id="goal" name="goal" required maxlength="4000" aria-describedby="goal-help" placeholder="e.g. Help community health workers identify patients who need a follow-up visit."></textarea>
+      <div class="field-grid"><div><label for="pathway">Affected pathway <span>*</span></label><textarea id="pathway" name="pathway" required maxlength="4000" placeholder="Which care pathway or workflow will change?"></textarea></div><div><label for="targetUsers">Target users <span>*</span></label><textarea id="targetUsers" name="targetUsers" required maxlength="4000" placeholder="Who will use this configuration?"></textarea></div></div>
+      <label for="acceptanceCriteria">Acceptance criteria <span>*</span></label><p id="criteria-help" class="field-help">Describe the observable results that would make this change complete.</p><textarea id="acceptanceCriteria" name="acceptanceCriteria" required maxlength="4000" aria-describedby="criteria-help" placeholder="e.g. A follow-up task appears when…"></textarea></fieldset>
+      <fieldset><legend><span>02</span> Add supporting context</legend>
+      <label for="baselineVersion">Current configuration version <span>*</span></label><select id="baselineVersion" name="baselineVersion" required><option value="" disabled selected>Select a configuration version</option></select>
+      <label for="guidelineUrls">Clinical guideline links <span class="optional">Optional</span></label><p id="urls-help" class="field-help">Public HTTP or HTTPS links, one per line. Links are saved as references.</p><textarea id="guidelineUrls" name="guidelineUrls" aria-describedby="urls-help" placeholder="https://example.org/clinical-guideline"></textarea>
+      <label for="attachment">Guideline attachment <span class="optional">Optional</span></label><div class="upload"><input id="attachment" name="attachment" type="file" accept=".txt,.md" aria-describedby="attachment-help"><p id="attachment-help" class="field-help">No upload is required for submission or screening. Optional files: UTF-8 TXT or Markdown · Up to 256 KiB</p></div></fieldset>
+      <div class="form-footer"><p class="small">Saving creates a traceable revision of your request.</p><div class="actions"><button id="new-request" class="secondary" type="button">Start fresh</button><button class="primary" type="submit">Submit revision <span aria-hidden="true">→</span></button></div></div>
+    </form></section>
+    <section id="requests-page" hidden>
+    <section id="requests-overview" class="panel requests-panel"><div class="panel-heading"><h2>Your requests</h2><span id="request-count" class="count">0</span></div><p class="section-help">Your latest submissions, all in one place. Select a request to view its revisions.</p><ul id="requests"></ul></section>
+    <section id="details" class="panel" aria-label="Request revision history" hidden></section>
+    </section>
+  </section>
+  <footer>Medic <span>·</span> Configuration workspace <span class="footer-note">Designed around better care.</span></footer>
 </main>
 <script type="module" src="/app.js"></script>
+</body>
 </html>

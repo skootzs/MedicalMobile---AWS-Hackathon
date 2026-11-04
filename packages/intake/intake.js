@@ -34,6 +34,10 @@ export class HttpError extends Error {
 }
 
 export async function authenticate(header, verify, getRoles) {
+  return (await authenticateProfile(header, verify, getRoles)).authorId
+}
+
+export async function authenticateProfile(header, verify, getRoles) {
   const match = /^Bearer (\S+)$/i.exec(header ?? '')
   if (!match) throw new HttpError(401, 'Sign in to continue.')
   let claims
@@ -45,7 +49,7 @@ export async function authenticate(header, verify, getRoles) {
   if (typeof claims.sub !== 'string' || !claims.sub) throw new HttpError(401, 'Invalid identity.')
   const assigned = (await getRoles(claims.sub)).filter(role => roles.includes(role))
   if (!assigned.includes('PO')) throw new HttpError(403, 'This account requires the PO role.')
-  return claims.sub
+  return { authorId: claims.sub, username: claims.username || claims.sub, roles: assigned }
 }
 
 function parseAttachment(attachment) {
@@ -89,7 +93,7 @@ function publicUrl(value) {
   }
 }
 
-export async function submit({ store, registry, author, requestId, key, raw, oversized = false }) {
+export async function submit({ store, registry, author, requestId, key, raw, oversized = false, commitGuard }) {
   if (!/^[\w-]{16,128}$/.test(key ?? '')) throw new HttpError(400, 'Provide a valid idempotency key.')
   let input = {}
   if (!oversized) {
@@ -169,18 +173,14 @@ export async function submit({ store, registry, author, requestId, key, raw, ove
     baselineVersion: version.length <= 256 ? version : '', baselineHash, sources, references,
     screeningStatus: status, corrections,
     events: [{ status: 'received', at: reservation.receivedAt }, { status, at: new Date().toISOString() }]
-  })
+  }, commitGuard)
 }
 
 /**
- * Invoke downstream only from a trusted caller with a recorded screening pass for this revision.
- * @param {RequestSnapshot} snapshot
+ * Legacy phase-one boundary remains closed. Phase two queues a durable handoff
+ * through createReview.confirm after checking stored screening and confirmation.
+ * A future dispatcher must validate those durable records, never caller assertions.
  */
-export async function handoff(snapshot, screen, downstream) {
-  if (snapshot.screeningStatus === 'blocked') return false
-  const result = await screen(snapshot)
-  if (snapshot.screeningStatus !== 'passed' || result?.status !== 'passed' ||
-      result.revisionId !== snapshot.revisionId) return false
-  await downstream(snapshot)
-  return true
+export async function handoff() {
+  return false
 }
