@@ -1246,3 +1246,195 @@ handoff port bound to the accepted request revision and LogicModel references;
 coordinate the R3 drafting/R4 checker/R5 compiler/R6 verification contracts before
 real adapters. Routing must not silently dispatch jobs, compile or bypass approval.
 A durable outbox/worker handoff can follow with R7 once persistence is selected.
+
+## Explicit routing application service (local milestone)
+
+`RoutingService` in src/routing-service.ts connects the existing pure Routing Box
+to APPLY_ROUTING through store.apply(). It introduces no second state machine,
+review assignment, compilation, AWS call or job dispatch. Pass it as the optional
+`routing` dependency of createLocalApi(); authentication remains deny-by-default,
+and the factory still exposes inject()/close() without a public listener.
+
+Execution is explicit: resolve the verified server actor and request visibility,
+load current state and the immutable preview, verify accepted screening/owner PO
+confirmation records, call routeDesignBrief(), and atomically commit the existing
+workflow transition. Command revision/hash and expected workflow version must match.
+Cached COMPLETED/CONFIRMED flags alone are insufficient: exactly one matching accepted
+record of each kind must exist for the same current request revision/hash and IDs.
+The preview's content must also match the stored brief. Missing, duplicate, failed,
+incomplete, stale or conflicting evidence blocks routing.
+
+| Routing result | Effect |
+| --- | --- |
+| NOT_READY | 409 with structured reasons; no state advancement, receipt, SD queue item or job. An authorized blocked attempt is audited as rejected. |
+| NEEDS_SD_REVIEW | Commit the existing NEEDS_SD_REVIEW workflow state. The existing authorized SD queue discovers it; no individual assignment is created. |
+| READY_FOR_BEDROCK_REVIEW | Commit the existing READY_FOR_LOGIC_PROPOSAL workflow state. Nothing invokes Bedrock or starts logic drafting. |
+
+PO confirmation and preliminary screening are not clinical approval. Independent
+clinician, compilation, verification and separate release gates remain unchanged.
+The state machine revalidates the routing result at commit and rejects attempts in
+other states. Routing with a new event ID after a successful route does not skip the
+next guarded workflow step.
+
+### Provisional authorization policy
+
+The default requires a server-resolved ORCHESTRATOR role, consistent with the
+existing workflow guard. An optional authorizeActor(actor, requestId) dependency can
+restrict that permission further (for example, to approved internal identities).
+It cannot elevate PO/SD/clinician actors past the workflow's mandatory ORCHESTRATOR
+role. A future human-trigger permission must be agreed with the team; a verified
+human would need an explicitly authorized role or a deliberate shared guard change.
+No browser role/actor/trusted claim establishes authority.
+
+canAccessRequest is a required injected backend policy, with no allow default; use
+the same request/tenant visibility policy as the HTTP authentication boundary.
+Visibility is checked before private reads and again before apply(). The extra actor
+policy is also checked again. The store re-resolves the actor, compares expectedActorId
+and runs current workflow role/version guards. Its real identity resolver must enforce
+current request membership at commit as well. The current mocks and in-memory store
+do not provide real authentication or distributed authorization guarantees.
+Malformed, inaccessible or role-denied calls stop before storage; operational security
+logging for those attempts remains pending. Well-formed NOT_READY/stale/conflicting
+commands submitted to apply() append rejection audits when storage is available.
+
+### HTTP contract and retries
+
+```http
+POST /api/requests/fictional-001/route
+Content-Type: application/json
+```
+
+Fictional body for a confirmed preview at version 3:
+
+```json
+{
+  "eventId": "fictional-route",
+  "expectedVersion": 3,
+  "revision": 1,
+  "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952"
+}
+```
+
+requestId comes from the path. The body accepts only those four fields. Screening,
+confirmation, computed routes, assignments, dispatch flags, roles and identities must
+not be supplied. Unknown body/query fields, invalid hashes and coerced/fractional
+versions are rejected. The existing body size and identifier limits apply.
+
+For clear fictional screening, the full 200 response is:
+
+```json
+{
+  "status": "SUCCESS",
+  "reason": "APPLY_ROUTING",
+  "requestId": "fictional-001",
+  "eventId": "fictional-route",
+  "workflowVersion": 4,
+  "auditId": "[\"fictional-001\",\"fictional-route-attempt\"]",
+  "routing": {
+    "route": "READY_FOR_BEDROCK_REVIEW",
+    "requestId": "fictional-001",
+    "revision": 1,
+    "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952",
+    "screeningId": "screen-1",
+    "confirmationId": "confirm-1",
+    "reasons": [{
+      "code": "READY_FOR_AI_REVIEW",
+      "field": "brief",
+      "message": "Current screening and PO confirmation match. Downstream review may be scheduled separately; clinician approval, developer verification, and release approval remain mandatory."
+    }],
+    "clinicalApprovalRequired": true
+  }
+}
+```
+
+The example uses a deterministic fictional attempt ID; normal attempts use backend
+UUIDs. Snapshot hashes are computed by the existing snapshot module, not invented
+by routing logic. Read current workflow status separately; the example state is now
+READY_FOR_LOGIC_PROPOSAL, with no LogicModel or clinical/release approval yet.
+
+When current screening contains the fictional clinical concern from the tests, the
+route is NEEDS_SD_REVIEW with REVIEW_REQUIRED reasons referencing
+screening.checks.clinicalSafety. GET /api/reviews/queue?category=SERVICE_DESIGNER through
+a verified fictional SD session returns:
+
+```json
+{
+  "category": "SERVICE_DESIGNER",
+  "items": [{
+    "requestId": "fictional-001",
+    "category": "SERVICE_DESIGNER",
+    "workflowVersion": 4,
+    "status": "NEEDS_SD_REVIEW",
+    "request": {
+      "requestId": "fictional-001",
+      "revision": 1,
+      "snapshotHash": "0de6a9d3c1fb64bc258d9252c371c2faa5639f39858ef32b155346727402b952"
+    }
+  }]
+}
+```
+
+The existing SD review-context API exposes the corresponding screening findings and
+clarification reasons. NOT_READY never creates this item. Its 409 response contains
+`error.code: NOT_READY` and a routing object with field-specific reason codes/messages;
+there is no accepted routing receipt. Repeating the same blocked command cannot
+advance state. Changed prerequisites increment workflow version, requiring a fresh
+command based on the new current state.
+
+HTTP conventions: 200 committed success or identical accepted retry, 400 malformed
+command, 401 missing authentication, 403 unsupported actor/policy, generic 404 for
+missing/inaccessible requests, 409 stale versions/revisions, conflicting event or
+wrong state, and sanitized 503 for storage/provider failures. Uncommitted valid routes
+are not returned as success. Responses retain Cache-Control: no-store.
+
+The command fingerprint covers all command fields and the verified initiating actor
+ID. An identical accepted retry returns DUPLICATE_EVENT with the original routing
+result; changed command fields or another actor under the same accepted event ID
+conflict. A receipt recheck closes the race between separate receipt/state reads:
+a concurrent identical commit is replayed rather than rejected as a stale preflight.
+The store's atomic version check still ensures distinct concurrent commands cannot
+advance the same version twice. Exact retries after later revisions acknowledge only
+the historical route: they never restore old state, screening, confirmation or queues.
+The returned workflowVersion may therefore be current while routing refers to an older
+accepted preview. Fetch current status before further actions.
+
+### Atomic routing records and Pending Role 4 Integration
+
+AuditRecord and EventReceipt now have optional routing: RoutingResult fields. The
+in-memory adapter copies the full validated routing decision into both only after
+an accepted APPLY_ROUTING transition, in the same atomic operation as state, receipt
+and audit. This retains reasons, screeningId, confirmationId and exact preview
+revision/hash after later revisions. The referenced screening/confirmation records
+already remain immutable in evidence history. Returned copies cannot mutate stored
+history. No separate routing record map or second persistence operation was added.
+Rejected attempts do not assert an accepted routing payload in their audits; detailed
+NOT_READY reasons are returned to the caller. Failed commits leave no partial records.
+
+The optional fields preserve old/non-routing record compatibility. Older raw workflow
+routing receipts without the new application fingerprint cannot be silently claimed
+as application retries. An application retry whose stored routing payload is missing
+fails closed. R7's future durable adapter must preserve these routing fields atomically,
+not discard them as optional metadata.
+
+R4 must finalize the command/receipt/audit schemas, evidence ID scope, hash policy,
+state/route terminology and structured error vocabulary. The service still uses
+provisional orchestrator-local contracts and the existing snapshot-validation boundary.
+Role 3 owns screening content and must eventually supply authenticated evidence;
+Role 2 does not implement model assessment. Team/R7 agreement is still needed on
+internal identities, any permitted human routing roles and request/tenant access at
+commit. No real auth or durable database transaction is claimed.
+
+Verification: 665 passing tests (568 preserved + 97 new service/HTTP tests), strict
+TypeScript with zero errors, and fictional Fastify inject() scenarios without a
+listener. Tests cover blocked evidence, SD discovery, concurrency including the
+receipt/state race, immutable history, rollback and unchanged downstream gates.
+Node 22 runtime verification remains pending; the local environment is Node 24 with
+Node 22 typings. No dependencies or root/shared configurations changed.
+
+Smallest next step: a mocked, explicit version-bound proposal-handoff service. Load
+an accepted routing receipt, verify the current preview/version still matches and
+the route permits logic drafting, then create/retry a synthetic handoff keyed by
+routing event ID and job type. Bind the initial draft job to the request preview;
+attach a real LogicModel identity only when one exists. SD/NOT_READY or superseded
+routes must never create a drafting handoff. Do not dispatch just because the route
+endpoint returns. Add a durable outbox with R7 later when a database adapter is agreed.

@@ -129,7 +129,8 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
     const recordedAt = (this.#options.now ?? (() => new Date().toISOString()))();
     if (typeof recordedAt !== 'string' || !Number.isFinite(Date.parse(recordedAt))) throw new StorageError('INVALID_CLOCK');
     const history = base.audits.get(command.requestId) ?? [];
-    const record: AuditRecord = { ...structuredClone(audit), auditId, sequence: history.length + 1, recordedAt };
+    const record: AuditRecord = { ...structuredClone(audit), auditId, sequence: history.length + 1, recordedAt,
+      ...(audit.outcome === 'ACCEPTED' && command.event.type === 'APPLY_ROUTING' ? { routing: structuredClone(command.event.result) } : {}) };
     const result: ApplyResult = { outcome: audit.outcome, reason: audit.reason, version: hiddenVersion ? null : audit.stateVersion, auditId, replayed: false };
     const data = { ...base, audits: new Map(base.audits), attempts: new Map(base.attempts) };
     data.audits.set(command.requestId, [...history, record]);
@@ -217,7 +218,8 @@ export class InMemoryOrchestratorStore implements OrchestratorStore, ReviewCandi
       if (!processed) throw new StorageError('MISSING_EVENT_RECEIPT');
       const receipt: EventReceipt = { request: identity(next), eventId: event.eventId,
         fingerprint: processed.fingerprint, workflowVersion: next.version, auditId: update.result.auditId,
-        ...(command.commandFingerprint === undefined ? {} : { commandFingerprint: command.commandFingerprint }) };
+        ...(command.commandFingerprint === undefined ? {} : { commandFingerprint: command.commandFingerprint }),
+        ...(event.type === 'APPLY_ROUTING' ? { routing: structuredClone(event.result) } : {}) };
       const candidate: MemoryData = { ...update.data, snapshots, evidence, workflows: new Map(base.workflows), receipts: new Map(base.receipts) };
       candidate.workflows.set(command.requestId, structuredClone(next));
       candidate.receipts.set(receiptKey, receipt);

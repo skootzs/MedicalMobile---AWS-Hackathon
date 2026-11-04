@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ApprovalService } from './approvals.ts';
 import type { RequestService } from './requests.ts';
 import type { ReviewService } from './reviews.ts';
+import type { RoutingService } from './routing-service.ts';
+import { registerRoutingRoute } from './routes/route.ts';
 import { registerReviewRoutes } from './routes/review.ts';
 import { registerRequestRoutes } from './routes/requests.ts';
 import { denyAllAuthentication } from './auth.ts';
@@ -18,6 +20,7 @@ export interface LocalApiDependencies {
   /** Optional so existing approval-only local integration stays unchanged. */
   requests?: RequestService;
   reviews?: ReviewService;
+  routing?: RoutingService;
   /** No default mock: omitted authentication always denies access. */
   authentication?: AuthenticationBoundary;
 }
@@ -69,6 +72,7 @@ export function createLocalApi(deps: LocalApiDependencies): LocalApi {
     return principal;
   };
   registerApprovalRoutes(app, deps.approvals, principalFor);
+  if (deps.routing) registerRoutingRoute(app, deps.routing, principalFor);
   if (deps.reviews) registerReviewRoutes(app, deps.reviews, principalFor);
   if (deps.requests) registerRequestRoutes(app, deps.requests, principalFor);
   return { inject: app.inject.bind(app), close: () => app.close() };
