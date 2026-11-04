@@ -41,3 +41,11 @@ output "ecr_repository_urls" {
 output "cht_secret_name" {
   value = aws_secretsmanager_secret.cht_login.name
 }
+
+output "bedrock_guardrail_id" {
+  value = aws_bedrock_guardrail.pii.guardrail_id
+}
+
+output "bedrock_guardrail_version" {
+  value = aws_bedrock_guardrail_version.pii.version
+}

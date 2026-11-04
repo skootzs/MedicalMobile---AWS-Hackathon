@@ -130,6 +130,13 @@ data "aws_iam_policy_document" "app_host" {
     ]
   }
 
+  # Bedrock Guardrail: PII blocking/anonymization on model inputs.
+  statement {
+    sid       = "BedrockApplyGuardrail"
+    actions   = ["bedrock:ApplyGuardrail"]
+    resources = [aws_bedrock_guardrail.pii.guardrail_arn]
+  }
+
   # Cognito: read-only.
   statement {
     sid       = "CognitoReadOnly"
