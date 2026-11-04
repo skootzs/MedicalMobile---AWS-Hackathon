@@ -1,0 +1,1 @@
+Sure! Here is the logic model: {"schemaVersion": "1.0", "pathwayId": 

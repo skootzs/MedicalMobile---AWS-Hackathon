@@ -1,0 +1,425 @@
+{
+  "schemaVersion": "1.0",
+  "pathwayId": "child_cough",
+  "title": "Child Cough and Fast Breathing (Demo)",
+  "language": "en",
+  "sources": [
+    {
+      "id": "who_imci_2014",
+      "title": "WHO Integrated Management of Childhood Illness Chart Booklet, March 2014",
+      "sha256": "d10fd1d040bdbdb6db4254b8095e1d1722d0a3d2f80c3651b3003301a8a6959f",
+      "url": "https://cdn.who.int/media/docs/default-source/mca-documents/child/imci-integrated-management-of-childhood-illness/imci-in-service-training/imci-chart-booklet.pdf"
+    }
+  ],
+  "context": [
+    {
+      "id": "patient_age_in_months",
+      "type": "integer",
+      "from": "contact.age_in_months"
+    }
+  ],
+  "applicability": {
+    "when": {
+      "and": [
+        {
+          "gte": [
+            "patient_age_in_months",
+            2
+          ]
+        },
+        {
+          "lt": [
+            "patient_age_in_months",
+            60
+          ]
+        }
+      ]
+    },
+    "notApplicableOutcome": "out_of_scope",
+    "unknownOutcome": "age_unknown",
+    "source": {
+      "sourceId": "who_imci_2014",
+      "page": 5,
+      "quote": "SICK CHILD AGE 2 MONTHS UP TO 5 YEARS"
+    }
+  },
+  "pages": [
+    {
+      "id": "intro",
+      "label": "Cough or difficult breathing"
+    },
+    {
+      "id": "danger_signs",
+      "label": "General danger signs"
+    },
+    {
+      "id": "breathing",
+      "label": "Breathing"
+    }
+  ],
+  "questions": [
+    {
+      "id": "has_cough_or_difficult_breathing",
+      "type": "boolean",
+      "page": "intro",
+      "label": "Does the child have cough or difficult breathing?",
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 6,
+        "quote": "Does the child have cough or difficult breathing?"
+      }
+    },
+    {
+      "id": "not_able_to_drink_or_breastfeed",
+      "type": "boolean",
+      "page": "danger_signs",
+      "label": "Is the child NOT able to drink or breastfeed?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 5,
+        "quote": "Is the child able to drink or breastfeed?"
+      }
+    },
+    {
+      "id": "vomits_everything",
+      "type": "boolean",
+      "page": "danger_signs",
+      "label": "Does the child vomit everything?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 5,
+        "quote": "Does the child vomit everything?"
+      }
+    },
+    {
+      "id": "had_convulsions",
+      "type": "boolean",
+      "page": "danger_signs",
+      "label": "Has the child had convulsions?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 5,
+        "quote": "Has the child had convulsions?"
+      }
+    },
+    {
+      "id": "lethargic_or_unconscious",
+      "type": "boolean",
+      "page": "danger_signs",
+      "label": "Is the child lethargic or unconscious?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 5,
+        "quote": "See if the child is lethargic or unconscious."
+      }
+    },
+    {
+      "id": "convulsing_now",
+      "type": "boolean",
+      "page": "danger_signs",
+      "label": "Is the child convulsing now?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 5,
+        "quote": "Is the child convulsing now?"
+      }
+    },
+    {
+      "id": "breaths_per_minute",
+      "type": "integer",
+      "page": "breathing",
+      "label": "Count the breaths in one minute. How many breaths per minute?",
+      "hint": "The child must be calm while you count.",
+      "min": 0,
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 6,
+        "quote": "Count the breaths in one minute."
+      }
+    },
+    {
+      "id": "chest_indrawing",
+      "type": "boolean",
+      "page": "breathing",
+      "label": "Do you see chest indrawing?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 6,
+        "quote": "Look for chest indrawing."
+      }
+    },
+    {
+      "id": "stridor_in_calm_child",
+      "type": "boolean",
+      "page": "breathing",
+      "label": "Do you hear stridor while the child is calm?",
+      "relevantWhen": {
+        "eq": [
+          "has_cough_or_difficult_breathing",
+          true
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 6,
+        "quote": "Stridor in calm child."
+      }
+    }
+  ],
+  "derived": [
+    {
+      "id": "fast_breathing",
+      "type": "boolean",
+      "when": {
+        "or": [
+          {
+            "and": [
+              {
+                "lt": [
+                  "patient_age_in_months",
+                  12
+                ]
+              },
+              {
+                "gte": [
+                  "breaths_per_minute",
+                  50
+                ]
+              }
+            ]
+          },
+          {
+            "and": [
+              {
+                "gte": [
+                  "patient_age_in_months",
+                  12
+                ]
+              },
+              {
+                "gte": [
+                  "breaths_per_minute",
+                  40
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 6,
+        "quote": "2 months up to 12 months 50 breaths per minute or more 12 Months up to 5 years 40 breaths per minute or more"
+      }
+    },
+    {
+      "id": "any_general_danger_sign",
+      "type": "boolean",
+      "when": {
+        "or": [
+          {
+            "eq": [
+              "not_able_to_drink_or_breastfeed",
+              true
+            ]
+          },
+          {
+            "eq": [
+              "vomits_everything",
+              true
+            ]
+          },
+          {
+            "eq": [
+              "had_convulsions",
+              true
+            ]
+          },
+          {
+            "eq": [
+              "lethargic_or_unconscious",
+              true
+            ]
+          },
+          {
+            "eq": [
+              "convulsing_now",
+              true
+            ]
+          }
+        ]
+      },
+      "source": {
+        "sourceId": "who_imci_2014",
+        "page": 5,
+        "quote": "CHECK FOR GENERAL DANGER SIGNS"
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "severe_pneumonia_or_very_severe_disease",
+      "label": "SEVERE PNEUMONIA OR VERY SEVERE DISEASE",
+      "referral": "urgent",
+      "message": "Refer URGENTLY to hospital."
+    },
+    {
+      "id": "pneumonia",
+      "label": "PNEUMONIA",
+      "referral": "none",
+      "followUp": {
+        "afterDays": 3
+      },
+      "message": "Follow up in 3 days."
+    },
+    {
+      "id": "cough_or_cold",
+      "label": "COUGH OR COLD",
+      "referral": "none",
+      "followUp": {
+        "afterDays": 5
+      },
+      "message": "Follow up in 5 days if not improving."
+    },
+    {
+      "id": "not_in_pathway",
+      "label": "No cough or difficult breathing",
+      "referral": "none",
+      "message": "This form does not assess other problems."
+    },
+    {
+      "id": "out_of_scope",
+      "label": "Outside the 2 months to 5 years age range",
+      "referral": "none",
+      "message": "No classification was made."
+    },
+    {
+      "id": "age_unknown",
+      "label": "No date of birth recorded",
+      "referral": "none",
+      "message": "No classification was made."
+    },
+    {
+      "id": "incomplete",
+      "label": "Assessment incomplete",
+      "referral": "none",
+      "message": "Not all answers needed for a classification were given."
+    }
+  ],
+  "ambiguities": [
+    {
+      "id": "A1",
+      "status": "open",
+      "blocking": true,
+      "text": "Is 12 months in the first or second breathing-rate band, and is age measured in completed months?",
+      "sourceRef": {
+        "sourceId": "who_imci_2014",
+        "page": 6
+      }
+    },
+    {
+      "id": "A2",
+      "status": "open",
+      "blocking": false,
+      "text": "What should a CHW do for a child outside the 2 months to 5 years range?",
+      "sourceRef": {
+        "sourceId": "who_imci_2014",
+        "page": 5
+      }
+    },
+    {
+      "id": "A3",
+      "status": "open",
+      "blocking": false,
+      "text": "General danger signs are only asked when cough is present; WHO checks them for every sick child.",
+      "sourceRef": {
+        "sourceId": "who_imci_2014",
+        "page": 5
+      }
+    },
+    {
+      "id": "A4",
+      "status": "open",
+      "blocking": false,
+      "text": "The wheeze bronchodilator trial before classification is not modelled.",
+      "sourceRef": {
+        "sourceId": "who_imci_2014",
+        "page": 6
+      }
+    },
+    {
+      "id": "A5",
+      "status": "open",
+      "blocking": false,
+      "text": "COUGH OR COLD follow-up applies only if not improving; the model schedules it unconditionally.",
+      "sourceRef": {
+        "sourceId": "who_imci_2014",
+        "page": 6
+      }
+    },
+    {
+      "id": "A6",
+      "status": "open",
+      "blocking": false,
+      "text": "No plausible upper bound for breaths per minute is given.",
+      "sourceRef": {
+        "sourceId": "who_imci_2014",
+        "page": 6
+      }
+    },
+    {
+      "id": "A7",
+      "status": "open",
+      "blocking": false,
+      "text": "The chart booklet targets facility health workers; CHW suitability of chest indrawing and stridor assessment is undecided."
+    },
+    {
+      "id": "A8",
+      "status": "open",
+      "blocking": false,
+      "text": "Age comes from the contact's date of birth; the form stops if it is missing."
+    }
+  ]
+}

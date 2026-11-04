@@ -1,0 +1,27 @@
+{
+  "name": "@cht-nocode/drafter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Role 3: drafts a cited LogicModel v1 from one public guideline with Amazon Bedrock, or returns explicit blockers",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "practice": "node src/cli.ts --mode practice --recorded test/fixtures/recorded/good.json --out /tmp/drafter-practice",
+    "live": "node src/cli.ts --mode live --out /tmp/drafter-live",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "3.1154.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "~5.9.3"
+  }
+}
