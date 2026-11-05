@@ -35,6 +35,8 @@ Ripple is a hackathon prototype for turning a product owner's request and public
 
 ## Startup guide
 
+<img width="3024" height="1514" alt="image" src="https://github.com/user-attachments/assets/e2e28dfd-74fe-4034-adc3-6c8c4f132f44" />
+
 Use Node.js 22.18 or later. Run the commands below from the repository root.
 
 | What you want to test | Start here | Where the request goes |
