@@ -18,6 +18,8 @@ function project(): string {
   writeFileSync(join(root, 'convert.log'), `log ${Math.random()}`);
   mkdirSync(join(root, 'shiv'));
   writeFileSync(join(root, 'shiv/cache'), String(Math.random()));
+  mkdirSync(join(root, 'node_modules/.cache'), { recursive: true });
+  writeFileSync(join(root, 'node_modules/.cache/.eslintcache'), String(Math.random()));
   return root;
 }
 
@@ -27,7 +29,7 @@ describe('deterministic package', () => {
     assert.equal(sha256(deterministicTgz(root)), sha256(deterministicTgz(root)));
   });
 
-  it('mtimes, logs and the shiv cache do not change the hash', () => {
+  it('mtimes, logs and the shiv and eslint caches do not change the hash', () => {
     const a = project();
     const b = project();
     utimesSync(join(b, 'tasks.js'), new Date(1000), new Date(1000));
@@ -71,6 +73,7 @@ describe('deterministic package', () => {
     assert.equal(bytes, canonicalJson(JSON.parse(bytes)));
     assert.ok(manifest.files.some((f) => f.path === 'forms/app/f.xml'));
     assert.ok(!manifest.files.some((f) => f.path.startsWith('shiv')));
+    assert.ok(!manifest.files.some((f) => f.path.startsWith('node_modules')));
     assert.deepEqual(manifest.logs, [{ path: 'convert.log', sha256: sha256('x') }]);
   });
 });
@@ -126,6 +129,24 @@ describe('container flags', () => {
     assert.deepEqual(JSON.parse(output), ['--existing', '--no-sandbox']);
   });
 
+  it('the image preload also patches a harness loaded by absolute path, and only its entry file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'preload-'));
+    const moduleDir = join(root, 'node_modules/cht-conf-test-harness');
+    mkdirSync(join(moduleDir, 'src'), { recursive: true });
+    writeFileSync(join(moduleDir, 'package.json'), '{"main":"./src/harness.js","version":"5.0.4"}');
+    writeFileSync(join(moduleDir, 'src/harness.js'), `module.exports = class {
+      options = {};
+      start() { return this.options.args; }
+    };`);
+    const script = join(root, 'run.cjs');
+    writeFileSync(script, `require('cht-conf-test-harness/package.json');
+      const Harness = require(require.resolve('cht-conf-test-harness'));
+      console.log(JSON.stringify(new Harness().start()));`);
+    const preload = fileURLToPath(new URL('../../build-image/harness-no-sandbox.cjs', import.meta.url));
+    const output = execFileSync(process.execPath, ['--require', preload, script], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), ['--no-sandbox']);
+  });
+
   it('the image preload fails closed if the harness has no start()', () => {
     const root = mkdtempSync(join(tmpdir(), 'preload-'));
     const moduleDir = join(root, 'node_modules/cht-conf-test-harness');
@@ -138,7 +159,7 @@ describe('container flags', () => {
   });
 
   it('verify adds no capabilities, and /project is read-only', () => {
-    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', logicModelHash: 'e', inputHash: 'i', hasGoldenCases: false }, 'n');
+    const args = verifyArgs({ image: 'b', projectDir: '/p', inDir: '/in-dir', verifierDir: '/v', outDir: '/o', packageHash: 'p', compileArtifactHash: 'a', logicModelHash: 'l', inputHash: 'i' }, 'n');
     hasAll(args, shared);
     assert.ok(!args.includes('--cap-add'));
     assert.ok(!args.includes('SYS_ADMIN'));

@@ -53,7 +53,29 @@ async function run(payload: Record<string, unknown>) {
 
 const compiled = await run(h.payload({ logicModelHash: hash, snapshotUri }));
 
-async function verify(extra: Record<string, unknown>) {
+// Says why a report didn't pass. verificationPassed=false is a valid outcome, so the run
+// carries on, but the reason needs to be visible.
+function explainResult(label: string, passed: unknown, report: any) {
+  console.log(`== ${label}: verificationPassed=${String(passed)} coverageComplete=${String(report.coverageComplete)} ==`);
+  if (passed === true) return;
+  console.log(`evaluator: used=${String(report.evaluator.used)} reason=${String(report.evaluator.reason)}`);
+  for (const item of report.integrityChecks.filter((check: { ok: boolean }) => !check.ok)) {
+    console.log(`failed integrity check ${item.name}: ${item.detail}`);
+  }
+  const counts: Record<string, number> = {};
+  for (const item of report.cases) counts[item.status] = (counts[item.status] ?? 0) + 1;
+  console.log(`cases by status: ${JSON.stringify(counts)}`);
+  const bad = report.cases.filter((item: { status: string }) => item.status !== 'pass');
+  for (const item of bad.slice(0, 10)) {
+    console.log(`case ${item.id} (${item.status}): ${JSON.stringify({ failureDetail: item.failureDetail, branchId: item.branchId, golden: item.golden, evaluator: item.evaluator, actual: item.actual, harnessOutput: item.harnessOutput }).slice(0, 800)}`);
+  }
+  if (bad.length > 10) console.log(`... and ${bad.length - 10} more cases`);
+  for (const item of report.coverage.uncoveredBranches) console.log(`uncovered branch ${item.id}: ${item.reason}`);
+  if (report.coverage.sampleWarning) console.log(`coverage warning: ${report.coverage.sampleWarning}`);
+  for (const item of report.disagreements.slice(0, 10)) console.log(`disagreement: ${JSON.stringify(item).slice(0, 500)}`);
+}
+
+async function verify(label: string, extra: Record<string, unknown>) {
   const payload: Record<string, unknown> = h.payload({
     jobType: 'VERIFY_BUILD', logicModelHash: hash, snapshotUri, compileJobId: 'compile-e2e', packageUri: compiled.packageUri,
     packageHash: compiled.packageHash, compileArtifactHash: compiled.compileArtifactHash, manifestHash: compiled.manifestHash, ...extra,
@@ -63,11 +85,11 @@ async function verify(extra: Record<string, unknown>) {
   const report = JSON.parse((await h.artifacts.get(job.reportUri)).toString('utf8'));
   const check = (name: string) => (report.integrityChecks as { name: string; ok: boolean; detail: string }[]).find((item) => item.name === name);
 
+  explainResult(label, job.verificationPassed, report);
   assert.equal(job.reportVersion, '2.3.0');
-  assert.equal(check('logicModelHash')?.ok, true, check('logicModelHash')?.detail);
-  assert.equal(check('inputHash')?.ok, true, check('inputHash')?.detail);
-  assert.equal(check('compileArtifactHash')?.ok, true, check('compileArtifactHash')?.detail);
-  assert.equal(check('toolVersionsKnown')?.ok, true, check('toolVersionsKnown')?.detail);
+  for (const name of ['logicModelHash', 'inputHash', 'compileArtifactHash', 'compileArtifactHashExpected', 'toolVersionsKnown']) {
+    assert.equal(check(name)?.ok, true, `${name}: ${check(name)?.detail}`);
+  }
   assert.equal(report.references.logicModelHash, hash);
   assert.notEqual(report.references.logicModelHash, compiled.inputHash);
   assert.equal(report.packageHash, compiled.packageHash);
@@ -75,12 +97,12 @@ async function verify(extra: Record<string, unknown>) {
   return report;
 }
 
-const plain = await verify({});
+const plain = await verify('without golden cases', {});
 assert.equal(plain.goldenCasesHash, null);
 assert.ok(!plain.cases.some((item: { id: string }) => item.id.startsWith('golden/')));
 
 const golden = readFileSync(GOLDEN_FILE);
-const withGolden = await verify({ goldenCasesUri: h.artifacts.seed('sources/golden-cases.json', golden), goldenCasesHash: `sha256:${sha256(golden)}` });
+const withGolden = await verify('with golden cases', { goldenCasesUri: h.artifacts.seed('sources/golden-cases.json', golden), goldenCasesHash: `sha256:${sha256(golden)}` });
 assert.equal(withGolden.goldenCasesHash, sha256(golden));
 assert.equal((withGolden.integrityChecks as { name: string; ok: boolean }[]).find((item) => item.name === 'goldenCasesHashExpected')?.ok, true);
 assert.ok(withGolden.cases.some((item: { id: string }) => item.id.startsWith('golden/')));

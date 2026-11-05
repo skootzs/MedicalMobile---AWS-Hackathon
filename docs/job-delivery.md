@@ -35,7 +35,8 @@ disagree with the table:
   `dynamodb.NewImage.payload` from it and unmarshalls it.
 - **Events Pipe** (Tier 3): DynamoDB Stream → EventBridge Pipe, filtered to
   `MODIFY` on `JOB#` `META` items where `status` changed → the `job-events`
-  queue, sending `{ requestId, jobId, status, attempt }`.
+  queue, sending `{ requestId, jobId, status, attempt }`. `attempt` is a numeric string,
+  because Pipes renders stream values as strings and can't convert them without an enrichment step.
 
 **Fallbacks if Pipes don't work out** (ask R7 before switching): a poller in
 the orchestrator for the outbox (runner idempotency makes duplicate sends
@@ -165,7 +166,7 @@ Release approval binds to `packageHash` (exact bytes downloaded) +
 `snapshotHash`, `inputHash`, `compileArtifactHash`, `templateHash`,
 `manifestHash`, `packageHash`.
 
-### Verify stage (R6's verifier @ `90fd841`)
+### Verify stage (R6's verifier @ `e9f70f6`, report 2.3.0)
 
 The verify container runs `node /verifier/dist/run.js` with:
 
@@ -176,18 +177,17 @@ The verify container runs `node /verifier/dist/run.js` with:
 | `TZ` | `Africa/Nairobi` |
 | `PACKAGE_HASH` | the payload's `packageHash`, as bare hex |
 | `COMPILE_ARTIFACT_HASH` | the payload's `compileArtifactHash`, as bare hex |
-| `LOGIC_MODEL_HASH` | the payload's envelope `logicModelHash`, as bare hex. Checked against `manifest.snapshotHash` and echoed into `references.logicModelHash` |
-| `INPUT_HASH` | the runner's hash of `/in/logic.json`, as bare hex. Checked against `manifest.inputHash` |
+| `LOGIC_MODEL_HASH` | R2's envelope hash, as bare hex. R6 checks it against the manifest's `snapshotHash` and echoes it into `references.logicModelHash` |
+| `INPUT_HASH` | the bare model's hash. R6 checks it against the manifest's `inputHash` |
 | `GOLDEN_CASES_FILE` | `/in/golden-cases.json`, only when the job has golden cases |
-| `GOLDEN_CASES_HASH` | the payload's `goldenCasesHash`, as bare hex, only when the job has golden cases |
+| `GOLDEN_CASES_HASH` | that file's hash, only when the job has golden cases |
 
 Read-only mounts: `/project`, `/in` (`logic.json`, plus `golden-cases.json` when present) and
-`/verifier`. `/verifier` has no `node_modules`; the harness comes from the image through
-`NODE_PATH`. Build it with `scripts/build-verifier.sh`.
+`/verifier`. `/verifier` has no `node_modules`; the harness comes from the image. Build it with
+`scripts/build-verifier.sh`. The runner's copy of R6's report schema
+(`runner/src/verification-report.schema.json`) must match the pinned commit, so update them together.
 
-The two hashes stay separate. `LOGIC_MODEL_HASH` is the snapshot envelope, which is what
-R2 compares in `references.logicModelHash`. `INPUT_HASH` is the bare LogicModel, which is
-what `compile-manifest.json` stores as `inputHash`. The runner passes each as bare hex.
+The two hashes stay separate. `LOGIC_MODEL_HASH` is the snapshot envelope. `INPUT_HASH` is the bare LogicModel. The runner passes each as bare hex.
 
 ### R2 alignment
 
@@ -207,11 +207,11 @@ Still open before a hosted job finishes end to end:
 
 | Item | Contract | Next step |
 |---|---|---|
-| `job-events` | Pipe sends `{ requestId, jobId, status, attempt }` | A consumer must call `JobCompletionReconciler`. The reconciler is in-process and does not poll the queue |
+| `job-events` | Pipe sends `{ requestId, jobId, status, attempt }`. `attempt` arrives as a numeric string | A consumer must call `JobCompletionReconciler`, converting `attempt` with `Number()`. The reconciler accepts that string and does not poll the queue |
 | Service actors | Runner records `cht-runner-compile` and `cht-runner-verify` | Register both in `resolveServiceActor`, with the COMPILER and VERIFIER roles |
-| Golden cases | Optional `goldenCasesUri` and `goldenCasesHash` | R2 adds them when it has golden cases. Without them, the verifier runs without golden cases |
+| Golden cases | Optional `goldenCasesUri` and `goldenCasesHash` | R2 adds them when it has an authoritative golden-case object. Without them, verification runs without golden cases and uses the evaluator |
 
-Already aligned: approval records, `sha256:` prefix handling, and `TIMED_OUT` and `EXHAUSTED`, which R2 can read but the runner never writes.
+Already aligned: approval records, `sha256:` prefix handling, and `TIMED_OUT` and `EXHAUSTED`, which R2 can read but the runner never writes. No real R2 job has gone through the runner yet.
 
 ### Pinned compiler commit
 

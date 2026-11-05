@@ -21,11 +21,11 @@ Everything that needs AWS or x86_64 runs on the Kiro workspace, using the ordere
 ## Deploy
 
 ```sh
-scripts/deploy.sh
+TF_VAR_alarm_email=<address-for-error-alarms> scripts/deploy.sh
 ```
 
 This runs `terraform apply` (it shows the plan and asks you to confirm), creates the demo users, and
-writes the gitignored `.env`.
+writes the gitignored `.env`. Confirm the email SNS sends that address, or the alarm won't reach you.
 
 Then:
 

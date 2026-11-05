@@ -132,11 +132,27 @@ echo "== 31-deploy-runner: confirming it's polling =="
 run_on_host verify '
 sleep 45
 systemctl is-active cht-build-runner
-since="$(systemctl show -p ActiveEnterTimestamp --value cht-build-runner)"
-log="$(journalctl -u cht-build-runner --since "$since" --no-pager)"
+log="$(cat /var/log/cht-nocode/runner.log)"
 echo "$log" | tail -n 20
 echo "$log" | grep -q "runner started" || { echo "No runner started line"; exit 1; }
 if echo "$log" | grep -q "runner loop error"; then echo "Runner loop errors found"; exit 1; fi
 ' || fail "the runner is not polling cleanly, see output above"
 
-echo "RESULT: PASS runner $TAG polling on $APP_HOST"
+echo "== 31-deploy-runner: confirming logs reach CloudWatch =="
+LOG_GROUP="$(tf log_group_name)"
+SINCE_MS="$(( ($(date +%s) - 900) * 1000 ))"
+shipped=0
+for _ in $(seq 1 18); do
+  shipped="$(aws logs filter-log-events --region "$AWS_REGION" --log-group-name "$LOG_GROUP" \
+    --log-stream-name-prefix runner- --start-time "$SINCE_MS" --filter-pattern '"runner started"' \
+    --query 'length(events)' --output text)"
+  [ "$shipped" != "0" ] && break
+  sleep 10
+done
+[ "$shipped" != "0" ] || fail "runner logs did not reach $LOG_GROUP within 3 minutes"
+matches="$(aws logs test-metric-filter --region "$AWS_REGION" --filter-pattern '"level=error"' \
+  --log-event-messages 'level=error runner loop error' 'level=info runner started' \
+  --query 'length(matches)' --output text)"
+[ "$matches" = "1" ] || fail "the error alarm's filter pattern matched $matches of 2 test lines, expected 1"
+
+echo "RESULT: PASS runner $TAG polling on $APP_HOST, logs reaching $LOG_GROUP"

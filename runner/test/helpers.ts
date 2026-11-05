@@ -96,6 +96,9 @@ export class FakeStages implements Stages {
     writeFileSync(join(input.workDir, 'app_settings.json'), '{}');
     mkdirSync(join(input.workDir, 'shiv'), { recursive: true });
     writeFileSync(join(input.workDir, 'shiv/cache'), String(Math.random()));
+    // Like cht-conf's eslint cache, which differs on every run.
+    mkdirSync(join(input.workDir, 'node_modules/.cache/eslint-webpack-plugin'), { recursive: true });
+    writeFileSync(join(input.workDir, 'node_modules/.cache/eslint-webpack-plugin/.eslintcache'), String(Math.random()));
     return this.convertResult;
   }
   async verify(input: Parameters<Stages['verify']>[0]) {
@@ -107,6 +110,12 @@ export class FakeStages implements Stages {
     return this.verifyResult;
   }
   async imageDigest(image: string) { return `${image}@sha256:test`; }
+  cleanupCalls: string[] = [];
+  onCleanup: ((dir: string) => void) | undefined;
+  async removeContainerFiles(dir: string) {
+    this.cleanupCalls.push(dir);
+    this.onCleanup?.(dir);
+  }
 }
 
 let messageCounter = 0;

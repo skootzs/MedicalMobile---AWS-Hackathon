@@ -10,7 +10,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="$1"
 COMPILER_COMMIT="${COMPILER_COMMIT:-7f488e6}"
-VERIFIER_COMMIT="${VERIFIER_COMMIT:-90fd841}"
+VERIFIER_COMMIT="${VERIFIER_COMMIT:-e9f70f6}"
 WORK_PARENT="$(mktemp -d)"
 VERIFIER_WORKTREE="$WORK_PARENT/verifier-worktree"
 CONTEXT="$WORK_PARENT/context"

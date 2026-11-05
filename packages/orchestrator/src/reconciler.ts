@@ -30,8 +30,8 @@ export interface JobCompletionNotification {
   jobType?: 'COMPILE_LOGIC' | 'VERIFY_BUILD';
   /** Hint only. The pipe includes it; the reconciler re-reads JOB/META. */
   status?: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
-  /** R7's attempt counter from the event; the reconciler re-reads the record. */
-  attempt: number;
+  /** R7's attempt counter. The events Pipe sends it as a numeric string. */
+  attempt: number | string;
 }
 export type ReconcileStatus =
   | 'RECONCILED' | 'DUPLICATE' | 'STALE' | 'BLOCKED' | 'REJECTED' | 'UNKNOWN_JOB' | 'STORAGE_FAILURE';
@@ -57,7 +57,15 @@ export interface ReconcilerDependencies {
 const defaultEventId = (jobType: string, jobId: string, attempt: number) =>
   `result-${jobType === 'VERIFY_BUILD' ? 'v' : 'c'}-${createHash('sha256').update(`${jobType}:${jobId}:${attempt}`).digest('hex')}`;
 const id = (v: unknown): v is string => typeof v === 'string' && !!v.trim() && v.trim() === v && v.length <= 100;
-const attemptOk = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 1;
+/** Pipes renders every stream number as a string. Accept 1 and "1"; reject 0, "01", and "1.5". */
+function attemptNumber(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 1) return v;
+  if (typeof v === 'string' && /^[1-9][0-9]*$/.test(v)) {
+    const n = Number(v);
+    return Number.isSafeInteger(n) ? n : null;
+  }
+  return null;
+}
 
 /**
  * The R7 consumer calls reconcile() with a verified service principal. The
@@ -78,7 +86,8 @@ export class JobCompletionReconciler {
   async reconcile(notification: JobCompletionNotification, principal: unknown): Promise<ReconcileResult> {
     const reply = (status: ReconcileStatus, jobType: ReconcileResult['jobType'], reason: string, workflowVersion: number | null = null): ReconcileResult =>
       ({ status, jobType, reason, workflowVersion });
-    if (!notification || !id(notification.jobId) || !attemptOk(notification.attempt)) {
+    const attempt = notification ? attemptNumber(notification.attempt) : null;
+    if (!notification || !id(notification.jobId) || attempt === null) {
       return reply('REJECTED', null, 'INVALID_NOTIFICATION');
     }
     let requestId = notification.requestId;
@@ -88,7 +97,7 @@ export class JobCompletionReconciler {
       catch { return reply('STORAGE_FAILURE', null, 'SERVICE_UNAVAILABLE'); }
       if (!id(requestId)) return reply('UNKNOWN_JOB', null, 'JOB_NOT_FOUND');
     }
-    const { jobId, attempt } = notification;
+    const { jobId } = notification;
     const eventId = (this.#deps.resultEventId ?? defaultEventId);
     try {
       // Confirm the authoritative job type from R2's stored intent (not the hint).

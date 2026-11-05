@@ -37,10 +37,9 @@ variable "bedrock_crosscheck_model_id" {
   default     = "TODO-confirm-bedrock-model-id"
 }
 
-variable "budget_alert_email" {
-  description = "Email address for the error-rate CloudWatch alarm. Not used to create a Budget resource (the hackathon already manages one)."
+variable "alarm_email" {
+  description = "Email address for the error-rate CloudWatch alarm. Set it with TF_VAR_alarm_email."
   type        = string
-  default     = "TODO@example.com"
 }
 
 variable "lease_seconds" {

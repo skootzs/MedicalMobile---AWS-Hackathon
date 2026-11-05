@@ -129,13 +129,14 @@ export interface JobResult {
 }
 
 // Thin; R2 reads the job item for details. The events Pipe sends only requestId, jobId,
-// status and attempt.
+// status and attempt. Pipes renders every stream value as a string, so attempt arrives as a
+// numeric string: use Number(event.attempt).
 export interface JobEvent {
   contractVersion?: typeof CONTRACT_VERSION;
   requestId: string;
   jobId: string;
   status: JobStatus;
-  attempt: number;
+  attempt: number | string;
 }
 
 // --- JSON Schemas (additionalProperties: false; every schema carries contractVersion) ---
@@ -329,7 +330,7 @@ export const jobEventSchema: JSONSchemaType<JobEvent> = {
     requestId: { type: 'string', minLength: 1 },
     jobId: { type: 'string', minLength: 1 },
     status: { type: 'string', enum: ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED'] },
-    attempt: { type: 'integer', minimum: 1 },
+    attempt: { type: ['integer', 'string'], minimum: 1, pattern: '^[1-9][0-9]*$' },
   },
   required: ['requestId', 'jobId', 'status', 'attempt'],
 } as unknown as JSONSchemaType<JobEvent>;

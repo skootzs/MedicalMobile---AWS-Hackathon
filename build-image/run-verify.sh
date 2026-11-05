@@ -1,8 +1,8 @@
 #!/bin/sh
 # Stage 6 (verify), run inside BUILD_IMAGE. /project is the already-converted package from
 # COMPILE_LOGIC, so nothing is reconverted here. The runner passes CHT_CONFIG_DIR, OUT_DIR,
-# TZ, PACKAGE_HASH, COMPILE_ARTIFACT_HASH, LOGIC_MODEL_HASH and, for jobs with golden
-# cases, GOLDEN_CASES_FILE.
+# TZ, PACKAGE_HASH, COMPILE_ARTIFACT_HASH, LOGIC_MODEL_HASH, INPUT_HASH and, for jobs with
+# golden cases, GOLDEN_CASES_FILE and GOLDEN_CASES_HASH.
 #
 # Exit codes: 0 passed, 1 failed with a valid report, 2 runner error.
 VERIFIER_ENTRYPOINT="/verifier/dist/run.js"
@@ -16,6 +16,8 @@ export TZ="${TZ:-Africa/Nairobi}"
 export NODE_PATH="/build-image/node_modules"
 # The verifier's fallback if `cht --version` can't run. Matches the image's pin.
 export CHT_CONF_VERSION="${CHT_CONF_VERSION:-6.6.1}"
+# The verifier's Python evaluator sits on a read-only mount.
+export PYTHONDONTWRITEBYTECODE=1
 export CHT_CONFIG_DIR OUT_DIR
 
 # The verifier writes verification.log itself, so its console output goes elsewhere first.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { before, beforeEach, describe, it } from 'node:test';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { sha256 } from '../src/hashing.ts';
@@ -8,6 +8,7 @@ import { marshall } from '@aws-sdk/util-dynamodb';
 import { decodeBody, validatePayload } from '../src/worker.ts';
 import { verifyArgs } from '../launch-build.ts';
 import { canonicalJson } from '../src/hashing.ts';
+import { validateJobEvent } from '../src/generated/handoffs.ts';
 import { ARTIFACT_HASH, createTable, Harness, INPUT_HASH, LOGIC, LOGIC_HASH, OK } from './helpers.ts';
 
 let db: DynamoDBDocumentClient;
@@ -38,13 +39,11 @@ async function verifyPayload(overrides: Record<string, unknown> = {}) {
 const TESTED_DIR_HASH = sha256('tested');
 
 const report = (p: Record<string, unknown>, passed: boolean) => ({
-  schemaVersion: '2.3.0', version: '2.3.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z',
-  asOf: '2026-11-04T00:00:00.000Z',
-  evaluator: { used: false, reason: null, source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-11-04T00:00:00.000Z' },
-  passed, coverageComplete: true,
+  schemaVersion: '2.3.0', version: '2.3.0', packageHash: p.packageHash as string, generatedAt: '2026-11-04T00:00:00.000Z', asOf: '2026-02-15', passed, coverageComplete: true,
+  evaluator: { used: false, reason: 'none', source: null, root: null, evaluatorHash: null, pythonVersion: null, jsonschemaVersion: null, logicModelSource: null, asOf: '2026-02-15' },
   toolVersions: { node: 'v20', chtConf: '6.6.1', chtConfTestHarness: '5.0.4', chromiumRevision: '1', python: 'Python 3.11.2' },
   run: { command: ['node', 'run.js'], tz: 'Africa/Nairobi', seed: null, fixedClock: '2026-02-15' },
-  references: { snapshotId: null, logicModelHash: INPUT_HASH, revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash, expectedCompileArtifactHash: null },
+  references: { snapshotId: null, logicModelHash: sha256('envelope'), revision: null, clinicalApprovalId: null, compilationJobId: null, packageHash: p.packageHash, expectedCompileArtifactHash: p.compileArtifactHash },
   compileArtifactHash: p.compileArtifactHash as string, testedDirHash: TESTED_DIR_HASH, patientSetHash: sha256('patients'), goldenCasesHash: null, integrityChecks: [],
   coverage: { method: 'observed-outcome', branchSource: 'manifest', sampleWarning: null, totalBranches: 0, coveredBranches: 0, coveredBranchIds: [], coveredViaBlockedSubmission: [], uncoveredBranchIds: [], uncoveredBranches: [] },
   cases: [], disagreements: [],
@@ -256,6 +255,14 @@ describe('fails closed', () => {
     assert.equal(decodeBody(JSON.stringify(record({ BOGUS: 'x' }))), undefined);
     // What the old input template produced.
     assert.equal(decodeBody('{M:{jobId:{S:smoke-1},revision:{N:1}}}'), undefined);
+  });
+
+  it('accepts the job event the events Pipe sends', () => {
+    const event = { requestId: 'r', jobId: 'j', status: 'RUNNING' };
+    assert.ok(validateJobEvent({ ...event, attempt: '2' }));
+    assert.ok(validateJobEvent({ ...event, attempt: 2 }));
+    assert.ok(!validateJobEvent({ ...event, attempt: 'two' }));
+    assert.ok(!validateJobEvent({ ...event, attempt: 0 }));
   });
 
   it('accepts payloads still on contract 1.0.0 and rejects unknown versions', () => {
@@ -499,17 +506,16 @@ describe('VERIFY_BUILD', () => {
     assert.equal(await h.run(payload), 'RETRYING');
   });
 
-  it('gives the verifier the envelope hash and the bare inputHash separately', async () => {
+  it('gives the verifier the checked logic, the envelope hash and the inputHash', async () => {
     const payload: Record<string, unknown> = await verifyPayload();
     const packageHex = String(payload.packageHash);
     h.stages.report = report(payload, true);
     assert.equal(await h.run({ ...payload, packageHash: `sha256:${packageHex}` }), 'SUCCEEDED');
     const input = h.stages.verifyInputs[0]!;
     assert.equal(input.inputHash, INPUT_HASH);
-    assert.equal(input.logicModelHash, String(payload.logicModelHash).replace(/^sha256:/, ''));
+    assert.equal(input.logicModelHash, LOGIC_HASH.slice('sha256:'.length));
     assert.notEqual(input.inputHash, input.logicModelHash);
     assert.equal(input.packageHash, packageHex);
-    assert.equal(input.hasGoldenCases, false);
     assert.equal(input.goldenCasesHash, undefined);
     assert.deepEqual(h.stages.verifyFiles[0], { 'logic.json': canonicalJson(LOGIC) });
   });
@@ -535,7 +541,6 @@ describe('VERIFY_BUILD', () => {
     const payload = await verifyPayload({ goldenCasesUri: h.artifacts.seed('sources/golden.json', golden), goldenCasesHash: `sha256:${sha256(golden)}` });
     h.stages.report = report(payload, true);
     assert.equal(await h.run(payload), 'SUCCEEDED');
-    assert.equal(h.stages.verifyInputs[0]!.hasGoldenCases, true);
     assert.equal(h.stages.verifyInputs[0]!.goldenCasesHash, sha256(golden));
     assert.equal(h.stages.verifyFiles[0]!['golden-cases.json'], golden);
   });
@@ -555,33 +560,50 @@ describe('VERIFY_BUILD', () => {
 
   it('builds the verify container with the contract env and read-only mounts', () => {
     const base = { image: 'i', projectDir: '/p', inDir: '/n', verifierDir: '/v', outDir: '/o', packageHash: 'pkg', compileArtifactHash: 'art', logicModelHash: 'envelope', inputHash: 'input' };
-    const args = verifyArgs({ ...base, hasGoldenCases: false }, 'name');
+    const args = verifyArgs(base, 'name');
     for (const expected of ['PACKAGE_HASH=pkg', 'COMPILE_ARTIFACT_HASH=art', 'LOGIC_MODEL_HASH=envelope', 'INPUT_HASH=input', 'CHT_CONFIG_DIR=/project', 'OUT_DIR=/out', 'TZ=Africa/Nairobi', '/p:/project:ro', '/n:/in:ro', '/v:/verifier:ro']) {
       assert.ok(args.includes(expected), expected);
     }
     assert.ok(!args.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
-    assert.ok(!args.includes('GOLDEN_CASES_HASH=golden'));
-    const withGolden = verifyArgs({ ...base, hasGoldenCases: true, goldenCasesHash: 'golden' }, 'name');
+    assert.ok(!args.some((arg) => arg.startsWith('GOLDEN_CASES_HASH=')));
+    const withGolden = verifyArgs({ ...base, goldenCasesHash: 'golden' }, 'name');
     assert.ok(withGolden.includes('GOLDEN_CASES_FILE=/in/golden-cases.json'));
     assert.ok(withGolden.includes('GOLDEN_CASES_HASH=golden'));
   });
 
-  it('a job dir it cannot clean up does not change the outcome', async () => {
-    const payload = await verifyPayload();
+  // Stands in for a uid 1000 directory: this user can't remove what's inside it.
+  function lockOutDir(payload: Record<string, unknown>) {
     h.stages.report = report(payload, true);
     const fakeVerify = h.stages.verify.bind(h.stages);
-    let locked = '';
+    const paths = { locked: '', attemptDir: '' };
     h.stages.verify = async (input) => {
-      locked = join(input.outDir, 'locked');
-      mkdirSync(locked);
-      writeFileSync(join(locked, 'file'), 'x');
-      chmodSync(locked, 0o555);
+      paths.locked = join(input.outDir, 'locked');
+      paths.attemptDir = dirname(input.outDir);
+      mkdirSync(paths.locked);
+      writeFileSync(join(paths.locked, 'file'), 'x');
+      chmodSync(paths.locked, 0o555);
       return fakeVerify(input);
     };
+    return paths;
+  }
+
+  it('removes an attempt dir with files only the container user can remove', async () => {
+    const payload = await verifyPayload();
+    const paths = lockOutDir(payload);
+    h.stages.onCleanup = () => chmodSync(paths.locked, 0o755);
+    assert.equal(await h.run(payload), 'SUCCEEDED');
+    assert.deepEqual(h.stages.cleanupCalls, [paths.attemptDir]);
+    assert.equal(existsSync(paths.attemptDir), false);
+  });
+
+  it('an attempt dir it cannot clean up does not change the outcome', async () => {
+    const payload = await verifyPayload();
+    const paths = lockOutDir(payload);
     try {
       assert.equal(await h.run(payload), 'SUCCEEDED');
+      assert.equal((await h.job(payload.jobId)).status, 'SUCCEEDED');
     } finally {
-      chmodSync(locked, 0o755);
+      chmodSync(paths.locked, 0o755);
     }
   });
 

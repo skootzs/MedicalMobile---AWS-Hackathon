@@ -65,6 +65,8 @@ test('rejects an invalid notification without touching any service', async () =>
   const r = new JobCompletionReconciler(deps());
   assert.equal((await r.reconcile({ requestId: '', jobId: 'compile-x', attempt: 1 }, 'svc')).status, 'REJECTED');
   assert.equal((await r.reconcile({ requestId: 'req-1', jobId: 'compile-x', attempt: 0 }, 'svc')).status, 'REJECTED');
+  assert.equal((await r.reconcile({ requestId: 'req-1', jobId: 'compile-x', attempt: '2' }, 'svc')).status, 'RECONCILED');
+  assert.equal((await r.reconcile({ requestId: 'req-1', jobId: 'compile-x', attempt: '01' }, 'svc')).status, 'REJECTED');
 });
 
 test('maps ingestion statuses to reconcile statuses (incl. fail-closed ones)', async () => {

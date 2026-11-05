@@ -13,8 +13,10 @@ until these are wired up. Current status of each is in
 [job-delivery.md](./job-delivery.md#r2-alignment-still-needed).
 
 1. **Consume `job-events`.** Nothing reads this queue yet. Each message is
-   `{ requestId, jobId, status, attempt }`. Read it, call R2's reconciler (`reconciler.ts`,
-   an in-process service), and delete the message. Without this, R2 never learns a job finished.
+   `{ requestId, jobId, status, attempt }`. `attempt` arrives as a numeric string, such as `"1"`,
+   because Pipes renders stream values as strings, and R2 needs a number, so pass `Number(attempt)`.
+   Read it, call R2's reconciler (`reconciler.ts`, an in-process service), and delete the message.
+   Without this, R2 never learns a job finished.
 2. **Register the runner's service actors with R2.** The runner records itself as
    `cht-runner-compile` and `cht-runner-verify`. R2 needs both in `resolveServiceActor`, with the
    COMPILER and VERIFIER roles, and it needs to supply its `CompilationArtifactVerifier`.
@@ -56,7 +58,7 @@ Use `env_file: /etc/cht-nocode/env` in compose to get the shared values.
 | `BUILD_IMAGE` | runner | Installer (the ECR `build-image` tag) |
 | `COMPILER_DIR`, `COMPILER_COMMIT` | runner | Installer (`7f488e6`) |
 | `TEMPLATE_DIR` | runner | Installer |
-| `VERIFIER_DIR`, `VERIFIER_COMMIT` | runner | Installer (`90fd841`) |
+| `VERIFIER_DIR`, `VERIFIER_COMMIT` | runner | Installer (`e9f70f6`) |
 | `RUNNER_WORK_DIR` | runner | Installer |
 | `CHT_CONF_VERSION` | runner | Optional, defaults to `6.6.1` |
 | `LEASE_SECONDS` | runner | Optional, defaults to `900` |
@@ -114,8 +116,7 @@ Get the instance ID with `terraform -chdir=infra/terraform output -raw app_host_
 | 8080 on the app host | Orchestrator or UI, whichever you publish | Reached only through the port forward |
 | None | Runner | It only makes outbound calls |
 
-- **Outbound is 443 only.** AWS APIs, ECR and Docker Hub work. Anything on port 80 fails, and that
-  includes Ubuntu's default apt mirrors, so install nothing on the host with `apt` and build images on Kiro.
+- **Outbound is ports 443 and 80 only.** AWS APIs, ECR, Docker Hub and apt work. Other ports fail. Build images on Kiro.
 - **Containers can use the instance role.** IMDSv2's hop limit is 2, so don't pass AWS keys.
 - **Hosts stop at 23:00 America/Los_Angeles.** Use a restart policy (`restart: unless-stopped`) so
   the stack comes back when a host starts again. The runner restarts on its own.
@@ -144,7 +145,8 @@ The orchestrator, UI and runner share this one role.
 ## What the runner expects
 
 The runner is a systemd service on the app host (`cht-build-runner`), not part of compose. Check it
-with `systemctl status cht-build-runner` and `journalctl -u cht-build-runner`.
+with `systemctl status cht-build-runner`. It logs to `/var/log/cht-nocode/runner.log`, which is shipped
+to `/cht-nocode/app` in a `runner-<instance-id>` stream.
 
 | It needs | Details |
 |---|---|

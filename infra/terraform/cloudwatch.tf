@@ -10,7 +10,8 @@ resource "aws_cloudwatch_log_group" "app" {
 resource "aws_cloudwatch_log_metric_filter" "errors" {
   name           = "cht-nocode-error-count"
   log_group_name = aws_cloudwatch_log_group.app.name
-  pattern        = "level=error"
+  # A term with non-alphanumeric characters has to be quoted to match.
+  pattern = "\"level=error\""
 
   metric_transformation {
     name      = "ErrorCount"
@@ -27,7 +28,7 @@ resource "aws_sns_topic" "alerts" {
 resource "aws_sns_topic_subscription" "alerts_email" {
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
-  endpoint  = var.budget_alert_email
+  endpoint  = var.alarm_email
 }
 
 resource "aws_cloudwatch_metric_alarm" "error_rate" {

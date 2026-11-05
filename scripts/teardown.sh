@@ -53,6 +53,8 @@ if [ "$count" -gt 0 ]; then
 fi
 
 echo "== teardown: terraform destroy =="
+# Destroy has no use for this address, but Terraform still requires a value.
+export TF_VAR_alarm_email="${TF_VAR_alarm_email:-unused@example.com}"
 terraform -chdir="$TF_DIR" destroy
 
 echo "RESULT: PASS infrastructure destroyed"

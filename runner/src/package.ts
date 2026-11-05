@@ -3,9 +3,11 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { canonicalJson, sha256 } from './hashing.ts';
 
-// shiv/ is cht-conf's Python unpack cache (SHIV_ROOT) and convert.log may vary between
-// runs; neither is project content, and either would break packageHash determinism.
-const EXCLUDED_FROM_PACKAGE = new Set(['shiv', 'convert.log']);
+// None of these is project content, and each varies between runs, which would break
+// packageHash determinism: shiv/ is cht-conf's Python unpack cache (SHIV_ROOT), convert.log
+// has run output, and node_modules/ holds only cht-conf's eslint cache, which records file
+// mtimes and a varying file order.
+const EXCLUDED_FROM_PACKAGE = new Set(['shiv', 'convert.log', 'node_modules']);
 
 export interface PackageFile {
   path: string;

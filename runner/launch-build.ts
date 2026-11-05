@@ -29,7 +29,7 @@ export interface ConvertStageInput {
 export interface VerifyStageInput {
   image: string;
   projectDir: string;
-  inDir: string; // holds logic.json, and golden-cases.json when hasGoldenCases is set
+  inDir: string; // holds logic.json, and golden-cases.json when goldenCasesHash is set
   verifierDir: string;
   outDir: string;
   packageHash: string;
@@ -38,8 +38,7 @@ export interface VerifyStageInput {
   logicModelHash: string;
   /** Bare hex of the LogicModel. Passed as INPUT_HASH and checked against manifest.inputHash. */
   inputHash: string;
-  hasGoldenCases: boolean;
-  /** Bare hex of the golden file, passed as GOLDEN_CASES_HASH when the job has golden cases. */
+  /** Bare hex of the golden file. When set, the verifier receives GOLDEN_CASES_FILE and GOLDEN_CASES_HASH. */
   goldenCasesHash?: string;
 }
 
@@ -83,8 +82,9 @@ export function verifyArgs(input: VerifyStageInput, name: string): string[] {
     '-e', `LOGIC_MODEL_HASH=${input.logicModelHash}`,
     // Bare model hash. R6 checks this against compile-manifest.json inputHash.
     '-e', `INPUT_HASH=${input.inputHash}`,
-    ...(input.hasGoldenCases ? ['-e', 'GOLDEN_CASES_FILE=/in/golden-cases.json'] : []),
-    ...(input.goldenCasesHash ? ['-e', `GOLDEN_CASES_HASH=${input.goldenCasesHash}`] : []),
+    ...(input.goldenCasesHash
+      ? ['-e', 'GOLDEN_CASES_FILE=/in/golden-cases.json', '-e', `GOLDEN_CASES_HASH=${input.goldenCasesHash}`]
+      : []),
     '-v', `${input.projectDir}:/project:ro`,
     '-v', `${input.inDir}:/in:ro`,
     '-v', `${input.verifierDir}:/verifier:ro`,
@@ -125,6 +125,7 @@ export interface Stages {
   convert(input: ConvertStageInput, signal: AbortSignal, timeoutMs: number): Promise<StageResult>;
   verify(input: VerifyStageInput, signal: AbortSignal, timeoutMs: number): Promise<StageResult>;
   imageDigest(image: string): Promise<string | undefined>;
+  removeContainerFiles(dir: string, image: string): Promise<void>;
 }
 
 export const dockerStages: Stages = {
@@ -134,6 +135,18 @@ export const dockerStages: Stages = {
   async imageDigest(image) {
     const result = await runInspect(image);
     return result || undefined;
+  },
+  // Stage containers leave uid 1000 files, which a host user with another uid can't remove,
+  // so a container with that uid removes them. Files it doesn't own are left to the caller.
+  removeContainerFiles(dir, image) {
+    return new Promise((resolve) => {
+      const child = spawn('docker', [
+        'run', '--rm', ...BASE_FLAGS, '-v', `${dir}:/clean`, image,
+        'sh', '-c', 'chmod -R u+rwX /clean 2>/dev/null; find /clean -mindepth 1 -delete 2>/dev/null; true',
+      ], { stdio: 'ignore' });
+      child.on('error', () => resolve());
+      child.on('close', () => resolve());
+    });
   },
 };
 
