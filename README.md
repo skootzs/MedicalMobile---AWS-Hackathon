@@ -93,6 +93,10 @@ scripts/kiro/32-cost-report.sh
 Bedrock calls through shared inference profiles aren't tagged, so tagged spend alone understates the
 cost. The report also prints the account's Bedrock line for comparison.
 
+Measured on the hackathon account at 5:00 PM Pacific on 4 Nov 2026, for 1 Oct 2026 through 5 Nov 2026. Cost Explorer lags by about a day. Tagged `project=cht-nocode` spend was $0.00. The whole account was $5.82: EC2 compute $4.34, CloudTrail $0.66, CloudWatch $0.29, EC2 other $0.25, VPC $0.21, Secrets Manager $0.05, GuardDuty $0.01. No Bedrock line appeared at or above $0.01.
+
+In us-west-2, Claude Haiku 4.5 was 52 calls, 90,529 input tokens and 45,824 output tokens. Claude Sonnet 4.6 was 37 calls, 140,229 input tokens and 98,724 output tokens. The same account also recorded Luma and Stability image calls; those are not this pathway. Invocation logging is off, so these counts come from CloudWatch metrics. There is no DynamoDB table named `cht-nocode` in that account, so the report could not divide any of this by a pathway run. The team budget is $400 and the sandbox budget is $500. $5.82 is the whole account, not a per-run figure.
+
 ## Intake
 
 See the [intake implementation guide](docs/intake-implementation-guide.md) for the original phase-one requirements and the phase-two Bedrock screening, preview, confirmation, and handoff plan.
