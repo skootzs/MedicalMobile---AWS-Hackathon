@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "start": "npm run start -w packages/intake",
-    "test": "node --test packages/intake/*.test.js"
+    "test": "node --test packages/intake/*.test.js packages/ui/test/*.test.js"
   },
   "engines": {
     "node": ">=22"

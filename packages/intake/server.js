@@ -1,3 +1,4 @@
+import { createUiResponder } from '../ui/serve.js'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
@@ -26,15 +27,7 @@ const verifier = CognitoJwtVerifier.create({
 const store = createStore({ table: INTAKE_TABLE, bucket: INTAKE_BUCKET })
 const screening = screeningConfig()
 const review = createReview({ store, registry, config: screening, screen: screening.enabled ? createScreener(screening) : null })
-const assets = new Map([
-  ['/', ['index.html', 'text/html; charset=utf-8']],
-  ['/requests', ['index.html', 'text/html; charset=utf-8']],
-  ['/requests/new', ['index.html', 'text/html; charset=utf-8']],
-  ['/signed-out', ['index.html', 'text/html; charset=utf-8']],
-  ['/styles.css', ['src/styles.css', 'text/css; charset=utf-8']],
-  ['/tracking.js', ['src/tracking.js', 'text/javascript; charset=utf-8']],
-  ['/app.js', ['src/app.js', 'text/javascript; charset=utf-8']]
-])
+const serveUi = createUiResponder()
 
 async function readSubmission(req) {
   const digest = createHash('sha256')
@@ -58,16 +51,7 @@ const server = createServer(async (req, res) => {
   }
   try {
     const path = new URL(req.url, 'http://localhost').pathname
-    const asset = assets.get(path) ?? (/^\/requests\/[a-f0-9-]{36}$/.test(path) ? assets.get('/requests') : undefined)
-    if (req.method === 'GET' && asset) {
-      const content = await readFile(new URL(`../ui/${asset[0]}`, import.meta.url))
-      res.writeHead(200, {
-        'Content-Type': asset[1], 'X-Content-Type-Options': 'nosniff',
-        'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'self'; base-uri 'none'; frame-ancestors 'none'"
-      })
-      return res.end(content)
-    }
+    if (await serveUi(req, res, path)) return
     if (path === '/api/sign-in' && req.method === 'GET') {
       return send(200, { hostedUrl: hosted.origin, clientId: COGNITO_CLIENT_ID, redirectUri: callback.href })
     }

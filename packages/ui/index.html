@@ -3,30 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Request intake · Medic</title>
+<title>Guideline library · Community Health Toolkit</title>
+<meta name="description" content="Community Health Toolkit configuration requests and illustrative references.">
+<link rel="icon" href="/assets/cht-mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/workspace.css">
 </head>
 <body>
-<header class="topbar">
-  <a class="brand" href="/" aria-label="Medic home"><span class="brand-mark" aria-hidden="true">m</span>medic<span class="brand-divider"></span><span class="workspace">Configuration workspace</span></a>
-  <span class="environment">Request intake</span>
-  <nav id="account-actions" class="account-actions" aria-label="Account" hidden>
-    <span id="signed-in-name" class="signed-in-name"></span>
-    <button id="profile" class="secondary" type="button" aria-haspopup="dialog">Profile</button>
-    <button id="sign-out" class="secondary" type="button">Log out</button>
-  </nav>
-</header>
-<dialog id="profile-dialog" aria-labelledby="profile-title">
-  <h2 id="profile-title">Your profile</h2>
-  <dl class="profile-fields">
-    <dt>Username</dt><dd id="profile-username"></dd>
-    <dt>Privilege level</dt><dd id="profile-roles"></dd>
-    <dt>User ID</dt><dd id="profile-id"></dd>
-  </dl>
-  <p class="small">Product owners can submit requests and view or correct their own requests.</p>
-  <form method="dialog"><button class="primary" type="submit">Close</button></form>
-</dialog>
-<main>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Workspace navigation" hidden>
+  <a class="cht-brand" href="/" aria-label="Community Health Toolkit home"><img src="/assets/cht-logo.svg" alt="Community Health Toolkit"></a>
+  <button class="mobile-nav-close icon-button" data-action="close-navigation" aria-label="Close navigation" type="button">×</button>
+  <p class="nav-label">Workspace</p><nav id="sidebar-links" class="sidebar-links" aria-label="Workspace"></nav>
+  <p class="nav-label collections-label">Collections</p><nav id="sidebar-collections" class="sidebar-collections" aria-label="Collections"></nav>
+  <a id="request-nav" class="requests-link" href="/requests">Configuration requests <span aria-hidden="true">↗</span></a>
+  <div class="sidebar-bottom"><section class="local-first"><span class="teal-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z M8 12l3 3 5-6"/></svg></span><h3>Local protocols first</h3><p>Confirm guidance with your organization before clinical use.</p></section>
+  <button class="help-link" data-action="help" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17v.1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg> Help &amp; feedback</button><p class="brand-caption">Community Health Toolkit ·<br>Design concept</p></div>
+</aside>
+<button id="drawer-backdrop" class="drawer-backdrop" aria-label="Close navigation" hidden></button>
+<div class="app-frame">
+<header class="workspace-header"><div class="header-left"><button id="sidebar-toggle" class="icon-button" type="button" aria-label="Toggle navigation" aria-controls="workspace-sidebar" aria-expanded="false" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v16H3z M8 4v16"/></svg></button><a class="header-brand" href="/" aria-label="Community Health Toolkit home"><img src="/assets/cht-logo.svg" alt="Community Health Toolkit" width="184" height="41"></a><nav id="breadcrumb" class="breadcrumb" aria-label="Breadcrumb"></nav></div>
+<div class="header-right"><span class="preview-label">Request workspace</span><div class="account-container"><button id="account-toggle" type="button" class="account-toggle" aria-expanded="false" aria-controls="account-menu" hidden><span id="account-initials" class="avatar"></span><span id="account-name"></span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div id="account-menu" class="account-menu" hidden><button id="profile" type="button">Your profile</button><button id="sign-out" type="button">Log out</button></div></div><div id="account-actions" hidden><span id="signed-in-name" hidden></span></div></div></header>
+<main id="main-content" tabindex="-1" class="workspace-main">
+<div id="workspace-notice" class="concept-notice" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v6 M12 7v.1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg><span>Concept preview · Clinical content is illustrative and requires local protocol review. Not a validated clinical tool.</span></div>
+<p id="storage-warning" class="inline-warning" hidden></p>
+<p id="workspace-status" class="sr-only" role="status" aria-live="polite"></p>
+<p id="workspace-message" role="status" hidden></p>
+<div id="workspace-content" hidden></div>
+<section id="legacy-root" class="legacy-root">
+
+
   <div id="page-heading" class="page-heading"><div><p class="eyebrow">BUILD BETTER CARE</p><h1 id="page-title">Small changes. Better workflows.</h1><p id="page-intro" class="intro">Turn your team's needs into a clear configuration request.</p></div><span class="phase-label">01 / Request intake</span></div>
   <p id="message" role="status" aria-live="polite"></p>
   <section id="signed-out" class="welcome panel" aria-labelledby="signed-out-title" hidden>
@@ -72,8 +78,20 @@
     <section id="details" class="panel" aria-label="Request revision history" hidden></section>
     </section>
   </section>
-  <footer>Medic <span>·</span> Configuration workspace <span class="footer-note">Designed around better care.</span></footer>
-</main>
-<script type="module" src="/app.js"></script>
+</section>
+<footer id="workspace-footer" class="workspace-footer" hidden><span>Reference workspace · No patient information is stored in this concept.</span><button type="button" data-action="governance">Content governance ↗</button></footer>
+</main></div>
+<dialog id="profile-dialog" aria-labelledby="profile-title">
+  <h2 id="profile-title">Your profile</h2>
+  <dl class="profile-fields">
+    <dt>Username</dt><dd id="profile-username"></dd>
+    <dt>Privilege level</dt><dd id="profile-roles"></dd>
+    <dt>User ID</dt><dd id="profile-id"></dd>
+  </dl>
+  <p class="small">Product owners can submit requests and view or correct their own requests.</p>
+  <form method="dialog"><button class="primary" type="submit">Close</button></form>
+</dialog>
+<dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-dialog-title"><button type="button" class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">×</button><div id="workspace-dialog-body"></div></dialog>
+<script type="module" src="/workspace/boot.js"></script>
 </body>
 </html>
