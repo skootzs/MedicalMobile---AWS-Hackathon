@@ -97,6 +97,25 @@ Measured on the hackathon account at 5:00 PM Pacific on 4 Nov 2026, for 1 Oct 20
 
 In us-west-2, Claude Haiku 4.5 was 52 calls, 90,529 input tokens and 45,824 output tokens. Claude Sonnet 4.6 was 37 calls, 140,229 input tokens and 98,724 output tokens. The same account also recorded Luma and Stability image calls; those are not this pathway. Invocation logging is off, so these counts come from CloudWatch metrics. There is no DynamoDB table named `cht-nocode` in that account, so the report could not divide any of this by a pathway run. The team budget is $400 and the sandbox budget is $500. $5.82 is the whole account, not a per-run figure.
 
+## What the child-cough pathway showed
+
+On the Kiro workspace at 4:56 PM Pacific on 4 Nov 2026, commit `cdb0b7d`:
+
+- `scripts/kiro/20-build-image.sh` built the image and launched Chromium.
+- `scripts/kiro/25-fixture-end-to-end.sh` compiled the fixture, and cht-conf plus the form harness passed at compiler `7f488e6`.
+- `scripts/kiro/29-verify-stage-e2e.sh` ran compile and then verify at verifier `e9f70f6`. With the golden cases, `verificationPassed` was true. Without them, the job still finished and `verificationPassed` was false, because those extra patients have no expected answer.
+
+A clinician has not approved the golden cases. A Medic representative has not confirmed the demo.
+
+| Well-Architected target | Evidence |
+|---|---|
+| Operational excellence | [Deploy](#deploy) and [Teardown](#teardown). One change is the request, the approval record, and the compile hashes |
+| Security | Cognito sign-in in [Sign-in](#sign-in). Synthetic demo users only. Content approval and release approval are separate records, and the compile and verify runners are different actors |
+| Reliability | A job starts as `PENDING` and can be ingested again. The checker blocks a release on a blocking finding. Teardown removes the stack |
+| Performance efficiency | The Kiro run above. Models are used for drafting and screening. The compiler does not call a model |
+| Cost optimization | The measured account spend above, the nightly stop, and [Teardown](#teardown). A per-run dollar figure needs the `cht-nocode` table |
+| Sustainability | Hosts stop at 23:00 America/Los_Angeles and do not restart themselves. The shipped output is ordinary offline CHT configuration |
+
 ## Intake
 
 See the [intake implementation guide](docs/intake-implementation-guide.md) for the original phase-one requirements and the phase-two Bedrock screening, preview, confirmation, and handoff plan.
