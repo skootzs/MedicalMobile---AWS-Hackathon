@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node --experimental-strip-types src/main.ts",
-    "test": "node --experimental-strip-types --test test/routing.test.ts test/workflow.test.ts test/snapshots.test.ts test/storage.test.ts test/approvals.test.ts test/api.test.ts test/requests.test.ts test/request-api.test.ts test/reviews.test.ts test/review-api.test.ts test/routing-service.test.ts test/routing-api.test.ts test/jobs.test.ts test/callbacks.test.ts test/checkers.test.ts test/compilations.test.ts test/compilation-results.test.ts test/compilation-reconciliation.test.ts test/config.test.ts test/cognito-auth.test.ts test/bootstrap.test.ts test/cognito-verify.test.ts test/s3-objects.test.ts test/aws-mode.test.ts test/verify-build.test.ts test/verification-report.test.ts test/download.test.ts test/reconciler.test.ts test/r7-job-record.test.ts",
+    "test": "node --experimental-strip-types --test test/routing.test.ts test/workflow.test.ts test/snapshots.test.ts test/storage.test.ts test/approvals.test.ts test/api.test.ts test/requests.test.ts test/request-api.test.ts test/reviews.test.ts test/review-api.test.ts test/routing-service.test.ts test/routing-api.test.ts test/jobs.test.ts test/callbacks.test.ts test/checkers.test.ts test/compilations.test.ts test/compilation-results.test.ts test/compilation-reconciliation.test.ts test/config.test.ts test/cognito-auth.test.ts test/bootstrap.test.ts test/cognito-verify.test.ts test/s3-objects.test.ts test/aws-mode.test.ts test/verify-build.test.ts test/verification-report.test.ts test/download.test.ts test/reconciler.test.ts test/r7-job-record.test.ts test/service-actors.test.ts test/job-events.test.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test:dynamodb": "node --experimental-strip-types --test test/dynamodb.integration.test.ts test/verification.integration.test.ts test/assembled.integration.test.ts"
   },
@@ -15,6 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1161.0",
     "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/client-sqs": "3.1161.0",
     "@aws-sdk/lib-dynamodb": "3.1161.0",
     "ajv": "8.20.0",
     "aws-jwt-verify": "5.2.1",

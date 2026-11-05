@@ -207,8 +207,8 @@ Still open before a hosted job finishes end to end:
 
 | Item | Contract | Next step |
 |---|---|---|
-| `job-events` | Pipe sends `{ requestId, jobId, status, attempt }`. `attempt` arrives as a numeric string | A consumer must call `JobCompletionReconciler`, converting `attempt` with `Number()`. The reconciler accepts that string and does not poll the queue |
-| Service actors | Runner records `cht-runner-compile` and `cht-runner-verify` | Register both in `resolveServiceActor`, with the COMPILER and VERIFIER roles |
+| `job-events` | Pipe sends `{ requestId, jobId, status, attempt }`. `attempt` arrives as a numeric string | The orchestrator polls `JOB_EVENTS_QUEUE_URL` in AWS mode and calls `JobCompletionReconciler`. The reconciler accepts the numeric string. Nothing starts the poller in local mode |
+| Service actors | Runner records `cht-runner-compile` and `cht-runner-verify` | Bootstrap recognizes those two principals when no custom resolver is supplied, and authorizes each for its own job type. A supplied resolver is left unchanged |
 | Golden cases | Optional `goldenCasesUri` and `goldenCasesHash` | R2 adds them when it has an authoritative golden-case object. Without them, verification runs without golden cases and uses the evaluator |
 
 Already aligned: approval records, `sha256:` prefix handling, and `TIMED_OUT` and `EXHAUSTED`, which R2 can read but the runner never writes. No real R2 job has gone through the runner yet.

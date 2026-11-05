@@ -12,9 +12,14 @@
  * Start:  npm start           (reads env; see README / .env for keys)
  * Stop:   Ctrl-C / SIGTERM    (graceful shutdown)
  */
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { SQSClient } from '@aws-sdk/client-sqs';
 import { loadConfig } from './config.ts';
 import { bootstrap } from './bootstrap.ts';
 import { createDemoIdentity } from './demo-identity.ts';
+import { pollJobEventsOnce } from './job-events.ts';
 
 async function run(): Promise<void> {
   const config = loadConfig();
@@ -26,7 +31,9 @@ async function run(): Promise<void> {
     ...(config.mode === 'local' ? { identity: createDemoIdentity() } : {}),
   });
 
+  let stopped = false;
   const shutdown = async (signal: string) => {
+    stopped = true;
     process.stdout.write(`\n[orchestrator] received ${signal}, shutting down...\n`);
     try {
       await server.close();
@@ -42,6 +49,31 @@ async function run(): Promise<void> {
   try {
     const address = await server.app.listen({ host: config.host, port: config.port });
     process.stdout.write(`[orchestrator] mode=${config.mode} listening on ${address}\n`);
+    const jobEventsUrl = process.env.JOB_EVENTS_QUEUE_URL?.trim();
+    if (config.mode === 'aws' && jobEventsUrl) {
+      const sqs = new SQSClient({ region: config.region });
+      const document = DynamoDBDocumentClient.from(new DynamoDBClient({ region: config.region }));
+      process.stdout.write('[orchestrator] consuming job-events\n');
+      void (async () => {
+        while (!stopped) {
+          try {
+            await pollJobEventsOnce({
+              queueUrl: jobEventsUrl,
+              sqs,
+              reconciler: server.services.reconciler,
+              async jobType(jobId) {
+                const row = await document.send(new GetCommand({ TableName: config.ddbTable, Key: { pk: `JOB#${jobId}`, sk: 'META' }, ConsistentRead: true }));
+                return typeof row.Item?.jobType === 'string' ? row.Item.jobType : null;
+              },
+              log: (message, detail) => process.stdout.write(`[orchestrator] ${message}${detail === undefined ? '' : ` ${JSON.stringify(detail)}`}\n`),
+            });
+          } catch (error) {
+            process.stderr.write(`[orchestrator] job-events: ${(error as Error).message}\n`);
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+        }
+      })();
+    }
     if (config.mode === 'local') {
       process.stdout.write('[orchestrator] LOCAL DEMO identities active (not production auth).\n');
     } else {

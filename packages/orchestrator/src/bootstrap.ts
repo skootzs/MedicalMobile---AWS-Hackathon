@@ -29,6 +29,7 @@ import { CompilationResultService } from './compilation-results.ts';
 import { VerifyBuildHandoffService } from './verify-builds.ts';
 import { VerificationResultService } from './verification-results.ts';
 import { JobCompletionReconciler } from './reconciler.ts';
+import { isRunnerCompileActor, isRunnerVerifyActor, resolveRunnerServiceActor } from './service-actors.ts';
 import { DurableLogicModelReferences } from './storage/durable-objects.ts';
 import { r7CompilationExecutionSource, r7VerificationExecutionSource, r7CompilationCondition, r7VerificationCondition } from './r7-job-record.ts';
 import { buildServer } from './server.ts';
@@ -242,8 +243,12 @@ export function bootstrap(options: BootstrapOptions): BootstrappedServer {
   // through a distinct service-actor resolver (never the human Cognito path).
   // Absent a service resolver, worker ingestion resolves no worker role and
   // fails closed.
-  const serviceResolver: StoreDependencies['resolveActor'] = workers.resolveServiceActor ?? identity.resolveActor;
-  const canServiceAccess = workers.canServiceAccessRequest ?? (() => false);
+  // A supplied resolver stays the only resolver. Otherwise the two runner
+  // actors are recognized, and every other principal still uses the human path.
+  const serviceResolver: StoreDependencies['resolveActor'] = workers.resolveServiceActor
+    ?? ((principal, requestId) => resolveRunnerServiceActor(principal) ?? identity.resolveActor(principal, requestId));
+  const canServiceAccess = workers.canServiceAccessRequest
+    ?? ((principal: unknown) => resolveRunnerServiceActor(principal) !== null);
 
   // Handoff services (emit job intents, no runner/worker execution).
   const draftingHandoff = new DraftingHandoffService({ store, resolveActor: identity.resolveActor, canAccessRequest: canAccess });
@@ -277,11 +282,11 @@ export function bootstrap(options: BootstrapOptions): BootstrappedServer {
     : null;
   const compilationResults = new CompilationResultService({
     store: compileStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, executions: compileSrc,
-    authorizeRunner: (actor, job) => workers.authorizeCompilationRunner?.(actor, job.jobId) ?? false, artifacts: workers.compilationArtifacts,
+    authorizeRunner: (actor, job) => workers.authorizeCompilationRunner ? workers.authorizeCompilationRunner(actor, job.jobId) : isRunnerCompileActor(actor), artifacts: workers.compilationArtifacts,
   });
   const verificationResults = new VerificationResultService({
     store: verifyStore, resolveActor: serviceResolver, canAccessRequest: canServiceAccess, executions: verifySrc,
-    authorizeRunner: (actor, job) => workers.authorizeVerificationRunner?.(actor, job.jobId) ?? false, objects,
+    authorizeRunner: (actor, job) => workers.authorizeVerificationRunner ? workers.authorizeVerificationRunner(actor, job.jobId) : isRunnerVerifyActor(actor), objects,
   });
   const reconciler = new JobCompletionReconciler({
     store, compilation: compilationResults, verification: verificationResults,
