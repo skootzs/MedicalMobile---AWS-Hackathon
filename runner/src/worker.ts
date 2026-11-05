@@ -176,6 +176,16 @@ function parseReport(bytes: Buffer): VerificationReport | undefined {
   }
 }
 
+/** Why a written report was rejected. Kept short so it fits in the job error. */
+function reportRejection(bytes: Buffer | undefined): string {
+  if (!bytes || bytes.length === 0) return 'no report.json';
+  let report: unknown;
+  try { report = JSON.parse(bytes.toString('utf8')); } catch (err) { return `report.json is not JSON: ${String(err).slice(0, 180)}`; }
+  validateReport(report);
+  const errors = (validateReport.errors ?? []).slice(0, 6).map((item) => `${item.instancePath || '/'} ${item.message}`);
+  return errors.length > 0 ? errors.join('; ') : 'schema rejected the report';
+}
+
 export class Worker {
   readonly #d: WorkerDeps;
   readonly #now: () => number;
@@ -588,13 +598,15 @@ export class Worker {
 
     const prefix = this.#prefix(payload, lease.attempt);
     const logPath = join(outDir, 'verification.log');
-    const { uri: logUri } = await artifacts.put(`${prefix}/verification.log`, existsSync(logPath) ? readFileSync(logPath) : `${run.stdout}${run.stderr}`);
+    const logBytes = existsSync(logPath) ? readFileSync(logPath) : Buffer.from(`${run.stdout}${run.stderr}`);
+    const { uri: logUri } = await artifacts.put(`${prefix}/verification.log`, logBytes);
 
     const reportPath = join(outDir, 'report.json');
     const reportBytes = existsSync(reportPath) ? readFileSync(reportPath) : undefined;
     const report = reportBytes ? parseReport(reportBytes) : undefined;
     if ((run.exitCode !== 0 && run.exitCode !== 1) || !report || !reportBytes) {
-      throw new JobFailure('VERIFY_ERROR', `Verifier exited ${run.exitCode} without a valid report`, true, { logUri });
+      const clues = logBytes.toString('utf8').split('\n').filter((line) => /runner error|RESULT:|Error:/.test(line)).slice(-4).join(' | ');
+      throw new JobFailure('VERIFY_ERROR', `Verifier exited ${run.exitCode} without a valid report. ${reportRejection(reportBytes)}. ${clues}`.slice(0, 1500), true, { logUri });
     }
     const mismatch = report.passed !== (run.exitCode === 0) ? 'report.passed disagrees with the exit code'
       : hexOf(report.packageHash ?? '') !== hexOf(payload.packageHash) ? 'report.packageHash does not match the job'
