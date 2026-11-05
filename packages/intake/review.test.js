@@ -1,3 +1,4 @@
+import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { submit, hash } from './intake.js'
@@ -182,6 +183,22 @@ test('strict model schema rejects fabricated references, extra authority, and co
     { ...valid, issues: [{ code: 'MISSING', field: 'goal', question: 'Which goal?' }] } ]) {
     assert.throws(() => validateResult(invalid, ['s1']))
   }
+})
+
+test('screening prefers the configured AWS credentials for both Bedrock operations', async t => {
+  const commands = []
+  t.mock.method(BedrockRuntimeClient.prototype, 'send', async function (command) {
+    assert.deepEqual(await this.config.authSchemePreference(), ['sigv4'])
+    commands.push(command.constructor.name)
+    if (commands.length === 1) return { action: 'NONE' }
+    return { stopReason: 'end_turn', output: { message: { content: [{ text: JSON.stringify({
+      decision: 'pass', summary: 'Synthetic input is complete.', issues: [], suggestions: [],
+      evidence: [{ source: 'synthetic', location: 'Submitted requirements' }]
+    }) }] } } }
+  })
+  const result = await createScreener(config)({ requirementsSource: 'synthetic', guidelines: [] })
+  assert.equal(result.result.decision, 'pass')
+  assert.deepEqual(commands, ['ApplyGuardrailCommand', 'ConverseCommand'])
 })
 
 test('Bedrock adapter applies input guardrails, sends separated instructions and validates output', async () => {

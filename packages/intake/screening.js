@@ -67,7 +67,11 @@ export function validateResult(value, sourceIds, requirements) {
 
 export class ScreeningBlock extends Error {}
 
-export function createScreener(config, client = new BedrockRuntimeClient({ region: config.region, maxAttempts: 2, credentials: awsCredentials })) {
+export function createScreener(config, client = new BedrockRuntimeClient({
+  region: config.region, maxAttempts: 2, credentials: awsCredentials,
+  // Keep guardrail and model calls on the same IAM identity as intake storage.
+  authSchemePreference: ['sigv4']
+})) {
   return async input => {
     const data = JSON.stringify(input)
     if (Buffer.byteLength(data) > config.maxInputBytes) throw new ScreeningBlock('INPUT_TOO_LARGE')
