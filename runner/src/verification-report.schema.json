@@ -175,7 +175,8 @@
       "required": ["expected", "status"],
       "properties": {
         "expected": {},
-        "status": { "enum": ["pass", "fail"] }
+        "status": { "enum": ["pass", "fail"] },
+        "usedDayOnly": { "type": "boolean" }
       }
     },
     "case": {
