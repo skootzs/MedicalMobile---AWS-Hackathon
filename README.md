@@ -1,4 +1,8 @@
-# CHT No-Code Configuration
+# Ripple
+
+**Push a ripple, ship a wave.**
+
+<img src="docs/ripple-brand.png" alt="Ripple and Community Health Toolkit" width="486">
 
 ![AWS Breaking Barriers Challenge 2026](docs/aws-breaking-barriers-challenge-2026.png)
 
@@ -16,7 +20,18 @@
 ![Terraform](https://img.shields.io/badge/Terraform-844FBA?style=for-the-badge&logo=terraform&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
 
-A hackathon prototype for turning a product owner's request and public guideline evidence into reviewable [Community Health Toolkit (CHT)](https://communityhealthtoolkit.org/) configuration. Use public guidelines and synthetic patient data for the demo.
+Ripple is a hackathon prototype for turning a product owner's request and public guideline evidence into reviewable [Community Health Toolkit (CHT)](https://communityhealthtoolkit.org/) configuration. Use public guidelines and synthetic patient data for the demo.
+
+## How Ripple works
+
+![Concept diagram of request intake, Bedrock-assisted drafting, review, and supporting AWS services](docs/ripple-architecture.png)
+
+*Concept sketch for intake, routing, and review. The steps below describe the implemented request-to-release flow.*
+
+1. **Submit and confirm.** A product owner signs in through Amazon Cognito and submits a request. The integrated app saves the revision in DynamoDB, screens it with Amazon Bedrock and Guardrails, and generates a preview when screening passes. The owner confirms that exact preview to start the downstream workflow.
+2. **Draft and check.** A worker loads the pinned guideline and independently reviewed golden cases for the selected pathway and baseline. Bedrock proposes the pathway logic, and a deterministic checker compares it with the golden cases. The timeline shows blockers such as missing evidence or a failed check.
+3. **Approve, build, and verify.** A clinician reviews the checked draft in the app. Once approved, the build runner compiles it into a CHT package and verifies the build against the same pinned golden cases.
+4. **Release and download.** A separate release approver reviews the verified build. After approval, the product owner can download the exact package version that was approved.
 
 ## Startup guide
 
