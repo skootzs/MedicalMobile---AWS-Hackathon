@@ -64,10 +64,10 @@ output "log_group_name" {
 
 output "intake_environment" {
   value = {
-    AWS_REGION           = data.aws_region.current.region
+    AWS_REGION           = data.aws_region.current.name
     COGNITO_USER_POOL_ID = aws_cognito_user_pool.intake.id
     COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.intake.id
-    COGNITO_HOSTED_URL   = "https://${local.intake_resource_name}.auth.${data.aws_region.current.region}.amazoncognito.com"
+    COGNITO_HOSTED_URL   = "https://${local.intake_resource_name}.auth.${data.aws_region.current.name}.amazoncognito.com"
     COGNITO_REDIRECT_URI = var.intake_callback_url
     INTAKE_TABLE         = aws_dynamodb_table.intake.name
     INTAKE_BUCKET        = aws_s3_bucket.intake.id
@@ -76,4 +76,20 @@ output "intake_environment" {
 
 output "intake_runtime_policy_arn" {
   value = aws_iam_policy.intake_runtime.arn
+}
+
+output "integrated_app_environment" {
+  value = merge(local.intake_screening_environment, {
+    MODE                 = "aws"
+    AWS_REGION           = data.aws_region.current.name
+    DDB_TABLE            = aws_dynamodb_table.main.name
+    ARTIFACT_BUCKET      = aws_s3_bucket.artifacts.bucket
+    JOB_EVENTS_QUEUE_URL = aws_sqs_queue.job_events.url
+    COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
+    COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
+    COGNITO_HOSTED_URL   = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${data.aws_region.current.name}.amazoncognito.com"
+    COGNITO_REDIRECT_URI = "http://localhost:8080"
+    INTAKE_TABLE         = aws_dynamodb_table.intake.name
+    INTAKE_BUCKET        = aws_s3_bucket.intake.bucket
+  })
 }

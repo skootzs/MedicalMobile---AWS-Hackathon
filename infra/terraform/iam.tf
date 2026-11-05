@@ -22,11 +22,16 @@ resource "aws_iam_policy" "intake_runtime" {
       },
       {
         Effect   = "Allow"
+        Action   = ["dynamodb:Query"]
+        Resource = "${aws_dynamodb_table.intake.arn}/index/pipeline-due"
+      },
+      {
+        Effect   = "Allow"
         Action   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
         Resource = aws_dynamodb_table.intake.arn
         Condition = {
           "ForAllValues:StringLike" = {
-            "dynamodb:LeadingKeys" = ["author#*", "requests#*"]
+            "dynamodb:LeadingKeys" = ["author#*", "requests#*", "pipeline"]
           }
         }
       },
@@ -54,6 +59,11 @@ resource "aws_iam_policy" "intake_runtime" {
       }
     ] : [])
   })
+}
+
+resource "aws_iam_role_policy_attachment" "app_host_intake" {
+  role       = aws_iam_role.app_host.name
+  policy_arn = aws_iam_policy.intake_runtime.arn
 }
 
 # ---------- CHT host: SSM only ----------

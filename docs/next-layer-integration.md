@@ -238,7 +238,7 @@ The current PO routes enforce their own confirmation gates, but the future dispa
 - [Screening, preview, confirmation, and queued handoff](../packages/intake/review.js)
 - [DynamoDB keys and exact-version S3 access](../packages/intake/storage.js)
 - [Bedrock integration and policy fingerprint](../packages/intake/screening.js)
-- [Runtime configuration](../README.md#phase-two-screening-and-po-review)
+- [Runtime configuration](../packages/intake/README.md#phase-two-screening-and-po-review)
 
 
 ## Targeted revisions after screening

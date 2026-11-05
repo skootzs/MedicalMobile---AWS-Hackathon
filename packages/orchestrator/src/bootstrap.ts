@@ -87,6 +87,7 @@ export interface BootstrapOptions {
    * passing validation.
    */
   workers?: WorkerPolicies;
+  internalActor?: StoreDependencies['resolveActor'];
   now?: () => string;
 }
 
@@ -182,7 +183,7 @@ function buildObjects(config: OrchestratorConfig): { objects: DurableObjects; s3
  * Assemble the server. Does not call listen(); the caller (main.ts) owns the
  * socket lifecycle. Throws on any misconfiguration — never boots half-wired.
  */
-export function bootstrap(options: BootstrapOptions): BootstrappedServer {
+export function bootstrap(options: BootstrapOptions) {
   const { config } = options;
 
   // Local mode requires an explicit (local/test-only) identity up front and
@@ -297,6 +298,21 @@ export function bootstrap(options: BootstrapOptions): BootstrappedServer {
     },
   });
 
+  const automation = options.internalActor && (() => {
+    const resolveActor = options.internalActor;
+    const store = new DynamoOrchestratorStore({ ...storeBase, resolveActor });
+    const canAccessRequest = async (principal: unknown, requestId: string) => Boolean(await resolveActor(principal, requestId));
+    const boundary = { store, resolveActor, canAccessRequest };
+    return {
+      store, objects,
+      requests: new RequestService({ ...boundary, validateSnapshot: provisionalSnapshotValidator }),
+      routing: new RoutingService(boundary),
+      drafting: new DraftingHandoffService(boundary),
+      compile: new CompilationHandoffService({ ...boundary, snapshotReferences: new DurableLogicModelReferences(objects) }),
+      verify: new VerifyBuildHandoffService(boundary),
+    };
+  })();
+
   const services: OrchestratorServices = {
     draftingHandoff, draftingCallback, checkerResults,
     compilationHandoff, compilationResults, verifyBuildHandoff, verificationResults, reconciler,
@@ -308,6 +324,7 @@ export function bootstrap(options: BootstrapOptions): BootstrappedServer {
     app,
     config,
     services,
+    automation,
     async close() {
       try { await app.close(); } finally { createdClient?.destroy(); createdS3?.destroy(); }
     },

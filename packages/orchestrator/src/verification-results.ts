@@ -87,6 +87,11 @@ export class VerificationResultService {
         (refs.packageHash !== null && refs.packageHash !== job.packageHash)) return { failure: 'REPORT_REFERENCE_MISMATCH' };
     // The report must attest to the exact compiled artifact R2 authorized.
     if (report.compileArtifactHash !== job.compileArtifactHash) return { failure: 'REPORT_ARTIFACT_MISMATCH' };
+    if (job.goldenCases) {
+      if (report.goldenCasesHash !== job.goldenCases.sha256) return { failure: 'REPORT_GOLDEN_CASES_MISMATCH' };
+      if (refs.logicModelHash !== job.logicModelHash || refs.clinicalApprovalId !== job.clinicalApprovalId ||
+          refs.compilationJobId !== job.compileJobId || refs.packageHash !== job.packageHash) return { failure: 'REPORT_REFERENCE_MISMATCH' };
+    }
     const passed = report.passed === true && report.coverageComplete === true;
     return {
       passed,

@@ -33,6 +33,8 @@ export interface VerifyStageInput {
   verifierDir: string;
   outDir: string;
   packageHash: string;
+  clinicalApprovalId?: string;
+  compilationJobId?: string;
   compileArtifactHash: string;
   /** Bare hex of the snapshot envelope. Passed as LOGIC_MODEL_HASH and checked against manifest.snapshotHash. */
   logicModelHash: string;
@@ -77,6 +79,8 @@ export function verifyArgs(input: VerifyStageInput, name: string): string[] {
     '-e', 'TZ=Africa/Nairobi', '-e', 'npm_config_cache=/tmp/npm',
     '-e', 'CHT_CONFIG_DIR=/project', '-e', 'OUT_DIR=/out',
     '-e', `PACKAGE_HASH=${input.packageHash}`,
+    ...(input.clinicalApprovalId ? ['-e', `CLINICAL_APPROVAL_ID=${input.clinicalApprovalId}`] : []),
+    ...(input.compilationJobId ? ['-e', `COMPILATION_JOB_ID=${input.compilationJobId}`] : []),
     '-e', `COMPILE_ARTIFACT_HASH=${input.compileArtifactHash}`,
     // Envelope hash, echoed into references.logicModelHash. R2 compares that field to its raw hex.
     '-e', `LOGIC_MODEL_HASH=${input.logicModelHash}`,

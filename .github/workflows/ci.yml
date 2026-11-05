@@ -1,5 +1,4 @@
-# Minimal CI for R7's code. No AWS credentials: runner tests use DynamoDB Local,
-# and Terraform validates with -backend=false.
+# CI uses DynamoDB Local and recorded model responses. Terraform validates without an AWS backend.
 name: CI
 
 on:
@@ -30,6 +29,44 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npm test
+
+  app-pipeline:
+    runs-on: ubuntu-latest
+    services:
+      dynamodb-local:
+        image: amazon/dynamodb-local:2.5.3
+        ports:
+          - 8000:8000
+    env:
+      R2_DYNAMODB_LOCAL_ENDPOINT: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test -w packages/intake -w packages/ui
+      - run: npm run test:pipeline -w packages/orchestrator
+      - name: Build pipeline images and pin toolchain
+        run: |
+          docker build -f packages/orchestrator/Dockerfile -t cht-nocode/app:ci .
+          docker build -t cht-nocode/build-image:latest build-image
+          docker pull node:22.23.4-slim
+          git worktree add --detach "$RUNNER_TEMP/pipeline-compiler" 7f488e6
+          scripts/build-verifier.sh "$RUNNER_TEMP/pipeline-verifier" e9f70f6
+      - name: Run request-to-release with real build stages
+        env:
+          PIPELINE_DOCKER: '1'
+          COMPILE_IMAGE: node:22.23.4-slim
+          BUILD_IMAGE: cht-nocode/build-image:latest
+          COMPILER_DIR: ${{ runner.temp }}/pipeline-compiler/packages/compiler
+          TEMPLATE_DIR: ${{ runner.temp }}/pipeline-compiler/templates/cht-base
+          VERIFIER_DIR: ${{ runner.temp }}/pipeline-verifier/packages/verification
+          VERIFIER_COMMIT: e9f70f6
+        run: npm run test:pipeline -w packages/orchestrator
 
   terraform:
     runs-on: ubuntu-latest

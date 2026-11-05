@@ -1,10 +1,30 @@
-# DesignBrief eligibility gate and Routing Box
+# Workflow orchestrator
+
+The orchestrator owns downstream request state, review queues, approvals, and job reconciliation. It has its own request API and durable storage. [Intake](../intake/README.md) records a queued confirmation separately.
+
+1. Request and routing services check eligibility and record who can act on the current request.
+2. Review and approval services bind decisions to immutable snapshots. Content approval gates approved compilation. Release approval is a separate decision tied to verification evidence and the artifact being released.
+3. The compilation and verification handoff services record job intents for the [build runner](../../runner/README.md). In AWS mode, `JOB_EVENTS_QUEUE_URL` enables the completion poller. The reconciler checks the authoritative job attempt before applying a result.
+
+## Where to follow a request
+
+| Stage | Code and evidence |
+| --- | --- |
+| Create and route | [requests.ts](src/requests.ts) creates request state. [routing-service.ts](src/routing-service.ts) checks eligibility and routes the request using its current state. |
+| Review and approve | [reviews.ts](src/reviews.ts) exposes the queue and review context. [approvals.ts](src/approvals.ts) records decisions for the snapshot or release evidence the reviewer saw. |
+| Compile and verify | [compilation-integration.ts](src/compilation-integration.ts) and [verify-builds.ts](src/verify-builds.ts) create version-bound job intents. DynamoDB stores the intent and outbox together. |
+| Reconcile and release | [job-events.ts](src/job-events.ts) reads the completion queue and [reconciler.ts](src/reconciler.ts) ingests the authoritative job result. The release decision binds the verified artifact before access is granted. |
+
+Start with [DEMO.md](DEMO.md) for local and AWS setup and [CONTRACTS.md](CONTRACTS.md) for the API. The local demo uses DynamoDB Local and durable files. The AWS bootstrap uses Cognito, DynamoDB, and S3. Run `npm test -w packages/orchestrator` from the repository root for package tests. For the DynamoDB integration suite, start DynamoDB Local and follow the demo guide before running `npm run test:dynamodb -w packages/orchestrator`.
+
+If a downstream request is waiting for a job, compare the request version, job ID and attempt, and artifact digests before retrying. See the [runner guide](../../runner/README.md#troubleshoot-an-attempt) for delivery and lease failures. The sections below record implementation milestones and their original assumptions.
+
+## DesignBrief eligibility gate and Routing Box
 
 Run fictional unit tests without installing dependencies:
 
 ```sh
-cd /Users/vivi/Documents/Codex/2026-11-03/hel/work/packages/orchestrator
-npm test
+npm test -w packages/orchestrator
 ```
 
 Runtime tests were verified with Node.js v24.18.0. Static checking is configured

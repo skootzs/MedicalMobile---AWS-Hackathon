@@ -51,6 +51,17 @@ node src/cli.ts <logic-model.json> --out <dir> [--template DIR] [--baseline DIR]
 | 1 | Rejected | stderr JSON: `{ ok: false, errors: [...] }`; nothing written |
 | 2 | Usage or file error | stderr message |
 
+### Compile the child-cough fixture
+
+To compile the technical child-cough fixture from the repository root, choose a new or empty output directory.
+
+```sh
+node packages/compiler/src/cli.ts packages/compiler/test/fixtures/child-cough.logic.json \
+  --template templates/cht-base --out /tmp/cht-child-cough-build
+```
+
+Start with `compile-manifest.json` to identify the input and generated file hashes. Open `compile-rows.json` to inspect the rows behind the spreadsheet. To exercise the generated form, run the CHT conversion and validation command below or use the [build image](../../build-image/README.md).
+
 ### Compile and check in one step
 
 ```sh

@@ -1,0 +1,11 @@
+**
+!package.json
+!package-lock.json
+!packages/
+!packages/**
+!runner/
+!runner/package.json
+**/node_modules
+**/dist
+**/.env*
+**/.DS_Store

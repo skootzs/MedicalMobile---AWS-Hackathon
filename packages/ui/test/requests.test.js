@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { latestRequests, requestStatus, nextAction, renderRequestTimeline, renderRequestTracking, loadReviews } from '../src/workspace/requests.js'
+import { trackingState } from '../src/tracking.js'
 import { createUiResponder, isUiRoute } from '../serve.js'
 import { createUiTestServer } from './test-server.js'
 
@@ -47,6 +48,40 @@ test('new tracking has six implemented stages, escapes server text and never cla
   assert.match(html,/disabled/)
   assert.equal((renderRequestTimeline(revision(),state).match(/<li /g)||[]).length,6)
   assert.match(renderRequestTimeline(revision(),undefined),/Loading current review state/)
+})
+test('integrated stages advance through independent reviews and stop at the failed stage', () => {
+  const r = revision()
+  const review = { enabled: true, status: 'screening_passed', preview: {}, confirmed: true }
+  const phases = [
+    ['queued', 'Downstream handoff'],
+    ['DRAFTING_LOGIC', 'Clinical drafting'],
+    ['WAITING_FOR_LOGIC_CHECKS', 'Logic checks'],
+    ['WAITING_FOR_CLINICAL_APPROVAL', 'Clinical approval'],
+    ['COMPILING', 'Configuration build'],
+    ['VERIFYING', 'Build verification'],
+    ['WAITING_FOR_RELEASE_APPROVAL', 'Release approval']
+  ]
+  for (const [offset, [status, label]] of phases.entries()) {
+    const workflow = { status, label }
+    const state = { ...review, workflow }
+    const model = trackingState(r, state)
+    assert.equal(model.steps[model.current].label, label)
+    assert.deepEqual(model.steps.map(step => step.state), [
+      ...Array(5 + offset).fill('complete'), 'current', ...Array(7 - offset).fill('upcoming')
+    ])
+    assert.match(renderRequestTimeline(r, state), new RegExp(`Stage ${6 + offset} of 13`))
+  }
+
+  const failed = trackingState(r, { ...review, workflow: { status: 'FAILED', stoppedAt: 'VERIFYING', label: 'Verification failed' } })
+  assert.equal(failed.steps[failed.current].label, 'Build verification')
+  assert.equal(failed.steps[failed.current].state, 'attention')
+  assert.equal(failed.steps[failed.current + 1].state, 'upcoming')
+
+  const released = { ...review, workflow: { status: 'RELEASE_APPROVED', label: 'Approved for download', downloadable: true } }
+  assert.ok(trackingState(r, released).steps.every(step => step.state === 'complete'))
+  assert.match(renderRequestTimeline(r, released), /Workflow complete/)
+  assert.doesNotMatch(renderRequestTimeline(r, released), /aria-current="step"/)
+  assert.equal(nextAction(r, released)[1], 'download')
 })
 test('review loading uses at most four concurrent reads, isolates errors and respects navigation cancellation',async()=>{
   let active=0,max=0,results=[]

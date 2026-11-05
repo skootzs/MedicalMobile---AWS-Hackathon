@@ -1,16 +1,26 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'node:crypto'
 import { hash, HttpError } from './intake.js'
 import { awsCredentials } from './credentials.js'
 
-export function createStore({ table, bucket,
+export function createStore({ table, bucket, pipeline = false,
   db = DynamoDBDocumentClient.from(new DynamoDBClient({ credentials: awsCredentials })),
   s3 = new S3Client({ credentials: awsCredentials }) }) {
   const read = async Key => (await db.send(new GetCommand({ TableName: table, Key, ConsistentRead: true }))).Item
   const reservationKey = (author, key) => ({ pk: `author#${author}`, sk: `key#${key}` })
   const requestPartition = author => `requests#${author}`
+
+  const workKey = (kind, revisionId) => ({ pk: 'pipeline', sk: `${kind}#${revisionId}` })
+  const enqueue = (kind, author, requestId, revisionId) => ({ Put: {
+    TableName: table, Item: { ...workKey(kind, revisionId), kind, author, requestId, revisionId,
+      stage: kind, pipelineQueue: 'pending', attempts: 0, due: Date.now(), queuedAt: Date.now() },
+    ConditionExpression: 'attribute_not_exists(pk)'
+  } })
+  const leaseCondition = 'lease = :lease AND due > :now'
+  const conditionalFailure = error => error.name === 'ConditionalCheckFailedException' ||
+    error.CancellationReasons?.some(reason => reason.Code === 'ConditionalCheckFailed')
 
   async function query(pk, prefix) {
     const items = []
@@ -29,6 +39,64 @@ export function createStore({ table, bucket,
   }
 
   return {
+    current: async (author, requestId, revisionId) =>
+      (await read({ pk: `author#${author}`, sk: `head#${requestId}` }))?.revisionId === revisionId,
+    work: (kind, revisionId) => read(workKey(kind, revisionId)),
+    async *dueWork(now) {
+      let cursor
+      do {
+        const page = await db.send(new QueryCommand({
+          TableName: table, IndexName: 'pipeline-due', Limit: 100, ExclusiveStartKey: cursor,
+          KeyConditionExpression: 'pipelineQueue = :queue AND due <= :now',
+          ExpressionAttributeValues: { ':queue': 'pending', ':now': now }
+        }))
+        yield* page.Items ?? []
+        cursor = page.LastEvaluatedKey
+      } while (cursor)
+    },
+    async claimWork(item, now) {
+      try {
+        const result = await db.send(new UpdateCommand({
+          TableName: table, Key: workKey(item.kind, item.revisionId),
+          ConditionExpression: 'due <= :now', UpdateExpression: 'SET lease = :lease, due = :until',
+          ExpressionAttributeValues: { ':now': now, ':lease': randomUUID(), ':until': now + 10 * 60_000 },
+          ReturnValues: 'ALL_NEW'
+        }))
+        return result.Attributes
+      } catch (error) {
+        if (!conditionalFailure(error)) throw error
+      }
+    },
+    async saveWork(item, fields, guard) {
+      const Key = workKey(item.kind, item.revisionId)
+      const next = { ...item, ...fields }
+      delete next.lease
+      if (fields.due === null) {
+        delete next.due
+        delete next.pipelineQueue
+      }
+      const put = { TableName: table, Item: next, ConditionExpression: leaseCondition,
+        ExpressionAttributeValues: { ':lease': item.lease, ':now': Date.now() } }
+      try {
+        if (!guard) {
+          await db.send(new PutCommand(put))
+          return true
+        }
+        await db.send(new TransactWriteCommand({ TransactItems: [
+          { Put: put },
+          { ConditionCheck: { TableName: table, Key: { pk: `author#${item.author}`, sk: `head#${item.requestId}` },
+            ConditionExpression: 'revisionId = :revision', ExpressionAttributeValues: { ':revision': item.revisionId } } },
+          { ConditionCheck: { TableName: table, Key: { pk: `author#${item.author}`, sk: `phase#${item.requestId}#${item.revisionId}` },
+            ConditionExpression: '#v = :version AND policy = :policy',
+            ExpressionAttributeNames: { '#v': 'version' },
+            ExpressionAttributeValues: { ':version': guard.version, ':policy': guard.policy } } }
+        ] }))
+        return true
+      } catch (error) {
+        if (conditionalFailure(error)) return false
+        throw error
+      }
+    },
     async readSource(source) {
       if (source.bucket !== bucket || !source.key.startsWith('intake/') || !source.versionId) throw new Error('Invalid source reference.')
       const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: source.key, VersionId: source.versionId }))
@@ -59,6 +127,7 @@ export function createStore({ table, bucket,
       try {
         await db.send(new TransactWriteCommand({ TransactItems: [
           ...conditions,
+          ...(pipeline && next.outbox && !previous?.outbox ? [enqueue('dispatch', author, requestId, revisionId)] : []),
           { Put: { TableName: table, Item: { ...Key, ...next, version },
             ConditionExpression: previous ? '#v = :v' : 'attribute_not_exists(pk)',
             ...(previous && { ExpressionAttributeNames: { '#v': 'version' }, ExpressionAttributeValues: { ':v': previous.version } }) } },
@@ -126,6 +195,8 @@ export function createStore({ table, bucket,
             { Put: { TableName: table, Item: { ...revision, snapshot }, ConditionExpression: 'attribute_not_exists(pk)' } },
             { Put: { TableName: table, Item: { pk: `author#${author}`, sk: `head#${snapshot.requestId}`, revisionId: snapshot.revisionId },
               ...(commitGuard && { ConditionExpression: 'revisionId = :expected', ExpressionAttributeValues: { ':expected': commitGuard.revisionId } }) } },
+            ...(pipeline && snapshot.screeningStatus === 'pending_screening' ?
+              [enqueue('screen', author, snapshot.requestId, snapshot.revisionId)] : []),
             ...(commitGuard ? [{ ConditionCheck: { TableName: table,
               Key: { pk: `author#${author}`, sk: `phase#${snapshot.requestId}#${commitGuard.revisionId}` },
               ConditionExpression: '#v = :v', ExpressionAttributeNames: { '#v': 'version' },

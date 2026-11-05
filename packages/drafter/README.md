@@ -2,6 +2,15 @@
 
 Turns one public guideline plus a program officer's request into a **cited LogicModel v1 draft** using Amazon Bedrock, or returns **explicit blockers**. It never writes CHT configuration (that is Role 5), and nothing it produces is approved: a clinician reviews every draft.
 
+## Follow a draft through the package
+
+1. [extract.ts](src/extract.ts) reads the source Markdown and indexes the guideline by page. The envelope records the source and extracted-text digests.
+2. [draft.ts](src/draft.ts) screens the input and sends the request and guideline evidence to the configured model adapter. If validation fails, it can make one retry with the errors.
+3. [sources.ts](src/sources.ts) checks quoted text and clinical numbers against the cited pages. Inspect `citations`, `numbers`, and `openBlockingAmbiguities` in the envelope to see which rules need review.
+4. The caller receives the candidate logic and its envelope. Check the envelope's `status` and `blockers` before sending the candidate to the [checker](../checker/README.md). Keep the envelope with the candidate so a reviewer can trace the source, model, prompt, and attempts.
+
+[bedrock.ts](src/bedrock.ts) exposes both the practice client for fixture runs and the live Bedrock client. Intake's screening answers whether a product owner's request is complete enough to preview. This package drafts clinical rules from guideline evidence.
+
 ## What it guarantees (and the tests that prove it)
 
 | Guarantee | How | Test |

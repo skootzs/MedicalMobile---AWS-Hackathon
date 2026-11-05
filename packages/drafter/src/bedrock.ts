@@ -137,9 +137,15 @@ export async function liveClient(cfg: LiveConfig): Promise<ModelClient> {
                 toolChoice: { tool: { name: req.toolName } },
               },
               inferenceConfig: { maxTokens: 8000 },
+              ...(cfg.guardrailId && cfg.guardrailVersion ? { guardrailConfig: {
+                guardrailIdentifier: cfg.guardrailId, guardrailVersion: cfg.guardrailVersion,
+              } } : {}),
             }),
             { abortSignal: AbortSignal.timeout(cfg.timeoutMs) },
           );
+          if (res.stopReason === 'guardrail_intervened') {
+            throw new Error('Guardrail stopped drafting.')
+          }
           const blocks = res.output?.message?.content ?? [];
           const toolUse = blocks.find((b) => b.toolUse)?.toolUse;
           const text = blocks.map((b) => b.text ?? '').join('');

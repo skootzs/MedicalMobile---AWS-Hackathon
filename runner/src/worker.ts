@@ -592,6 +592,8 @@ export class Worker {
       compileArtifactHash: hexOf(payload.compileArtifactHash),
       logicModelHash: hexOf(payload.logicModelHash),
       inputHash: expectedInputHash,
+      ...(payload.clinicalApprovalId ? { clinicalApprovalId: payload.clinicalApprovalId } : {}),
+      compilationJobId: payload.compileJobId,
       ...(goldenCasesHash ? { goldenCasesHash } : {}),
     }, signal, config.buildTimeoutSeconds * 1000);
     if (run.timedOut) throw new JobFailure('TIMEOUT', 'Verify stage timed out', true);

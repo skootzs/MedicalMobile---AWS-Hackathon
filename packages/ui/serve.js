@@ -5,7 +5,7 @@ const assets = new Map([
   ['/workspace.css',['src/workspace.css','text/css']],
   ['/app.js',['src/app.js','text/javascript']],
   ['/tracking.js',['src/tracking.js','text/javascript']],
-  ...['boot','workspace','icons','data','state','requests'].map(name=>[`/workspace/${name}.js`,[`src/workspace/${name}.js`,'text/javascript']]),
+  ...['boot','workspace','icons','data','state','requests','review-inbox'].map(name=>[`/workspace/${name}.js`,[`src/workspace/${name}.js`,'text/javascript']]),
   ...['cht-logo','cht-mark'].map(name=>[`/assets/${name}.svg`,[`assets/${name}.svg`,'image/svg+xml']])
 ])
 export const isUiRoute = path => /^\/(?:saved|recent|signed-out|protocols(?:\/[a-f0-9-]{36}(?:\/draft)?)?|collections(?:\/[a-z0-9-]+)?|guidelines\/[a-z0-9-]+|requests(?:\/(?:new|[a-f0-9-]{36}))?)?$/.test(path)

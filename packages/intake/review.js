@@ -37,17 +37,20 @@ export function createReview({ store, registry, config, screen, now = Date.now }
       if (r.screeningStatus === 'blocked') return { status: 'blocked', enabled: config.enabled }
       return publicState(await store.phase(author, requestId, revisionId))
     },
-    async screen(author, requestId, revisionId) {
+    async screen(author, requestId, revisionId, { automatic = false } = {}) {
       const r = await revision(author, requestId, revisionId)
       if (!config.enabled) throw new HttpError(503, 'Screening is not enabled yet.')
       if (r.screeningStatus !== 'pending_screening') throw new HttpError(409, 'Correct the local validation issues first.')
       const previous = await store.phase(author, requestId, revisionId)
+      if (automatic && currentPolicy(previous) &&
+          (['screening_passed', 'needs_clarification', 'screening_blocked'].includes(previous.status) ||
+           (previous.status === 'screening_failed' && !previous.retryable))) return publicState(previous)
       if (previous?.confirmation) throw new HttpError(409, 'This revision is already confirmed. Submit a correction to screen it again.')
       if (previous?.status === 'screening' && previous.leaseUntil > now()) return publicState(previous)
       const attemptId = randomUUID()
       const active = await save(author, r, previous, {
         status: 'screening', attemptId, policy: config.fingerprint, leaseUntil: now() + leaseMs
-      }, { type: 'screening_started', attemptId, policy: config })
+      }, { type: 'screening_started', attemptId, policy: config }, automatic)
       let completion
       try {
         if (hash(serializeRequirements(r.normalizedRequirements)) !== r.requirementsHash ||
@@ -85,7 +88,7 @@ export function createReview({ store, registry, config, screen, now = Date.now }
       const complete = await save(author, r, active, { ...active, ...completion, leaseUntil: 0 }, {
         type: 'screening_completed', attemptId, ...completion,
         evidenceBinding: { requirementsHash: r.requirementsHash, baselineHash: r.baselineHash, sources: r.sources }
-      })
+      }, automatic)
       return publicState(complete)
     },
     async preview(author, requestId, revisionId) {

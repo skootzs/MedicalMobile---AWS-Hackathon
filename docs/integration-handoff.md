@@ -8,20 +8,17 @@ Region: `us-west-2`. Read live values with `terraform -chdir=infra/terraform out
 
 ## Must do for jobs to run
 
-R7's side is deployed separately (`scripts/kiro/31-deploy-runner.sh`), but no job completes
-until these are wired up. Current status of each is in
-[job-delivery.md](./job-delivery.md#r2-alignment-still-needed).
+Deploy the runner separately with `scripts/kiro/31-deploy-runner.sh`. See
+[job delivery](./job-delivery.md#r2-alignment) for the runner and orchestrator contract.
 
-1. **Consume `job-events`.** Nothing reads this queue yet. Each message is
-   `{ requestId, jobId, status, attempt }`. `attempt` arrives as a numeric string, such as `"1"`,
-   because Pipes renders stream values as strings, and R2 needs a number, so pass `Number(attempt)`.
-   Read it, call R2's reconciler (`reconciler.ts`, an in-process service), and delete the message.
-   Without this, R2 never learns a job finished.
-2. **Register the runner's service actors with R2.** The runner records itself as
-   `cht-runner-compile` and `cht-runner-verify`. R2 needs both in `resolveServiceActor`, with the
-   COMPILER and VERIFIER roles, and it needs to supply its `CompilationArtifactVerifier`.
-3. **Don't send to or read from the jobs queue.** R2 writes `JOB#<id>/OUTBOX` in its transaction,
-   and an EventBridge Pipe delivers it.
+1. **Set `JOB_EVENTS_QUEUE_URL`.** In AWS mode, the orchestrator polls this queue and passes
+   completion events to its reconciler. The poller handles the numeric string that Pipes emits
+   for `attempt`.
+2. **Supply the compilation artifact verifier.** Bootstrap recognizes `cht-runner-compile` and
+   `cht-runner-verify` by default. A custom resolver must preserve their compile and verify
+   roles. Approved compilation result ingestion requires a `CompilationArtifactVerifier`.
+3. **Use the outbox for job delivery.** The orchestrator writes `JOB#<id>/OUTBOX` in its
+   transaction, an EventBridge Pipe delivers it, and the runner consumes the jobs queue.
 
 ## Environment variables
 
@@ -85,9 +82,11 @@ its newest 10 images. Build `linux/amd64`, because both hosts are x86_64.
 REGISTRY=<account-id>.dkr.ecr.us-west-2.amazonaws.com
 TAG="$(git rev-parse --short=12 HEAD)"
 aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin "$REGISTRY"
-docker build --platform linux/amd64 -t "$REGISTRY/cht-nocode/orchestrator:$TAG" ./packages/orchestrator
+docker build --platform linux/amd64 -f packages/orchestrator/Dockerfile -t "$REGISTRY/cht-nocode/orchestrator:$TAG" .
 docker push "$REGISTRY/cht-nocode/orchestrator:$TAG"
 ```
+
+For the integrated app environment, evidence catalog and smoke test, see [Integrated request and release app](integrated-pipeline.md).
 
 Push from Kiro. The app host's role can pull but not push. To pull on the host, log in the same way.
 

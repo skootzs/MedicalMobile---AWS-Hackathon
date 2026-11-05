@@ -16,6 +16,7 @@
     "runner"
   ],
   "scripts": {
+    "start:integrated": "node packages/orchestrator/src/integrated/main.js",
     "start": "npm run start -w packages/intake",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

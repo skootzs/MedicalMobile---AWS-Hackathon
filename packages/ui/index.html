@@ -23,7 +23,7 @@
 <button id="drawer-backdrop" class="drawer-backdrop" aria-label="Close navigation" hidden></button>
 <div class="app-frame">
 <header class="workspace-header"><div class="header-left"><button id="sidebar-toggle" class="icon-button" type="button" aria-label="Toggle navigation" aria-controls="workspace-sidebar" aria-expanded="false" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v16H3z M8 4v16"/></svg></button><a class="header-brand" href="/" aria-label="Community Health Toolkit home"><img src="/assets/cht-logo.svg" alt="Community Health Toolkit" width="184" height="41"></a><nav id="breadcrumb" class="breadcrumb" aria-label="Breadcrumb"></nav></div>
-<div class="header-right"><span class="preview-label">Request workspace</span><div class="account-container"><button id="account-toggle" type="button" class="account-toggle" aria-expanded="false" aria-controls="account-menu" hidden><span id="account-initials" class="avatar"></span><span id="account-name"></span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div id="account-menu" class="account-menu" hidden><button id="profile" type="button">Your profile</button><button id="sign-out" type="button">Log out</button></div></div><div id="account-actions" hidden><span id="signed-in-name" hidden></span></div></div></header>
+<div class="header-right"><span class="preview-label">Request workspace</span><div class="account-container"><button id="account-toggle" type="button" class="account-toggle" aria-expanded="false" aria-controls="account-menu" hidden><span id="account-initials" class="avatar"></span><span id="account-name"></span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div id="account-menu" class="account-menu" hidden><button id="review-inbox" type="button" hidden>Review inbox</button><button id="profile" type="button">Your profile</button><button id="sign-out" type="button">Log out</button></div></div><div id="account-actions" hidden><span id="signed-in-name" hidden></span></div></div></header>
 <main id="main-content" tabindex="-1" class="workspace-main">
 <div id="workspace-notice" class="concept-notice" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v6 M12 7v.1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg><span>Concept preview · Clinical content is illustrative and requires local protocol review.</span></div>
 <p id="storage-warning" class="inline-warning" hidden></p>
@@ -81,6 +81,11 @@
 </section>
 <footer id="workspace-footer" class="workspace-footer" hidden><span>Reference workspace · No patient information is stored in this concept.</span><button type="button" data-action="governance">Content governance ↗</button></footer>
 </main></div>
+<dialog id="review-inbox-dialog" aria-labelledby="review-inbox-title">
+  <h2 id="review-inbox-title">Review inbox</h2>
+  <div id="review-inbox-body"></div>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
 <dialog id="profile-dialog" aria-labelledby="profile-title">
   <h2 id="profile-title">Your profile</h2>
   <dl class="profile-fields">

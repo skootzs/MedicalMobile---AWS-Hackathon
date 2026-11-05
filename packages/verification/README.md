@@ -20,6 +20,15 @@ makes `passed` false. **There are no model/LLM calls anywhere in this package.**
 
 ---
 
+## Follow one verification run
+
+1. Resolve the compiled project, logic, and optional golden-case file. [hashing.ts](src/hashing.ts) checks the inputs and compile artifact against the digests supplied by the runner.
+2. [patient-mapper.ts](src/patient-mapper.ts) maps synthetic patient fields to form pages. [case-executor.ts](src/case-executor.ts) drives the harness and records observed form fields, tasks, and branches.
+3. [evaluator-bridge.ts](src/evaluator-bridge.ts) obtains expected values from the Python evaluator when configured. The report also retains any golden expectations so disagreements can be traced to their source.
+4. [report-builder.ts](src/report-builder.ts) assembles case results, coverage, and integrity checks. The job runner validates the resulting report and binds it to the build being verified.
+
+For a failed run, open [the report field guide](#report-field-semantics-for-r2) and check integrity and case outcomes before investigating coverage gaps. Use `verification.log` for harness or Python errors. A process exit of 1 can still produce a valid report for review.
+
 ## Directory layout
 
 ```

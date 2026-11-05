@@ -94,6 +94,10 @@
 .revision-entry section{padding:10px 0;font-size:13px}.revision-entry button{background:var(--green);color:white;border-radius:6px;padding:10px 15px;margin:8px 8px 0 0}
 #requests-overview #requests button{padding:10px 0;font-size:15px}
 #requests-overview #requests button::after{content:"View journey →";float:right;font-size:12px;color:var(--green);font-weight:500;margin-left:16px}
+#details .tracking-route.extended{display:block;margin-left:4px}
+.tracking-route.extended .tracking-stop{display:flex;gap:20px;padding:0 0 28px}
+.tracking-route.extended .tracking-stop:not(:last-child)::after{left:19px;top:40px;bottom:0;right:auto;width:2px;height:auto}
+.tracking-route.extended .stop-marker{flex-shrink:0;margin:0}
 @media(max-width:960px){#details .tracking-route{display:block;margin-left:4px}.tracking-stop{display:flex;gap:20px;padding:0 0 28px}.tracking-stop:not(:last-child)::after{left:19px;top:40px;bottom:0;right:auto;width:2px;height:auto}.stop-marker{flex-shrink:0;margin:0}.tracking-stop>div{padding:2px 0 0}.tracking-stop p{max-width:540px}.tracking-stop h4{margin-bottom:4px}}
 @media(max-width:720px){#details>h2{font-size:21px}.tracking-summary{padding:20px}#requests-overview #requests button::after{float:none;display:block;margin:10px 0 0}}
 

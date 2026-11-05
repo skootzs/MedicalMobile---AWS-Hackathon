@@ -52,10 +52,14 @@ resource "aws_bedrock_guardrail_version" "intake" {
   }
 }
 
-output "intake_screening_environment" {
-  value = merge({ INTAKE_SCREENING_ENABLED = tostring(var.intake_screening_enabled) }, var.intake_screening_enabled ? {
+locals {
+  intake_screening_environment = merge({ INTAKE_SCREENING_ENABLED = tostring(var.intake_screening_enabled) }, var.intake_screening_enabled ? {
     BEDROCK_MODEL_ID          = var.intake_bedrock_model_id
     BEDROCK_GUARDRAIL_ID      = aws_bedrock_guardrail.intake[0].guardrail_id
     BEDROCK_GUARDRAIL_VERSION = aws_bedrock_guardrail_version.intake[0].version
   } : {})
+}
+
+output "intake_screening_environment" {
+  value = local.intake_screening_environment
 }

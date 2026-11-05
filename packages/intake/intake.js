@@ -37,7 +37,7 @@ export async function authenticate(header, verify, getRoles) {
   return (await authenticateProfile(header, verify, getRoles)).authorId
 }
 
-export async function authenticateProfile(header, verify, getRoles) {
+export async function authenticateProfile(header, verify, getRoles, { reviewers = false } = {}) {
   const match = /^Bearer (\S+)$/i.exec(header ?? '')
   if (!match) throw new HttpError(401, 'Sign in to continue.')
   let claims
@@ -47,8 +47,8 @@ export async function authenticateProfile(header, verify, getRoles) {
     throw new HttpError(401, 'Your access token is invalid or expired.')
   }
   if (typeof claims.sub !== 'string' || !claims.sub) throw new HttpError(401, 'Invalid identity.')
-  const assigned = (await getRoles(claims.sub)).filter(role => roles.includes(role))
-  if (!assigned.includes('PO')) throw new HttpError(403, 'This account requires the PO role.')
+  const assigned = (await getRoles(claims.sub, claims)).filter(role => roles.includes(role))
+  if (!assigned.includes('PO') && !(reviewers && assigned.some(role => ['clinician', 'release approver', 'service designer'].includes(role)))) throw new HttpError(403, 'This account requires the PO role.')
   return { authorId: claims.sub, username: claims.username || claims.sub, roles: assigned }
 }
 

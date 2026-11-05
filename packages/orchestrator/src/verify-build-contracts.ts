@@ -41,6 +41,7 @@ export interface VerifyBuildJobIntent {
   /** Immutable snapshot-envelope object the build was derived from. */
   snapshotUri: string;
   checkerReportId: string;
+  goldenCases?: { uri: string; sha256: string };
   sourceWorkflowVersion: number;
   workflowVersion: number;
   idempotencyKey: string;
@@ -69,6 +70,7 @@ export function createVerifyBuildIntent(input: VerifyBuildIntentInput): VerifyBu
     namespace: 'verify-build-v1', request: input.requestPreview,
     logic: { logicRevision: input.logicModelRevision, logicHash: input.logicModelHash },
     compileJobId: input.compileJobId, packageHash: input.packageHash, manifestHash: input.manifestHash,
+    ...(input.goldenCases ? { goldenCases: input.goldenCases } : {}),
   })).digest('hex');
   return {
     ...input, jobId: `verify-${digest}`, idempotencyKey: `verify-build-v1:${digest}`,
@@ -87,13 +89,15 @@ export function validVerifyBuildIntent(job: VerifyBuildJobIntent): boolean {
     const fields = ['jobId', 'jobType', 'requestId', 'revision', 'requestPreview', 'logicModelRevision', 'logicModelHash',
       'clinicalApprovalId', 'compileJobId', 'packageHash', 'packageUri', 'packageVersionId', 'manifestHash', 'compileArtifactHash',
       'snapshotUri', 'checkerReportId', 'sourceWorkflowVersion', 'workflowVersion', 'idempotencyKey', 'handoffEventId', 'createdBy', 'createdAt', 'status'];
+    if (job.goldenCases) fields.push('goldenCases');
     if (Object.keys(job).length !== fields.length || Object.keys(job).some(k => !fields.includes(k))) return false;
     const { jobId, jobType, workflowVersion, status, idempotencyKey, ...input } = job;
     return checkerSame(job, createVerifyBuildIntent(input)) && jobType === 'VERIFY_BUILD' && status === 'PENDING' &&
       [jobId, input.requestId, input.clinicalApprovalId, input.compileJobId, input.checkerReportId, input.handoffEventId, input.createdBy].every(checkerId) &&
       checkerVersionNumber(input.sourceWorkflowVersion) && checkerVersionNumber(workflowVersion) && checkerVersionNumber(input.revision) &&
       checkerVersionNumber(input.logicModelRevision) && hash(input.logicModelHash) && hash(input.packageHash) && hash(input.manifestHash) &&
-      hash(input.compileArtifactHash) && checkerId(input.packageVersionId) && typeof input.packageUri === 'string' && !!input.packageUri &&
+      hash(input.compileArtifactHash) && (!input.goldenCases ||
+        (Object.keys(input.goldenCases).length === 2 && /^s3:\/\/[^/]+\/.+/.test(input.goldenCases.uri) && hash(input.goldenCases.sha256))) && checkerId(input.packageVersionId) && typeof input.packageUri === 'string' && !!input.packageUri &&
       typeof input.snapshotUri === 'string' && !!input.snapshotUri && checkerVersionNumber(input.requestPreview.revision) &&
       input.requestPreview.requestId === input.requestId && hash(input.requestPreview.snapshotHash) &&
       typeof input.createdAt === 'string' && new Date(input.createdAt).toISOString() === input.createdAt;
@@ -125,6 +129,7 @@ export function toVerifyBuildPayload(job: VerifyBuildJobIntent, checkReportHash:
     packageHash: toR7Hash(job.packageHash),
     compileArtifactHash: toR7Hash(job.compileArtifactHash),
     manifestHash: toR7Hash(job.manifestHash),
+    ...(job.goldenCases ? { goldenCasesUri: job.goldenCases.uri, goldenCasesHash: toR7Hash(job.goldenCases.sha256) } : {}),
     createdBy: job.createdBy,
     createdAt: job.createdAt,
   };

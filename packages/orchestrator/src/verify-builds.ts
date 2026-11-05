@@ -72,7 +72,7 @@ export class VerifyBuildHandoffService {
         job.logicModelHash !== c.logicModelHash || job.compileJobId !== c.compileJobId) throw Error('Verify-build receipt integrity failure.');
     return job;
   }
-  async start(input: VerifyBuildCommand, principal: unknown): Promise<VerifyBuildHandoffResult> {
+  async start(input: VerifyBuildCommand, principal: unknown, goldenCases?: VerifyBuildJobIntent['goldenCases']): Promise<VerifyBuildHandoffResult> {
     const c = parse(input);
     const reply = (status: VerifyBuildHandoffResult['status'], reason: string, stored?: ApplyResult, job: VerifyBuildJobIntent | null = null): VerifyBuildHandoffResult => ({
       status, reason, job, workflowVersion: job?.workflowVersion ?? stored?.version ?? null, auditId: stored?.auditId ?? null,
@@ -83,7 +83,7 @@ export class VerifyBuildHandoffService {
       if (!actor || !checkerId(actor.id) || !Array.isArray(actor.roles)) return reply('REJECTED', 'UNAUTHORIZED');
       if (!await this.#deps.canAccessRequest(principal, c.requestId)) return reply('REJECTED', 'REQUEST_NOT_FOUND');
       let failure = !actor.roles.includes('ORCHESTRATOR') || this.#deps.authorizeActor && await this.#deps.authorizeActor(actor, c.requestId) !== true ? 'WRONG_ROLE' : undefined;
-      const fingerprint = createHash('sha256').update(canonicalizeJson({ command: c, actorId: actor.id })).digest('hex');
+      const fingerprint = createHash('sha256').update(canonicalizeJson({ command: c, actorId: actor.id, ...(goldenCases ? { goldenCases } : {}) })).digest('hex');
       let job: VerifyBuildJobIntent | null = null;
       if (!failure) {
         const receipt = await this.#deps.store.getReceipt(c.requestId, c.eventId);
@@ -120,6 +120,7 @@ export class VerifyBuildHandoffService {
                   packageVersionId: result.artifact.packagedObject.versionId, manifestHash: result.artifact.manifest.sha256,
                   compileArtifactHash: result.artifact.generatedFilesHash, snapshotUri: compiled.logicModelUri,
                   checkerReportId: s.checks.reportId, sourceWorkflowVersion: s.version,
+                  ...(goldenCases ? { goldenCases } : {}),
                   handoffEventId: c.eventId, createdBy: actor.id, createdAt: (this.#deps.now ?? (() => new Date().toISOString()))(),
                 });
                 // Fail closed if the outgoing payload would not satisfy R7's published schema.

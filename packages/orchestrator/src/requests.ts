@@ -6,7 +6,7 @@ import type { Actor, WorkflowState } from './workflow.ts';
 import type { ApplyResult, OrchestratorStore, StoreDependencies, WorkflowCommand } from './storage/requests.ts';
 
 /** Provisional R2 contracts, separate from R4's eventual shared schema. */
-export type RequestContent = Pick<DesignBrief, 'title' | 'objective' | 'targetPopulation' | 'requirements'>;
+export type RequestContent = Pick<DesignBrief, 'title' | 'objective' | 'targetPopulation' | 'requirements' | 'intakeEvidenceHash'>;
 export interface CreateRequestCommand { eventId: string; expectedVersion: 0; content: RequestContent }
 export interface CurrentRequestCommand extends RevisionIdentity { eventId: string; expectedVersion: number }
 export interface ConfirmRequestCommand extends CurrentRequestCommand {
@@ -50,7 +50,13 @@ const digest = (v: unknown) => createHash('sha256').update(canonicalizeJson(v), 
 const equal = (a: unknown, b: unknown) => canonicalizeJson(a) === canonicalizeJson(b);
 const exactKeys = (v: Record<string, unknown>, keys: readonly string[]) => Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v, k));
 function validContent(v: unknown): v is RequestContent {
-  return obj(v) && exactKeys(v, ['title', 'objective', 'targetPopulation', 'requirements']) &&
+  if (!obj(v)) return false;
+  const keys = ['title', 'objective', 'targetPopulation', 'requirements'];
+  if (Object.hasOwn(v, 'intakeEvidenceHash')) {
+    if (!hash(v.intakeEvidenceHash)) return false;
+    keys.push('intakeEvidenceHash');
+  }
+  return exactKeys(v, keys) &&
     [v.title, v.objective, v.targetPopulation].every(text) && Array.isArray(v.requirements) && v.requirements.length > 0 &&
     v.requirements.every(r => obj(r) && exactKeys(r, ['condition', 'action']) && text(r.condition) && text(r.action));
 }

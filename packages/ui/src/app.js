@@ -2,6 +2,7 @@ import { trackingState } from '/tracking.js'
 const byId = id => document.getElementById(id)
 const form = byId('request')
 let token
+let signedInProfile
 let requestId
 let attempt
 let viewSequence = 0
@@ -17,6 +18,8 @@ async function api(path, options = {}) {
   const body = await response.json()
   if (response.status === 401 && token) {
     token = undefined
+    signedInProfile = undefined
+    byId('review-inbox-dialog').close()
     byId('intake').hidden = true
     byId('welcome').hidden = false
     byId('account-actions').hidden = true
@@ -31,7 +34,7 @@ async function api(path, options = {}) {
     window.chtWorkspace?.signedOut()
   }
   if (!response.ok) {
-    const error = new Error(body?.error ?? (typeof body === 'string' ? body : 'Request failed.'))
+    const error = new Error(body?.error?.message ?? (typeof body?.error === 'string' ? body.error : typeof body === 'string' ? body : 'Request failed.'))
     error.status = response.status
     throw error
   }
@@ -111,12 +114,12 @@ function renderTracking(parent, revision, state, onNext) {
   append(summary, 'h3', model.headline)
   append(summary, 'p', model.steps[model.current].description)
   const route = append(parent, 'ol', '')
-  route.className = 'tracking-route'
+  route.className = state.workflow ? 'tracking-route extended' : 'tracking-route'
   route.setAttribute('aria-label', 'Request progress')
   for (const [index, step] of model.steps.entries()) {
     const stop = append(route, 'li', '')
     stop.className = `tracking-stop ${step.state}`
-    if (index === model.current) stop.setAttribute('aria-current', 'step')
+    if (index === model.current && !model.completed) stop.setAttribute('aria-current', 'step')
     const marker = append(stop, 'span', step.state === 'complete' ? '✓' : String(index + 1).padStart(2, '0'))
     marker.className = 'stop-marker'
     marker.setAttribute('aria-hidden', 'true')
@@ -176,7 +179,9 @@ async function show(id, replace = false) {
     if (action==='review') {const preview=entry.querySelector('.request-preview')||control;preview?.scrollIntoView({block:'start'});preview?.focus({preventScroll:true})}
     else control?.click()
   }
-  if (latest.screeningStatus === 'blocked') renderTracking(tracker, latest, {status:'blocked',enabled:false}, next)
+  if (latest.screeningStatus === 'blocked') renderTracking(tracker, latest, {
+    status:'blocked', enabled:false, ...(signedInProfile?.integrated && { workflow: { status: 'intake' } })
+  }, next)
   for (const revision of revisions) {
     const entry = append(details, 'details', '')
     entry.className = 'revision-entry'
@@ -250,6 +255,27 @@ async function showReview(parent, revision, onState, onCorrect, isCurrent = () =
     append(panel, 'p', `Screening: ${state.status}`)
     if (state.attemptId) append(panel, 'p', `Screening attempt: ${state.attemptId}`).className = 'small'
     if (state.message) append(panel, 'p', state.message)
+    if (state.workflow?.label) {
+      append(panel, 'h4', state.workflow.label)
+      if (state.workflow.message) append(panel, 'p', state.workflow.message)
+      if (state.workflow.downloadable) {
+        const download = append(panel, 'button', 'Download approved CHT package')
+        download.type = 'button'
+        download.setAttribute('data-review-action', 'download')
+        download.onclick = async () => {
+          try {
+            const response = await fetch(`${base}/workflow/download`, { headers: { Authorization: `Bearer ${token}` } })
+            if (!response.ok) throw new Error('The approved package is unavailable. Refresh and try again.')
+            const url = URL.createObjectURL(await response.blob())
+            const link = document.createElement('a')
+            link.href = url
+            link.download = 'cht-project.tgz'
+            link.click()
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+          } catch (error) { message(error.message) }
+        }
+      }
+    }
     if (!state.enabled) { append(panel, 'p', 'Bedrock screening has not been enabled.'); return }
     const action = (label, path, body = {}) => {
       const button = append(panel, 'button', label)
@@ -291,7 +317,8 @@ async function showReview(parent, revision, onState, onCorrect, isCurrent = () =
       for (const issue of state.result.issues ?? []) append(panel, 'p', `${issue.field}: ${issue.question}`)
       for (const evidence of state.result.evidence ?? []) append(panel, 'p', `Evidence: ${evidence.source} · ${evidence.location}`).className='small'
     }
-    if (!state.confirmed && (state.status !== 'screening' || state.leaseExpired)) {
+    if (!state.confirmed && (state.status !== 'screening' || state.leaseExpired) &&
+        !(state.status === 'pending_screening' && state.workflow?.status === 'screening')) {
       action(state.status === 'pending_screening' ? 'Screen this revision' : 'Screen again', 'screening')
     }
     if (state.status === 'screening') {
@@ -340,11 +367,27 @@ async function showReview(parent, revision, onState, onCorrect, isCurrent = () =
             render()
           } catch (error) { await reviewError(error); button.disabled = false }
         }
-      } else if (state.confirmed) append(previewPanel, 'p', 'Request confirmed. Handoff queued. The downstream workflow has not started.')
+      } else if (state.confirmed) append(previewPanel, 'p', 'Request confirmed.')
       if(revealPreview){parent.open=true;previewPanel.scrollIntoView?.({behavior:'smooth',block:'start'});previewPanel.focus?.({preventScroll:true})}
     }
   }
   render()
+  if (signedInProfile?.integrated && onState) {
+    const refreshWorkflow = async () => {
+      if (!isCurrent()) return
+      try {
+        const next = await api(`${base}/screening`)
+        if (!isCurrent()) return
+        const editing = document.activeElement?.tagName === 'TEXTAREA' && panel.contains(document.activeElement)
+        if (JSON.stringify(next) !== JSON.stringify(state) && !editing) {
+          state = next
+          render()
+        }
+      } catch (error) { if (error.status === 401) return }
+      if (isCurrent()) setTimeout(refreshWorkflow, 4000)
+    }
+    setTimeout(refreshWorkflow, 4000)
+  }
 }
 
 async function refresh() {
@@ -424,6 +467,12 @@ byId('new-request').onclick = () => {
   byId('correction-items').replaceChildren()
   byId('form-title').textContent = 'New request'
 }
+async function showInbox() {
+  const { openReviewInbox } = await import('/workspace/review-inbox.js')
+  await openReviewInbox({ api, profile: signedInProfile, append,
+    dialog: byId('review-inbox-dialog'), body: byId('review-inbox-body') })
+}
+byId('review-inbox').onclick = () => showInbox().catch(error => message(error.message))
 byId('profile').onclick = async () => {
   const button = byId('profile')
   button.disabled = true
@@ -496,16 +545,25 @@ try {
     token = session.token
     byId('account-actions').hidden = false
     const profile = await api('/api/profile')
+    signedInProfile = profile
+    byId('request-nav').hidden = profile.integrated && !profile.roles.includes('PO')
+    byId('review-inbox').hidden = !profile.integrated || !profile.roles.some(role => ['clinician', 'release approver', 'service designer'].includes(role))
     byId('signed-in-name').textContent = profile.username
     await window.chtWorkspace?.authenticated(profile)
-    const versions = await api('/api/versions')
-    for (const version of versions) form.elements.baselineVersion.add(new Option(version, version))
-    await refresh()
+    if (!profile.integrated || profile.roles.includes('PO')) {
+      const versions = await api('/api/versions')
+      for (const version of versions) form.elements.baselineVersion.add(new Option(version, version))
+      await refresh()
+    }
     byId('welcome').hidden = true
     byId('intake').hidden = false
     const returnTo = sessionStorage.getItem('intake-return-to')
     sessionStorage.removeItem('intake-return-to')
-    if (window.chtWorkspace) window.chtWorkspace.start(safeReturnPath(returnTo))
+    if (profile.integrated && !profile.roles.includes('PO')) {
+      byId('intake').hidden = true
+      window.chtWorkspace?.start('/')
+      await showInbox()
+    } else if (window.chtWorkspace) window.chtWorkspace.start(safeReturnPath(returnTo))
     else if (/^\/requests\/[a-f0-9-]{36}$/.test(returnTo || '')) await show(returnTo.split('/').pop(), true)
     else navigate(returnTo === '/requests/new' ? '/requests/new' : '/requests', true)
   }

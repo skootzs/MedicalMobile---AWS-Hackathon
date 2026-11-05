@@ -22,6 +22,24 @@ resource "aws_dynamodb_table" "intake" {
     type = "S"
   }
 
+  attribute {
+    name = "pipelineQueue"
+    type = "S"
+  }
+
+  attribute {
+    name = "due"
+    type = "N"
+  }
+
+  global_secondary_index {
+    name               = "pipeline-due"
+    hash_key           = "pipelineQueue"
+    range_key          = "due"
+    projection_type    = "INCLUDE"
+    non_key_attributes = ["kind", "revisionId"]
+  }
+
   point_in_time_recovery {
     enabled = true
   }

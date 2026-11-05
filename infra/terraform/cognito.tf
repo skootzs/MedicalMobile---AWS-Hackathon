@@ -26,7 +26,7 @@ resource "aws_cognito_user_pool_client" "main" {
   supported_identity_providers         = ["COGNITO"]
 
   callback_urls = ["http://localhost:8080"]
-  logout_urls   = ["http://localhost:8080"]
+  logout_urls   = ["http://localhost:8080", "http://localhost:8080/signed-out"]
 
   explicit_auth_flows = ["ALLOW_USER_SRP_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
 

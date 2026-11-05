@@ -10,6 +10,7 @@ export interface DesignBrief extends RevisionIdentity {
   title: string;
   objective: string;
   targetPopulation: string;
+  intakeEvidenceHash?: string;
   requirements: ReadonlyArray<{ condition: string; action: string }>;
 }
 
