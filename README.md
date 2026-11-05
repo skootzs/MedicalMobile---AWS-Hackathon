@@ -1,8 +1,8 @@
 # Ripple
 
-**Push a ripple, ship a wave.**
-
-<img src="docs/ripple-brand.png" alt="Ripple and Community Health Toolkit" width="486">
+<!-- **Push a ripple, ship a wave.** -->
+<!-- <img src="docs/ripple-brand.png" alt="Ripple and Community Health Toolkit" width="486"> -->
+<img width="2172" height="262" alt="image" src="https://github.com/user-attachments/assets/6a330994-b918-4172-8284-99e8c4e97d04" />
 
 ![AWS Breaking Barriers Challenge 2026](docs/aws-breaking-barriers-challenge-2026.png)
 
