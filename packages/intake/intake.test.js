@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { authenticate, handoff, hash, maxAttachmentBytes, submit } from './intake.js'
+import { authenticate, authenticateProfile, handoff, hash, maxAttachmentBytes, submit } from './intake.js'
 
 const registry = { v1: hash('baseline') }
 const valid = {
@@ -52,6 +52,15 @@ test('authentication and server-managed PO authorization', async () => {
   }
   await assert.rejects(authenticate('Bearer good', verify, async () => ['developer']), { status: 403 })
   assert.equal(await authenticate('Bearer good', verify, async () => ['PO']), 'alice')
+})
+
+test('profile uses verified identity and recognized server-managed privileges', async () => {
+  const verify = async () => ({ sub: 'alice', username: 'po-test', roles: ['release approver'] })
+  assert.deepEqual(await authenticateProfile('Bearer valid', verify, async () => ['PO', 'clinician', 'admin']), {
+    authorId: 'alice', username: 'po-test', roles: ['PO', 'clinician']
+  })
+  await assert.rejects(authenticateProfile('Bearer valid', verify, async () => []), { status: 403 })
+  await assert.rejects(authenticateProfile(undefined, verify, async () => ['PO']), { status: 401 })
 })
 
 test('reject forged attribution and cross-owner correction', async () => {

@@ -61,3 +61,19 @@ output "job_events_dlq_url" {
 output "log_group_name" {
   value = aws_cloudwatch_log_group.app.name
 }
+
+output "intake_environment" {
+  value = {
+    AWS_REGION           = data.aws_region.current.region
+    COGNITO_USER_POOL_ID = aws_cognito_user_pool.intake.id
+    COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.intake.id
+    COGNITO_HOSTED_URL   = "https://${local.intake_resource_name}.auth.${data.aws_region.current.region}.amazoncognito.com"
+    COGNITO_REDIRECT_URI = var.intake_callback_url
+    INTAKE_TABLE         = aws_dynamodb_table.intake.name
+    INTAKE_BUCKET        = aws_s3_bucket.intake.id
+  }
+}
+
+output "intake_runtime_policy_arn" {
+  value = aws_iam_policy.intake_runtime.arn
+}

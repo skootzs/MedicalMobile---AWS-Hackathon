@@ -1,0 +1,385 @@
+{
+  "notice": "Synthetic storage example generated through submit/createReview using an in-memory adapter. Resource names, identities, versions, model response, AWS request ID and usage are fixtures; no AWS calls were made. The envelope and sourceObjects are documentation helpers, not persisted application records. Audit event IDs/timestamps are synthetic.",
+  "tableName": "synthetic-intake-table",
+  "registry": {
+    "test-v1": "f615bd630f33f21b47c2d25ae5c2ac72a443b92d3b23cea212d645111fb45d86"
+  },
+  "submittedRevisionItem": {
+    "pk": "requests#synthetic-cognito-sub",
+    "sk": "f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7#898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+    "snapshot": {
+      "requestId": "f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7",
+      "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+      "authorId": "synthetic-cognito-sub",
+      "normalizedRequirements": {
+        "goal": "Clarify the COVID-19 referral task demonstration",
+        "pathway": "Synthetic COVID-19 referral follow-up",
+        "targetUsers": "Community health workers",
+        "acceptanceCriteria": "Display the follow-up task.\nPreserve the existing routing rules."
+      },
+      "requirementsHash": "23f88a5c7356fc7a6553a9755273fb121ef2f6e2abf03284f5ff8e75e37e7ed7",
+      "baselineVersion": "test-v1",
+      "baselineHash": "f615bd630f33f21b47c2d25ae5c2ac72a443b92d3b23cea212d645111fb45d86",
+      "sources": [
+        {
+          "bucket": "synthetic-intake-bucket",
+          "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+          "versionId": "synthetic-object-version-1",
+          "sha256": "82414418a5a0f8dd0b2c23c19f2a7534cd34b2f73cc07951ab8fc7be93ba6203"
+        },
+        {
+          "bucket": "synthetic-intake-bucket",
+          "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+          "versionId": "synthetic-object-version-1",
+          "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+          "filename": "synthetic-context.md"
+        }
+      ],
+      "references": [],
+      "screeningStatus": "pending_screening",
+      "corrections": [],
+      "events": [
+        {
+          "status": "received",
+          "at": "2026-11-04T22:11:00.305Z"
+        },
+        {
+          "status": "pending_screening",
+          "at": "2026-11-04T22:11:00.307Z"
+        }
+      ]
+    }
+  },
+  "headItem": {
+    "pk": "author#synthetic-cognito-sub",
+    "sk": "head#f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7",
+    "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71"
+  },
+  "retryReservationItem": {
+    "pk": "author#synthetic-cognito-sub",
+    "sk": "key#synthetic-submit-key-0001",
+    "fingerprint": "7892430f9cf50db139f101e4aa85faf743ba349d9846cd1bb1b4d8c745769723",
+    "requestId": "f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7",
+    "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+    "receivedAt": "2026-11-04T22:11:00.305Z",
+    "baselineHash": "f615bd630f33f21b47c2d25ae5c2ac72a443b92d3b23cea212d645111fb45d86",
+    "result": {
+      "requestId": "f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7",
+      "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+      "authorId": "synthetic-cognito-sub",
+      "normalizedRequirements": {
+        "goal": "Clarify the COVID-19 referral task demonstration",
+        "pathway": "Synthetic COVID-19 referral follow-up",
+        "targetUsers": "Community health workers",
+        "acceptanceCriteria": "Display the follow-up task.\nPreserve the existing routing rules."
+      },
+      "requirementsHash": "23f88a5c7356fc7a6553a9755273fb121ef2f6e2abf03284f5ff8e75e37e7ed7",
+      "baselineVersion": "test-v1",
+      "baselineHash": "f615bd630f33f21b47c2d25ae5c2ac72a443b92d3b23cea212d645111fb45d86",
+      "sources": [
+        {
+          "bucket": "synthetic-intake-bucket",
+          "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+          "versionId": "synthetic-object-version-1",
+          "sha256": "82414418a5a0f8dd0b2c23c19f2a7534cd34b2f73cc07951ab8fc7be93ba6203"
+        },
+        {
+          "bucket": "synthetic-intake-bucket",
+          "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+          "versionId": "synthetic-object-version-1",
+          "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+          "filename": "synthetic-context.md"
+        }
+      ],
+      "references": [],
+      "screeningStatus": "pending_screening",
+      "corrections": [],
+      "events": [
+        {
+          "status": "received",
+          "at": "2026-11-04T22:11:00.305Z"
+        },
+        {
+          "status": "pending_screening",
+          "at": "2026-11-04T22:11:00.307Z"
+        }
+      ]
+    }
+  },
+  "confirmedPhaseItem": {
+    "pk": "author#synthetic-cognito-sub",
+    "sk": "phase#f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7#898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+    "status": "screening_passed",
+    "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+    "policy": "d2cf9eec9ddea2354aa93afdc4ba67b739b80ae16cd9573a388b4e41b6763d8a",
+    "leaseUntil": 0,
+    "version": 4,
+    "result": {
+      "decision": "pass",
+      "summary": "Synthetic completeness pass; no clinical approval is implied.",
+      "issues": [],
+      "evidence": [
+        {
+          "source": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+          "location": "Submitted requirements"
+        }
+      ],
+      "suggestions": [
+        {
+          "id": "clarify-reader",
+          "field": "acceptanceCriteria",
+          "startLine": 1,
+          "endLine": 1,
+          "original": "Display the follow-up task.",
+          "replacement": "Display the follow-up task to community health workers.",
+          "kind": "clarification",
+          "rationale": "Community health workers are already named as target users."
+        }
+      ]
+    },
+    "requestId": "synthetic-bedrock-request-id",
+    "usage": {
+      "inputTokens": 100,
+      "outputTokens": 150
+    },
+    "preview": {
+      "id": "1bf48dc1-6efb-4b73-9fb2-791f88d23c50",
+      "hash": "ac17dee09fc80da179b263e6f969696a0d44c3408e6918d71d6eb6f6a7fa2432",
+      "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+      "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+      "content": {
+        "requirements": {
+          "goal": "Clarify the COVID-19 referral task demonstration",
+          "pathway": "Synthetic COVID-19 referral follow-up",
+          "targetUsers": "Community health workers",
+          "acceptanceCriteria": "Display the follow-up task.\nPreserve the existing routing rules."
+        },
+        "baselineVersion": "test-v1",
+        "sources": [
+          {
+            "bucket": "synthetic-intake-bucket",
+            "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+            "versionId": "synthetic-object-version-1",
+            "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+            "filename": "synthetic-context.md"
+          }
+        ],
+        "summary": "Synthetic completeness pass; no clinical approval is implied."
+      }
+    },
+    "confirmation": {
+      "id": "a4703f51-9f4e-4616-aa5d-eacc1a248ec2",
+      "authorId": "synthetic-cognito-sub",
+      "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+      "previewId": "1bf48dc1-6efb-4b73-9fb2-791f88d23c50",
+      "previewHash": "ac17dee09fc80da179b263e6f969696a0d44c3408e6918d71d6eb6f6a7fa2432",
+      "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+      "feedback": "Synthetic request summary reviewed.",
+      "at": "2026-11-04T20:00:00.000Z"
+    },
+    "outbox": {
+      "id": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+      "status": "queued",
+      "snapshot": {
+        "requestId": "f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7",
+        "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+        "authorId": "synthetic-cognito-sub",
+        "normalizedRequirements": {
+          "goal": "Clarify the COVID-19 referral task demonstration",
+          "pathway": "Synthetic COVID-19 referral follow-up",
+          "targetUsers": "Community health workers",
+          "acceptanceCriteria": "Display the follow-up task.\nPreserve the existing routing rules."
+        },
+        "requirementsHash": "23f88a5c7356fc7a6553a9755273fb121ef2f6e2abf03284f5ff8e75e37e7ed7",
+        "baselineVersion": "test-v1",
+        "baselineHash": "f615bd630f33f21b47c2d25ae5c2ac72a443b92d3b23cea212d645111fb45d86",
+        "sources": [
+          {
+            "bucket": "synthetic-intake-bucket",
+            "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+            "versionId": "synthetic-object-version-1",
+            "sha256": "82414418a5a0f8dd0b2c23c19f2a7534cd34b2f73cc07951ab8fc7be93ba6203"
+          },
+          {
+            "bucket": "synthetic-intake-bucket",
+            "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+            "versionId": "synthetic-object-version-1",
+            "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+            "filename": "synthetic-context.md"
+          }
+        ],
+        "references": [],
+        "screeningStatus": "screening_passed",
+        "corrections": [],
+        "events": [
+          {
+            "status": "received",
+            "at": "2026-11-04T22:11:00.305Z"
+          },
+          {
+            "status": "pending_screening",
+            "at": "2026-11-04T22:11:00.307Z"
+          }
+        ],
+        "screening": {
+          "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+          "policy": "d2cf9eec9ddea2354aa93afdc4ba67b739b80ae16cd9573a388b4e41b6763d8a"
+        },
+        "preview": {
+          "id": "1bf48dc1-6efb-4b73-9fb2-791f88d23c50",
+          "hash": "ac17dee09fc80da179b263e6f969696a0d44c3408e6918d71d6eb6f6a7fa2432"
+        },
+        "confirmation": {
+          "id": "a4703f51-9f4e-4616-aa5d-eacc1a248ec2",
+          "authorId": "synthetic-cognito-sub",
+          "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+          "previewId": "1bf48dc1-6efb-4b73-9fb2-791f88d23c50",
+          "previewHash": "ac17dee09fc80da179b263e6f969696a0d44c3408e6918d71d6eb6f6a7fa2432",
+          "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+          "feedback": "Synthetic request summary reviewed.",
+          "at": "2026-11-04T20:00:00.000Z"
+        }
+      }
+    }
+  },
+  "auditItems": [
+    {
+      "pk": "author#synthetic-cognito-sub",
+      "sk": "event#f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7#898cd1b1-e7e7-4cfe-8a6a-03101fa73f71#synthetic-event-1",
+      "type": "screening_started",
+      "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+      "policy": {
+        "enabled": true,
+        "region": "us-west-2",
+        "modelId": "synthetic-model",
+        "guardrailIdentifier": "synthetic-guardrail",
+        "guardrailVersion": "1",
+        "promptVersion": "intake-completeness-v4",
+        "schemaVersion": 2,
+        "timeoutMs": 20000,
+        "maxInputBytes": 12000,
+        "maxTokens": 4096,
+        "fingerprint": "d2cf9eec9ddea2354aa93afdc4ba67b739b80ae16cd9573a388b4e41b6763d8a"
+      },
+      "at": "2026-11-04T20:00:00.000Z"
+    },
+    {
+      "pk": "author#synthetic-cognito-sub",
+      "sk": "event#f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7#898cd1b1-e7e7-4cfe-8a6a-03101fa73f71#synthetic-event-2",
+      "type": "screening_completed",
+      "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+      "status": "screening_passed",
+      "result": {
+        "decision": "pass",
+        "summary": "Synthetic completeness pass; no clinical approval is implied.",
+        "issues": [],
+        "evidence": [
+          {
+            "source": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+            "location": "Submitted requirements"
+          }
+        ],
+        "suggestions": [
+          {
+            "id": "clarify-reader",
+            "field": "acceptanceCriteria",
+            "startLine": 1,
+            "endLine": 1,
+            "original": "Display the follow-up task.",
+            "replacement": "Display the follow-up task to community health workers.",
+            "kind": "clarification",
+            "rationale": "Community health workers are already named as target users."
+          }
+        ]
+      },
+      "requestId": "synthetic-bedrock-request-id",
+      "usage": {
+        "inputTokens": 100,
+        "outputTokens": 150
+      },
+      "evidenceBinding": {
+        "requirementsHash": "23f88a5c7356fc7a6553a9755273fb121ef2f6e2abf03284f5ff8e75e37e7ed7",
+        "baselineHash": "f615bd630f33f21b47c2d25ae5c2ac72a443b92d3b23cea212d645111fb45d86",
+        "sources": [
+          {
+            "bucket": "synthetic-intake-bucket",
+            "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+            "versionId": "synthetic-object-version-1",
+            "sha256": "82414418a5a0f8dd0b2c23c19f2a7534cd34b2f73cc07951ab8fc7be93ba6203"
+          },
+          {
+            "bucket": "synthetic-intake-bucket",
+            "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+            "versionId": "synthetic-object-version-1",
+            "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+            "filename": "synthetic-context.md"
+          }
+        ]
+      },
+      "at": "2026-11-04T20:00:00.000Z"
+    },
+    {
+      "pk": "author#synthetic-cognito-sub",
+      "sk": "event#f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7#898cd1b1-e7e7-4cfe-8a6a-03101fa73f71#synthetic-event-3",
+      "type": "preview_created",
+      "preview": {
+        "id": "1bf48dc1-6efb-4b73-9fb2-791f88d23c50",
+        "hash": "ac17dee09fc80da179b263e6f969696a0d44c3408e6918d71d6eb6f6a7fa2432",
+        "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+        "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+        "content": {
+          "requirements": {
+            "goal": "Clarify the COVID-19 referral task demonstration",
+            "pathway": "Synthetic COVID-19 referral follow-up",
+            "targetUsers": "Community health workers",
+            "acceptanceCriteria": "Display the follow-up task.\nPreserve the existing routing rules."
+          },
+          "baselineVersion": "test-v1",
+          "sources": [
+            {
+              "bucket": "synthetic-intake-bucket",
+              "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+              "versionId": "synthetic-object-version-1",
+              "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+              "filename": "synthetic-context.md"
+            }
+          ],
+          "summary": "Synthetic completeness pass; no clinical approval is implied."
+        }
+      },
+      "at": "2026-11-04T20:00:00.000Z"
+    },
+    {
+      "pk": "author#synthetic-cognito-sub",
+      "sk": "event#f0a9672e-6d30-4b2f-a9ce-fc2a0cbbbef7#898cd1b1-e7e7-4cfe-8a6a-03101fa73f71#synthetic-event-4",
+      "type": "confirmed",
+      "confirmation": {
+        "id": "a4703f51-9f4e-4616-aa5d-eacc1a248ec2",
+        "authorId": "synthetic-cognito-sub",
+        "revisionId": "898cd1b1-e7e7-4cfe-8a6a-03101fa73f71",
+        "previewId": "1bf48dc1-6efb-4b73-9fb2-791f88d23c50",
+        "previewHash": "ac17dee09fc80da179b263e6f969696a0d44c3408e6918d71d6eb6f6a7fa2432",
+        "attemptId": "8490eef8-d55e-42f0-b956-a3b518fce8e1",
+        "feedback": "Synthetic request summary reviewed.",
+        "at": "2026-11-04T20:00:00.000Z"
+      },
+      "at": "2026-11-04T20:00:00.000Z"
+    }
+  ],
+  "sourceObjects": [
+    {
+      "bucket": "synthetic-intake-bucket",
+      "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/submission.json",
+      "versionId": "synthetic-object-version-1",
+      "sha256": "82414418a5a0f8dd0b2c23c19f2a7534cd34b2f73cc07951ab8fc7be93ba6203",
+      "utf8": "{\"goal\":\"Clarify the COVID-19 referral task demonstration\",\"pathway\":\"Synthetic COVID-19 referral follow-up\",\"targetUsers\":\"Community health workers\",\"acceptanceCriteria\":\"Display the follow-up task.\\nPreserve the existing routing rules.\",\"baselineVersion\":\"test-v1\",\"guidelineUrls\":[],\"attachment\":{\"name\":\"synthetic-context.md\",\"base64\":\"U3ludGhldGljIGNvbnRleHQ6IGNvbW11bml0eSBoZWFsdGggd29ya2VycyB2aWV3IHJlZmVycmFsIGZvbGxvdy11cCB0YXNrcy4gTm8gY2xpbmljYWwgcnVsZXMgYXJlIGRlZmluZWQgYnkgdGhpcyBmaXh0dXJlLg==\"}}"
+    },
+    {
+      "bucket": "synthetic-intake-bucket",
+      "key": "intake/898cd1b1-e7e7-4cfe-8a6a-03101fa73f71/attachment",
+      "versionId": "synthetic-object-version-1",
+      "sha256": "fa6b34005f635dc361fde4949ba9fdfdec265f35311f3cba37dec1513a1244aa",
+      "utf8": "Synthetic context: community health workers view referral follow-up tasks. No clinical rules are defined by this fixture."
+    }
+  ]
+}

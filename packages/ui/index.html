@@ -1,30 +1,97 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Configuration request intake</title>
-<main>
-  <h1>Configuration request intake</h1>
+<title>Guideline library · Community Health Toolkit</title>
+<meta name="description" content="Community Health Toolkit configuration requests and illustrative references.">
+<link rel="icon" href="/assets/cht-mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/workspace.css">
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Workspace navigation" hidden>
+  <a class="cht-brand" href="/" aria-label="Community Health Toolkit home"><img src="/assets/cht-logo.svg" alt="Community Health Toolkit"></a>
+  <button class="mobile-nav-close icon-button" data-action="close-navigation" aria-label="Close navigation" type="button">×</button>
+  <p class="nav-label">Workspace</p><nav id="sidebar-links" class="sidebar-links" aria-label="Workspace"></nav>
+  <p class="nav-label collections-label">Collections</p><nav id="sidebar-collections" class="sidebar-collections" aria-label="Collections"></nav>
+  <a id="request-nav" class="requests-link" href="/requests">Configuration requests <span aria-hidden="true">↗</span></a>
+  <div class="sidebar-bottom"><section class="local-first"><span class="teal-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z M8 12l3 3 5-6"/></svg></span><h3>Local protocols first</h3><p>Confirm guidance with your organization before clinical use.</p></section>
+  <button class="help-link" data-action="help" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17v.1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg> Help &amp; feedback</button><p class="brand-caption">Community Health Toolkit ·<br>Design concept</p></div>
+</aside>
+<button id="drawer-backdrop" class="drawer-backdrop" aria-label="Close navigation" hidden></button>
+<div class="app-frame">
+<header class="workspace-header"><div class="header-left"><button id="sidebar-toggle" class="icon-button" type="button" aria-label="Toggle navigation" aria-controls="workspace-sidebar" aria-expanded="false" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v16H3z M8 4v16"/></svg></button><a class="header-brand" href="/" aria-label="Community Health Toolkit home"><img src="/assets/cht-logo.svg" alt="Community Health Toolkit" width="184" height="41"></a><nav id="breadcrumb" class="breadcrumb" aria-label="Breadcrumb"></nav></div>
+<div class="header-right"><span class="preview-label">Request workspace</span><div class="account-container"><button id="account-toggle" type="button" class="account-toggle" aria-expanded="false" aria-controls="account-menu" hidden><span id="account-initials" class="avatar"></span><span id="account-name"></span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div id="account-menu" class="account-menu" hidden><button id="profile" type="button">Your profile</button><button id="sign-out" type="button">Log out</button></div></div><div id="account-actions" hidden><span id="signed-in-name" hidden></span></div></div></header>
+<main id="main-content" tabindex="-1" class="workspace-main">
+<div id="workspace-notice" class="concept-notice" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v6 M12 7v.1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0"/></svg><span>Concept preview · Clinical content is illustrative and requires local protocol review. Not a validated clinical tool.</span></div>
+<p id="storage-warning" class="inline-warning" hidden></p>
+<p id="workspace-status" class="sr-only" role="status" aria-live="polite"></p>
+<p id="workspace-message" role="status" hidden></p>
+<div id="workspace-content" hidden></div>
+<section id="legacy-root" class="legacy-root">
+
+
+  <div id="page-heading" class="page-heading"><div><p class="eyebrow">BUILD BETTER CARE</p><h1 id="page-title">Small changes. Better workflows.</h1><p id="page-intro" class="intro">Turn your team's needs into a clear configuration request.</p></div><span class="phase-label">01 / Request intake</span></div>
   <p id="message" role="status" aria-live="polite"></p>
-  <button id="sign-in" type="button">Sign in with Cognito</button>
-  <section id="intake" hidden>
-    <button id="sign-out" type="button">End local session</button>
-    <h2 id="form-title">New request</h2>
-    <form id="request">
-      <p><label>Goal<br><textarea name="goal" required maxlength="4000"></textarea></label></p>
-      <p><label>Affected pathway<br><textarea name="pathway" required maxlength="4000"></textarea></label></p>
-      <p><label>Target users<br><textarea name="targetUsers" required maxlength="4000"></textarea></label></p>
-      <p><label>Acceptance criteria<br><textarea name="acceptanceCriteria" required maxlength="4000"></textarea></label></p>
-      <p><label>Current configuration version<br><select name="baselineVersion" required></select></label></p>
-      <p><label>Public clinical guideline URLs (one per line)<br><textarea name="guidelineUrls"></textarea></label></p>
-      <p><label>Guideline attachment (.txt or .md, up to 256 KiB)<br><input name="attachment" type="file" accept=".txt,.md"></label></p>
-      <button type="submit">Submit revision</button>
-      <button id="new-request" type="button">Start a new request</button>
-    </form>
-    <h2>Your requests</h2>
-    <ul id="requests"></ul>
-    <section id="details" aria-label="Request revision history"></section>
+  <section id="signed-out" class="welcome panel" aria-labelledby="signed-out-title" hidden>
+    <div>
+      <p class="eyebrow">SESSION ENDED</p>
+      <h1 id="signed-out-title">You’re signed out.</h1>
+      <p>Your session has ended. Returning to the sign-in page in 5 seconds.</p>
+      <button id="sign-in-again" class="primary" type="button">Sign in again</button>
+    </div>
   </section>
-</main>
-<script type="module" src="/app.js"></script>
+  <section id="welcome" class="welcome panel">
+    <div><p class="eyebrow">YOUR NEXT IMPROVEMENT STARTS HERE</p><h2>A clearer path from idea to request.</h2><p>Describe what needs to change, add the guidelines behind it, and keep every revision in one place.</p><button id="sign-in" class="primary" type="button">Sign in to get started <span aria-hidden="true">↗</span></button><p class="small">Use your organization's account. Product owner access is required.</p></div>
+    <ol class="welcome-steps"><li><span>01</span><div><h3>Describe the change</h3><p>Share the goal, pathway, and people affected.</p></div></li><li><span>02</span><div><h3>Add the context</h3><p>Select a baseline and attach supporting guidelines.</p></div></li><li><span>03</span><div><h3>Keep a clear record</h3><p>Track submission status and refine your request.</p></div></li></ol>
+  </section>
+  <section id="intake" hidden>
+    <div class="workspace-toolbar"><p><span class="session-dot"></span> Product owner workspace</p></div>
+    <nav class="workspace-nav" aria-label="Requests">
+      <a id="nav-requests" href="/requests">Your requests</a>
+      <a id="nav-new" href="/requests/new">New request</a>
+    </nav>
+    <section id="new-request-page" class="panel form-panel" aria-labelledby="form-title" hidden>
+    <div class="panel-heading"><div><p class="eyebrow">REQUEST DETAILS</p><h2 id="form-title">New request</h2></div><span class="small">* Required</span></div>
+    <section id="correction-notice" class="correction-notice" aria-labelledby="correction-title" tabindex="-1" hidden>
+      <p class="eyebrow">BEFORE YOU RESUBMIT</p>
+      <h3 id="correction-title">Changes needed</h3>
+      <p id="correction-context" class="small"></p>
+      <ul id="correction-items"></ul>
+      <p class="small">Uploads are optional. If you want to include a guideline attachment in this revision, select it again.</p>
+    </section>
+    <form id="request">
+      <fieldset><legend><span>01</span> Describe the change</legend><p class="section-help">Be specific about what should happen and why it matters.</p>
+      <label for="goal">Goal <span>*</span></label><p id="goal-help" class="field-help">What outcome should this change achieve?</p><textarea id="goal" name="goal" required maxlength="4000" aria-describedby="goal-help" placeholder="e.g. Help community health workers identify patients who need a follow-up visit."></textarea>
+      <div class="field-grid"><div><label for="pathway">Affected pathway <span>*</span></label><textarea id="pathway" name="pathway" required maxlength="4000" placeholder="Which care pathway or workflow will change?"></textarea></div><div><label for="targetUsers">Target users <span>*</span></label><textarea id="targetUsers" name="targetUsers" required maxlength="4000" placeholder="Who will use this configuration?"></textarea></div></div>
+      <label for="acceptanceCriteria">Acceptance criteria <span>*</span></label><p id="criteria-help" class="field-help">Describe the observable results that would make this change complete.</p><textarea id="acceptanceCriteria" name="acceptanceCriteria" required maxlength="4000" aria-describedby="criteria-help" placeholder="e.g. A follow-up task appears when…"></textarea></fieldset>
+      <fieldset><legend><span>02</span> Add supporting context</legend>
+      <label for="baselineVersion">Current configuration version <span>*</span></label><select id="baselineVersion" name="baselineVersion" required><option value="" disabled selected>Select a configuration version</option></select>
+      <label for="guidelineUrls">Clinical guideline links <span class="optional">Optional</span></label><p id="urls-help" class="field-help">Public HTTP or HTTPS links, one per line. Links are saved as references.</p><textarea id="guidelineUrls" name="guidelineUrls" aria-describedby="urls-help" placeholder="https://example.org/clinical-guideline"></textarea>
+      <label for="attachment">Guideline attachment <span class="optional">Optional</span></label><div class="upload"><input id="attachment" name="attachment" type="file" accept=".txt,.md" aria-describedby="attachment-help"><p id="attachment-help" class="field-help">No upload is required for submission or screening. Optional files: UTF-8 TXT or Markdown · Up to 256 KiB</p></div></fieldset>
+      <div class="form-footer"><p class="small">Saving creates a traceable revision of your request.</p><div class="actions"><button id="new-request" class="secondary" type="button">Start fresh</button><button class="primary" type="submit">Submit revision <span aria-hidden="true">→</span></button></div></div>
+    </form></section>
+    <section id="requests-page" hidden>
+    <section id="requests-overview" class="panel requests-panel"><div class="panel-heading"><h2>Your requests</h2><span id="request-count" class="count">0</span></div><p class="section-help">Your latest submissions, all in one place. Select a request to view its revisions.</p><ul id="requests"></ul></section>
+    <section id="details" class="panel" aria-label="Request revision history" hidden></section>
+    </section>
+  </section>
+</section>
+<footer id="workspace-footer" class="workspace-footer" hidden><span>Reference workspace · No patient information is stored in this concept.</span><button type="button" data-action="governance">Content governance ↗</button></footer>
+</main></div>
+<dialog id="profile-dialog" aria-labelledby="profile-title">
+  <h2 id="profile-title">Your profile</h2>
+  <dl class="profile-fields">
+    <dt>Username</dt><dd id="profile-username"></dd>
+    <dt>Privilege level</dt><dd id="profile-roles"></dd>
+    <dt>User ID</dt><dd id="profile-id"></dd>
+  </dl>
+  <p class="small">Product owners can submit requests and view or correct their own requests.</p>
+  <form method="dialog"><button class="primary" type="submit">Close</button></form>
+</dialog>
+<dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-dialog-title"><button type="button" class="dialog-close icon-button" data-action="close-dialog" aria-label="Close dialog">×</button><div id="workspace-dialog-body"></div></dialog>
+<script type="module" src="/workspace/boot.js"></script>
+</body>
 </html>

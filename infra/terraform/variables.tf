@@ -60,6 +60,18 @@ variable "stop_schedule_timezone" {
   default     = "America/Los_Angeles"
 }
 
+variable "intake_name" {
+  description = "Optional name for the intake table, bucket, and Cognito domain. Empty uses cht-nocode-intake plus the account id."
+  type        = string
+  default     = ""
+}
+
+variable "intake_callback_url" {
+  description = "Intake sign-in callback. Local default is the intake server origin."
+  type        = string
+  default     = "http://localhost:3000/"
+}
+
 variable "root_volume_size_gb" {
   description = "Root EBS volume size (GB) for both hosts."
   type        = number
