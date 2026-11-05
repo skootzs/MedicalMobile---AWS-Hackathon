@@ -3,12 +3,17 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { createUiResponder } from '../serve.js'
 import { submit, hash, HttpError } from '../../intake/intake.js'
 import { createReview } from '../../intake/review.js'
 import { screeningConfig } from '../../intake/screening.js'
 
 export function createUiTestServer() {
+  // Illustrative fixture only. It is not generated from the user's request,
+  // not stored in the preview, and never imported by the real intake server.
+  const exampleLogic = JSON.parse(readFileSync(new URL('../../drafter/test/fixtures/recorded/good.json', import.meta.url), 'utf8'))
+  const demoResponse = state => state?.preview ? { ...state, demoExample: exampleLogic } : state
   const revisions=[], reservations=new Map(), objects=new Map(), phases=new Map(), heads=new Map()
   const registry={v1:hash('test baseline')}, traffic=[]
   let screenCalls=0
@@ -28,7 +33,7 @@ export function createUiTestServer() {
     }
   }
   const config=screeningConfig({INTAKE_SCREENING_ENABLED:'true',BEDROCK_MODEL_ID:'test',BEDROCK_GUARDRAIL_ID:'test',BEDROCK_GUARDRAIL_VERSION:'1'})
-  const review=createReview({store,registry,config,screen:async input=>{
+  const review=createReview({store,registry,config,generateFlowchart:async ()=>'flowchart TD\n  A["Start example assessment"] --> B["Ask the guideline questions"]\n  B --> C{"Are the criteria available?"}\n  C -->|"Yes"| D["Show the matching draft outcome"]\n  C -->|"No"| E["Needs clarification"]\n  D --> F["Clinical review required"]\n  E --> F',screen:async input=>{
     screenCalls++
     const clarification=input.requirements.goal.includes('[clarify]')
     return {result:{decision:clarification?'needs_clarification':'pass',summary:clarification?'Clarify the requested timing.':'The submitted requirements are complete.',suggestions:[],issues:clarification?[{code:'TIMING',field:'acceptanceCriteria',question:'When should the task appear?'}]:[],evidence:[{source:input.requirementsSource,location:'Submitted requirements'}]}}
@@ -55,10 +60,10 @@ export function createUiTestServer() {
       if(!match)throw new HttpError(404,'Request not found.')
       const [,id,revisionId,action]=match
       if(action){
-        if(req.method==='GET'&&action==='screening')return send(200,await review.get(author,id,revisionId))
+        if(req.method==='GET'&&action==='screening')return send(200,demoResponse(await review.get(author,id,revisionId)))
         if(req.method!=='POST')throw new HttpError(405,'Method not allowed.')
         const body=JSON.parse(raw.toString()||'{}')
-        return send(200,await (action==='screening'?review.screen(author,id,revisionId):action==='preview'?review.preview(author,id,revisionId):review.confirm(author,id,revisionId,body)))
+        return send(200,demoResponse(await (action==='screening'?review.screen(author,id,revisionId):action==='preview'?review.preview(author,id,revisionId):review.confirm(author,id,revisionId,body))))
       }
       if(req.method==='GET'){
         const rows=await store.history(author,id)

@@ -40,6 +40,8 @@ test('primary actions respect screening availability, leases, correction and con
 test('new tracking has six implemented stages, escapes server text and never claims a release',()=>{
   const state={enabled:true,status:'screening_passed',preview:{},confirmed:true,message:'<img src=x onerror=alert(1)>'}
   const html=renderRequestTracking({...revision(),baselineVersion:'<script>'},state)
+  assert.doesNotMatch(html,/Your workflow journey|10 steps/)
+  assert.match(html,/Workflow timeline/)
   assert.match(html,/Request confirmed\. Handoff queued\./)
   assert.match(html,/&lt;img/)
   assert.doesNotMatch(html,/<script>|<img/)
@@ -66,7 +68,7 @@ test('static hosting preserves security headers, deep links and a strict asset a
   for(const path of ['/workspace/boot.js','/workspace/requests.js','/workspace.css','/assets/cht-logo.svg',`/requests/${requestId}`]){
     let headers,content
     assert.equal(await serve({method:'GET'},{writeHead(status,value){assert.equal(status,200);headers=value},end(value){content=value}},path),true)
-    assert.equal(headers['Content-Security-Policy'],"default-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+    assert.equal(headers['Content-Security-Policy'],"default-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
     assert.equal(headers['Cache-Control'],'no-store');assert.ok(content.length)
   }
   assert.equal(await serve({method:'GET'},{},'/runtime.js'),false)
@@ -94,6 +96,9 @@ test('same-origin host exercises real intake and review contracts through queued
   assert.equal(fixture.screenCalls(),0)
   await call(`${baseRevision}/screening`,{})
   const preview=(await call(`${baseRevision}/preview`,{})).body
+  assert.equal(preview.demoExample.pathwayId,'child_cough')
+  assert.equal(preview.preview.content.logicModel,undefined) // Example is not part of the confirmed preview.
+  assert.equal((await call(`${baseRevision}/screening`)).body.demoExample.pathwayId,'child_cough')
   const binding={attemptId:preview.attemptId,previewId:preview.preview.id,previewHash:preview.preview.hash,feedback:''}
   assert.equal((await call(`${baseRevision}/confirmation`,{...binding,previewHash:'stale'})).status,409)
   const confirmed=(await call(`${baseRevision}/confirmation`,binding)).body

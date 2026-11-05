@@ -116,3 +116,34 @@ test('creating a preview opens its revision and brings the returned summary into
   assert.equal(page.requests.filter(r=>r.path.endsWith('/preview')).length,1)
   assert.equal(page.requests.filter(r=>r.path.endsWith('/confirmation')).length,0)
 })
+test('passing screening creates the preview once and failures leave a manual retry',async()=>{
+  const {workspace}=bridge()
+  const base=`/api/requests/${id}/revisions/${rid}`
+  const passed={enabled:true,status:'screening_passed',attemptId:'attempt',result:{summary:'Complete.',issues:[],evidence:[]}}
+  const page=await browser('/','?code=code&state=state',{workspace,[`/api/requests/${id}`]:[revision],
+    [`${base}/screening`]:options=>options.method==='POST'?passed:{enabled:true,status:'pending_screening'},
+    [`${base}/preview`]:{httpStatus:503,body:'Could not generate the flowchart.'}})
+  await workspace.actions.navigate(`/requests/${id}`)
+  const descendants=node=>[node,...(node.children||[]).flatMap(descendants)]
+  await descendants(page.byId('details')).find(node=>node.textContent==='Screen this revision').onclick()
+  assert.equal(page.requests.filter(r=>r.path.endsWith('/preview')).length,1)
+  assert.ok(descendants(page.byId('details')).some(node=>node.textContent==='Create preview'))
+})
+
+test('demo preview shows the sample flowchart and keeps request details and confirmation',async()=>{
+  const {workspace}=bridge()
+  const base=`/api/requests/${id}/revisions/${rid}`
+  const preview={id:'preview',hash:'hash',content:{requirements:revision.normalizedRequirements,baselineVersion:'v1',summary:'Ready',sources:[],flowchartMermaid:'flowchart TD\n A-->B'}}
+  const page=await browser('/','?code=code&state=state',{workspace,[`/api/requests/${id}`]:[revision],
+    [`${base}/screening`]:{enabled:true,status:'screening_passed',attemptId:'attempt',preview,demoExample:{pathwayId:'child_cough'}}})
+  await workspace.actions.navigate(`/requests/${id}`)
+  const descendants=node=>[node,...(node.children||[]).flatMap(descendants)]
+  const all=descendants(page.byId('details'))
+  assert.ok(all.some(node=>node.textContent==='Draft workflow preview — clinical review required'))
+  assert.ok(all.some(node=>node.textContent?.includes('not generated from your request or guideline')))
+  assert.ok(all.some(node=>node.className==='flowchart-preview'))
+  assert.ok(!all.some(node=>node.textContent==='Explore an example decision map'))
+  assert.ok(all.some(node=>node.textContent==='Your request details'))
+  assert.ok(all.some(node=>node.textContent==='Saved goal'))
+  assert.ok(all.some(node=>node.textContent==='Confirm this exact revision'))
+})

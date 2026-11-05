@@ -267,7 +267,17 @@ async function showReview(parent, revision, onState, onCorrect, isCurrent = () =
         }
         try {
           state = await api(`${base}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-          render(path==='preview')
+          if (path === 'screening' && state.status === 'screening_passed' && !state.preview && !state.rejection) {
+            button.textContent = 'Generating flowchart…'
+            try {
+              state = await api(`${base}/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            } catch (error) {
+              render()
+              await reviewError(error)
+              return
+            }
+          }
+          render(path==='preview' || (path==='screening' && Boolean(state.preview)))
         } catch (error) { await reviewError(error); button.disabled = false }
         finally {
           if(path==='screening') {
@@ -308,13 +318,34 @@ async function showReview(parent, revision, onState, onCorrect, isCurrent = () =
       previewPanel.className='request-preview'
       previewPanel.tabIndex=-1
       previewPanel.setAttribute('aria-label','Request preview')
-      append(previewPanel, 'h4', 'Preview')
-      if(state.preview.content.summary)append(previewPanel,'p',state.preview.content.summary)
-      append(previewPanel, 'p', 'This summarizes your request for downstream drafting. Clinical logic still requires review.')
+      const heading = append(previewPanel, 'div', '')
+      heading.className = 'preview-intro'
+      append(heading, 'p', 'REQUEST REVIEW').className = 'preview-eyebrow'
+      append(heading, 'h4', 'Review your request')
+      append(heading, 'p', 'Check the details below before confirming this request.').className = 'preview-subtitle'
+      if(state.preview.content.summary)append(heading,'p',state.preview.content.summary).className = 'preview-summary'
+      if (state.preview.content.flowchartMermaid) {
+        const mapSection = append(previewPanel, 'section', '')
+        mapSection.className = 'preview-flowchart-section'
+        append(mapSection, 'p', state.demoExample ? 'ILLUSTRATIVE EXAMPLE' : 'DRAFT WORKFLOW').className = 'preview-eyebrow'
+        append(mapSection, 'h4', 'Draft workflow preview — clinical review required')
+        append(mapSection, 'p', state.demoExample
+          ? 'Example only: this diagram is not generated from your request or guideline.'
+          : 'Review the draft and any missing criteria. This is not a clinical approval.').className = 'preview-detail-note'
+        const chart = append(mapSection, 'div', 'Loading flowchart…')
+        chart.className = 'flowchart-preview'
+        const chartSource = state.preview.content.flowchartMermaid
+        import('/flowchart-renderer.js').then(({ renderFlowchart }) => renderFlowchart(chart, chartSource))
+          .catch(() => { chart.textContent = 'Could not display the flowchart.' })
+      }
+      append(previewPanel, 'h4', 'Your request details').className = 'preview-details-title'
+      append(previewPanel, 'p', 'This summary is what you are confirming. It is not clinical approval.').className = 'preview-detail-note'
       const flow = append(previewPanel, 'ol', '')
+      flow.className = 'preview-details-grid'
+      const fieldLabels = {goal:'Goal',pathway:'Pathway',targetUsers:'Who will use it',acceptanceCriteria:'What success looks like'}
       for (const [field, value] of Object.entries(state.preview.content.requirements)) {
         const card = append(flow, 'li', '')
-        append(card, 'strong', field)
+        append(card, 'strong', fieldLabels[field] || field)
         append(card, 'p', value)
       }
       append(previewPanel, 'p', `Baseline: ${state.preview.content.baselineVersion}`)

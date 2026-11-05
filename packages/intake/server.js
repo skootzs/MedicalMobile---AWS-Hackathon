@@ -7,6 +7,7 @@ import { authenticate, authenticateProfile, HttpError, maxBodyBytes, submit } fr
 import { createStore } from './storage.js'
 import { screeningConfig, createScreener } from './screening.js'
 import { createReview } from './review.js'
+import { createFlowchartGenerator } from './flowchart.js'
 import { credentialsUnavailableMessage } from './credentials.js'
 
 const { COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID, COGNITO_HOSTED_URL,
@@ -26,7 +27,8 @@ const verifier = CognitoJwtVerifier.create({
 })
 const store = createStore({ table: INTAKE_TABLE, bucket: INTAKE_BUCKET })
 const screening = screeningConfig()
-const review = createReview({ store, registry, config: screening, screen: screening.enabled ? createScreener(screening) : null })
+const review = createReview({ store, registry, config: screening, screen: screening.enabled ? createScreener(screening) : null,
+  generateFlowchart: screening.enabled ? createFlowchartGenerator(screening) : null })
 const serveUi = createUiResponder()
 
 async function readSubmission(req) {

@@ -53,3 +53,29 @@ h1[tabindex="-1"]:focus{outline:none}.consult-heading>.badge{position:static;ali
 /* Keep sidebar navigation scrollable without displaying a scrollbar. */
 .workspace-sidebar{scrollbar-width:none;-ms-overflow-style:none}
 .workspace-sidebar::-webkit-scrollbar{display:none}
+
+/* Request preview: the example map is explicitly separate from the request. */
+.request-preview{background:#fff;border:1px solid #d7e7e2;border-radius:18px;padding:clamp(20px,3vw,34px);box-shadow:0 12px 36px rgba(25,77,63,.07)}
+.request-preview h4{font-size:22px;letter-spacing:-.025em;color:#173e36;margin:0 0 8px}.request-preview .preview-eyebrow{color:#178478;font-size:10px;font-weight:800;letter-spacing:.15em;margin:0 0 10px}.request-preview .preview-subtitle,.request-preview .preview-detail-note{color:#647d75;font-size:14px;margin:5px 0 16px}.request-preview .preview-summary{display:inline-flex;align-items:center;border-radius:999px;padding:7px 12px;background:#e8f6ef;color:#206e54;font-size:12px;font-weight:700;margin:0}
+.preview-map-section{background:#f4faf8;border:1px solid #deeee7;border-radius:16px;margin:26px 0;padding:clamp(16px,2.5vw,26px)}.request-preview .preview-map-notice{font-size:13px;color:#795d27;background:#fff8e9;border:1px solid #f0e0ba;border-radius:10px;padding:12px 14px;line-height:1.5;margin:12px 0}.preview-map-frame{display:block;width:100%;height:820px;border:1px solid #dcebe4;border-radius:12px;background:#fff}
+.request-preview .preview-details-title{font-size:19px;margin:30px 0 5px}.request-preview .preview-details-grid{padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 20px}.preview-details-grid li{min-width:0;padding:16px;border:1px solid #e3ede8;border-radius:12px;background:#fbfdfc}.preview-details-grid strong{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#607e72}.preview-details-grid p{margin:7px 0 0;color:#23443a;overflow-wrap:anywhere;line-height:1.45}.request-preview textarea{border:1px solid #d7e7e2;border-radius:10px;min-height:90px;padding:12px}.request-preview>button{border-radius:10px;margin:10px 8px 0 0}
+@media(max-width:700px){.request-preview .preview-details-grid{grid-template-columns:1fr}.preview-map-frame{height:650px}.request-preview h4{font-size:19px}}
+
+/* A readable, application-styled Mermaid preview. */
+.preview-flowchart-section{margin:26px 0;padding:clamp(18px,3vw,30px);border:1px solid #d9ebe3;border-radius:18px;background:linear-gradient(145deg,#f4faf7,#ffffff)}
+.preview-flowchart-section h4{margin-bottom:8px}.preview-flowchart-section .flowchart-preview{display:flex;justify-content:center;align-items:flex-start;overflow:auto;min-height:160px;max-height:620px;margin-top:18px;padding:24px;border:1px solid #e3eee8;border-radius:14px;background:#fff;box-shadow:0 8px 22px rgba(24,84,62,.05)}
+.preview-flowchart-section .flowchart-preview svg{width:auto;max-width:100%;height:auto;min-width:280px}.preview-flowchart-section .flowchart-preview svg .node rect{rx:10px;ry:10px}.preview-flowchart-section .flowchart-preview svg .edgePath path{stroke-width:2px}
+@media(max-width:700px){.preview-flowchart-section{padding:16px}.preview-flowchart-section .flowchart-preview{padding:16px;justify-content:flex-start}}
+
+/* A quieter, easier-to-scan workflow preview; request details remain unchanged. */
+.preview-intro{max-width:920px;margin:0 auto 24px}.preview-flowchart-section{max-width:920px;margin:0 auto 30px;padding:clamp(18px,2.5vw,28px)}
+.preview-flowchart-section .preview-detail-note{line-height:1.5;margin:8px 0 0}.preview-flowchart-section .flowchart-preview{min-height:0;max-height:560px;margin-top:18px;padding:22px;background:#fff}
+.preview-flowchart-section .flowchart-preview svg{max-width:min(100%,680px);min-width:0;height:auto}
+@media(max-width:700px){.preview-intro{margin-bottom:18px}.preview-flowchart-section{margin-bottom:24px}.preview-flowchart-section .flowchart-preview{padding:16px}}
+
+/* More-specific selectors override the shared revision-section padding. */
+.revision-entry .request-preview{padding:clamp(22px,3vw,36px)}
+.revision-entry .preview-flowchart-section{padding:clamp(20px,2.5vw,28px)}
+.revision-entry .request-preview:focus:not(:focus-visible){outline:none}
+.revision-entry .request-preview:focus-visible{outline:3px solid #4bb4ae;outline-offset:3px}
+@media(max-width:700px){.revision-entry .request-preview{padding:20px}.revision-entry .preview-flowchart-section{padding:18px}}

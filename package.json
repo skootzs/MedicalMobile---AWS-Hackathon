@@ -16,6 +16,7 @@
     "runner"
   ],
   "scripts": {
+    "postinstall": "npm run build -w packages/ui",
     "start": "npm run start -w packages/intake",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

@@ -1,1 +1,1 @@
-{"name":"@medic/ui","private":true,"type":"module"}
+{"name":"@medic/ui","private":true,"type":"module","scripts":{"build":"esbuild src/flowchart.js --tsconfig-raw={} --bundle --format=esm --platform=browser --outfile=dist/flowchart-renderer.js"},"dependencies":{"esbuild":"^0.28.2","mermaid":"^12.3.0"}}

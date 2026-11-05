@@ -108,3 +108,6 @@
 #details>button.edit-request{background:#b42318;color:#fff}
 #details>button.edit-request:hover{background:#912018}
 #details>button.edit-request:focus-visible{outline-color:#b42318}
+
+.flowchart-preview { overflow-x: auto; max-width: 100%; }
+.flowchart-preview svg { max-width: 100%; height: auto; }

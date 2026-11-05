@@ -9,7 +9,7 @@ const blockedMessages = {
   GUARDRAIL_INTERVENED: 'Screening stopped on a content check. Use public or synthetic guideline text and remove embedded instructions.'
 }
 
-export function createReview({ store, registry, config, screen, now = Date.now }) {
+export function createReview({ store, registry, config, screen, generateFlowchart, now = Date.now }) {
   const leaseMs = 180000
   const currentPolicy = state => state?.policy === config.fingerprint
   async function revision(author, requestId, revisionId) {
@@ -94,9 +94,15 @@ export function createReview({ store, registry, config, screen, now = Date.now }
       if (!config.enabled || !currentPolicy(previous) || previous?.status !== 'screening_passed') throw new HttpError(409, 'Screen this revision before previewing it.')
       if (previous.rejection) throw new HttpError(409, 'This preview was rejected. Submit a correction before previewing again.')
       if (previous.preview) return publicState(previous)
-      // A deterministic request summary; clinical pathway drafting occurs downstream.
+      let flowchartMermaid
+      try {
+        flowchartMermaid = await generateFlowchart({ requirements: r.normalizedRequirements, summary: previous.result.summary })
+        if (typeof flowchartMermaid !== 'string' || !flowchartMermaid.trim() || flowchartMermaid.length > 16000) throw new Error('Invalid flowchart')
+      } catch {
+        throw new HttpError(503, 'Could not generate the flowchart. Please retry creating the preview.')
+      }
       const content = { requirements: r.normalizedRequirements, baselineVersion: r.baselineVersion,
-        sources: r.sources.filter(source => source.filename), summary: previous.result.summary }
+        sources: r.sources.filter(source => source.filename), summary: previous.result.summary, flowchartMermaid }
       const preview = { id: randomUUID(), hash: hash(JSON.stringify(content)), revisionId, attemptId: previous.attemptId, content }
       return publicState(await save(author, r, previous, { ...previous, preview }, { type: 'preview_created', preview }, true))
     },

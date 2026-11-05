@@ -10,7 +10,7 @@ const registry = { v1: hash('baseline') }
 const pass = input => ({ decision: 'pass', summary: 'Complete.', issues: [], suggestions: [],
   evidence: [{ source: input.guidelines[0]?.source || input.requirementsSource, location: 'Submitted requirements or excerpt' }] })
 
-async function fixture({ screen, attachment = true, urls = ['https://example.org/public'], settings = config } = {}) {
+async function fixture({ screen, generateFlowchart = async () => 'flowchart TD\n A["Example"]', attachment = true, urls = ['https://example.org/public'], settings = config } = {}) {
   let state, r, head, clock = 0, calls = 0
   const objects = new Map(), events = [], records = new Map(), reservations = new Map()
   const store = {
@@ -36,12 +36,30 @@ async function fixture({ screen, attachment = true, urls = ['https://example.org
     baselineVersion: 'v1', guidelineUrls: urls,
     ...(attachment && { attachment: { name: 'public.md', base64: Buffer.from('Public synthetic guideline: record follow-up.').toString('base64') } })
   })) })
-  const service = (policy = settings) => createReview({ store, registry, config: policy, now: () => clock,
+  const service = (policy = settings) => createReview({ store, registry, config: policy, now: () => clock, generateFlowchart,
     screen: async input => { calls++; return screen ? screen(input) : { result: pass(input) } } })
   const args = () => ['alice', r.requestId, r.revisionId]
   return { service, store, args, objects, events, revision: () => r, calls: () => calls,
     advance: () => { clock += 200000 }, correct: () => { head = 'new-revision' } }
 }
+
+test('preview saves one generated diagram and retries a failure without repeating screening', async () => {
+  let calls = 0
+  const f = await fixture({ generateFlowchart: async () => {
+    if (++calls === 1) throw new Error('offline')
+    return 'flowchart TD\n A["Example"]'
+  } })
+  const review = f.service(), args = f.args()
+  await review.screen(...args)
+  await assert.rejects(review.preview(...args), { status: 503 })
+  assert.equal((await review.get(...args)).status, 'screening_passed')
+  const result = await review.preview(...args)
+  assert.equal(result.preview.content.flowchartMermaid, 'flowchart TD\n A["Example"]')
+  assert.deepEqual(await review.preview(...args), result)
+  assert.equal(calls, 2)
+  assert.equal(f.calls(), 1)
+  assert.equal(result.preview.hash, hash(JSON.stringify(result.preview.content)))
+})
 
 test('only a verified, screened preview can be confirmed and queued idempotently', async () => {
   const f = await fixture(), review = f.service(), args = f.args()
