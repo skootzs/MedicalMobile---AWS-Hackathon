@@ -4,6 +4,8 @@
 <!-- <img src="docs/ripple-brand.png" alt="Ripple and Community Health Toolkit" width="486"> -->
 <img width="2172" height="262" alt="image" src="https://github.com/user-attachments/assets/6a330994-b918-4172-8284-99e8c4e97d04" />
 
+<hr>
+
 ![AWS Breaking Barriers Challenge 2026](docs/aws-breaking-barriers-challenge-2026.png)
 
 ![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonwebservices&logoColor=white)
